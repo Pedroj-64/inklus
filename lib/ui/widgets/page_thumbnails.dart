@@ -51,7 +51,7 @@ class _PageThumbnailsStripState extends State<PageThumbnailsStrip> {
       page,
       sheetSize: page.template.sheetSize,
       imageCache: widget.imageService.cache,
-      maxDimension: 240,
+      options: const ExportOptions(maxDimension: 240),
     );
   }
 

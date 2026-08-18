@@ -17,12 +17,34 @@ class NotebookMeta {
   /// Color de portada del cuaderno (ARGB). null = sin color.
   final int? colorValue;
 
+  /// Si está activo, el cuaderno se sincroniza con Google Drive.
+  /// null = true por defecto (para compatibilidad con índices antiguos).
+  final bool? syncEnabled;
+
   const NotebookMeta({
     required this.id,
     required this.title,
     required this.updatedAt,
     this.colorValue,
+    this.syncEnabled,
   });
+
+  /// Por defecto la sincronización está activa.
+  bool get isSyncEnabled => syncEnabled ?? true;
+
+  NotebookMeta copyWith({
+    String? title,
+    DateTime? updatedAt,
+    int? colorValue,
+    bool? syncEnabled,
+  }) =>
+      NotebookMeta(
+        id: id,
+        title: title ?? this.title,
+        updatedAt: updatedAt ?? this.updatedAt,
+        colorValue: colorValue ?? this.colorValue,
+        syncEnabled: syncEnabled ?? this.syncEnabled,
+      );
 
   factory NotebookMeta.fromJson(Map<String, dynamic> json) => NotebookMeta(
         id: json['id'] as String,
@@ -31,6 +53,7 @@ class NotebookMeta {
             DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
                 DateTime.fromMillisecondsSinceEpoch(0),
         colorValue: (json['color'] as num?)?.toInt(),
+        syncEnabled: json['syncEnabled'] as bool?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -38,6 +61,7 @@ class NotebookMeta {
         'title': title,
         'updatedAt': updatedAt.toIso8601String(),
         if (colorValue != null) 'color': colorValue,
+        if (syncEnabled != null) 'syncEnabled': syncEnabled,
       };
 }
 
@@ -218,6 +242,19 @@ class StorageService {
     doc.colorValue = colorValue;
     doc.updatedAt = DateTime.now();
     await save(doc);
+  }
+
+  /// Activa o desactiva la sincronización de un cuaderno con Google Drive.
+  Future<void> setSyncEnabled(String id, bool enabled) async {
+    final base = await _baseDir();
+    final metas = await _readIndex(base);
+    final idx = metas.indexWhere((m) => m.id == id);
+    if (idx < 0) return;
+    metas[idx] = metas[idx].copyWith(
+      updatedAt: metas[idx].updatedAt,
+      syncEnabled: enabled,
+    );
+    await _writeIndex(base, metas);
   }
 
   /// Duplica un cuaderno con un id nuevo y título "... (copia)".

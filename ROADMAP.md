@@ -41,7 +41,19 @@
 
 ### Nube y exportación
 - **Sincronización con Google Drive** (sin Firebase): signIn con scope `drive.file`, sesión silenciosa (One Tap), respaldo `<id>.inklus` en la carpeta 'Inklus' (upsert, no duplica), restore con extracción de imágenes.
+- **Estado de sincronización visible**: iconos por cuaderno (sincronizado/sincronizando/error/deshabilitado) en biblioteca y top bar.
+- **Restaurar entre versiones**: listar versiones de Drive con fecha/tamaño, elegir cuál restaurar.
+- **Cifrado opcional del backup**: contraseña al subir/restaurar desde Drive (XOR con clave derivada).
+- **Sync selectiva**: flag `syncEnabled` por cuaderno; solo se sincronizan los marcados.
+- **Cambiar de cuenta**: signOut + re-signIn desde el menú ☁️.
+- **Subir/bajar `.inklus` manual**: archivo `.inklus` del dispositivo a Drive y viceversa.
+- **Notificaciones de sync**: snackbar al completar backup/restore automático.
 - **Exportación**: página PNG/PDF, **cuaderno completo a PDF** (`renderNotebookPdf`), copia `.inklus`.
+- **Exportación configurable**: DPI (1024–8192 px), fondo transparente, solo trazos, región personalizada.
+- **Previsualización de exportación**: diálogo con vista previa antes de guardar PNG.
+- **Compartir**: PNG/PDF/.inklus a otras apps via `share_plus`.
+- **Exportar a SVG**: trazos como paths SVG editables (Inkscape/Illustrator).
+- **OCR de tinta**: reconocimiento de texto escrito a mano on-device (solo Android/iOS, `google_mlkit_text_recognition`).
 
 ### UI y experiencia
 - **Icono de la app** (adaptativo Android, `flutter_launcher_icons`) y **build de release** (`--split-per-abi`, ~20 MB).
@@ -76,33 +88,33 @@
 
 ## ☁️ Fase 2 — Sincronización y nube (Google Drive)
 
-| # | Tarea | Por qué / cómo |
+| # | Tarea | Estado |
 |---|---|---|
 | 2.1 | ✅ **Google Drive + `.inklus`** | Hecho: `DriveSyncService` con `drive.file`; backup/restore del contenedor `.inklus`. |
-| 2.2 | **Estado de sincronización visible** (icono subiendo/sincronizado/error por cuaderno) | Hookear `controller.onRemoteSync` (hoy silencioso) y exponer estado en `DriveSyncService`; mostrar en biblioteca y top bar. |
-| 2.3 | **Conflictos** (dos dispositivos editan lo mismo) | Decisión de diseño: *last-write-wins* (fácil) vs merge por página (complejo). Documentar la elegida en AGENTS.md. |
-| 2.4 | **Restaurar entre copias** (elegir entre las últimas N, no solo la más reciente) | En Drive: guardar versiones como `<id>_<fecha>.inklus` o usar el historial de revisiones; listar en la UI del menú ☁️. |
-| 2.5 | **Cifrado opcional del backup** (`.inklus` con contraseña) | `archive` soporta `ZipEncoder(password:)` / `ZipDecoder().decodeBytes(bytes, password:)`; pedir contraseña al exportar/importar y guardarla nunca (solo hash para validar). |
-| 2.6 | **Cambiar de cuenta / varias cuentas** | `GoogleSignIn.instance` mantiene una cuenta; añadir selector y re-autenticar (`signOut` + `signIn`). |
-| 2.7 | **Subir/bajar `.inklus` manual** desde el menú ☁️ | Exportar el contenedor a Drive como archivo visible o importar uno elegido; reutiliza `InklusFormat`. |
-| 2.8 | **Sync selectiva** (elegir qué cuadernos sincronizar) | Añadir flag `syncEnabled` a `NotebookMeta`; en el backup automático solo subir los marcados. |
-| 2.9 | **Notificación de sync** (toast discreto al completar backup/restore) | Mostrar un snackbar breve cuando termina un backup automático o restauración. |
+| 2.2 | ✅ **Estado de sincronización visible** (icono subiendo/sincronizado/error por cuaderno) | `SyncStatus` enum en `DriveSyncService`; iconos en tarjetas de la biblioteca y top bar del editor. |
+| 2.3 | ✅ **Conflictos** (last-write-wins) | `restoreDocument()` compara `updatedAt`; la versión más reciente de Drive gana. |
+| 2.4 | ✅ **Restaurar entre copias** (elegir entre las últimas N) | `listVersions()` lista archivos `.inklus` en Drive; menú ☁️ → "Ver versiones" con fecha/tamaño. |
+| 2.5 | ✅ **Cifrado opcional del backup** (`.inklus` con contraseña) | XOR con clave derivada de la contraseña; pedir contraseña al exportar/importar desde Drive. |
+| 2.6 | ✅ **Cambiar de cuenta** | `switchAccount()` cierra sesión y abre selector de Google; menú ☁️ → "Cambiar de cuenta". |
+| 2.7 | ✅ **Subir/bajar `.inklus` manual** desde el menú ☁️ | `uploadInklusFile()` sube un archivo elegido del dispositivo; menú ☁️ → "Subir archivo .inklus". |
+| 2.8 | ✅ **Sync selectiva** (elegir qué cuadernos sincronizar) | Flag `syncEnabled` en `NotebookMeta`; toggle en menú ☁️; backup automático respeta el flag. |
+| 2.9 | ✅ **Notificación de sync** (toast al completar) | `onSyncComplete` callback en `DriveSyncService`; snackbar en biblioteca y editor. |
 
 ---
 
 ## 📤 Fase 3 — Exportar y compartir
 
-| # | Tarea | Por qué / cómo |
+| # | Tarea | Estado |
 |---|---|---|
 | 3.1 | ✅ **Cuaderno completo a PDF** | `ExportService.renderNotebookPdf` (una hoja PDF por página). |
-| 3.2 | **Compartir** (PNG/PDF/.inklus a otras apps) | Añadir `share_plus`; en Android `FilePicker.saveFile` ya devuelve URI — `share_plus` permite el share sheet directo. |
-| 3.3 | **Tamaño/DPI de exportación configurables** | Parametrizar `renderPagePng` (hoy usa el mundo 1:1); añadir opción en el diálogo de exportar. |
-| 3.4 | **Exportar región/selección** | Renderizar solo un `Rect` del mundo (ya lo soporta `paintWorld(visibleWorldRect:)`); recortar con la herramienta de selección. |
-| 3.5 | **Exportar a texto** (OCR) | Mismo motor que 4.1; renderizar la página a imagen y pasarla al reconocedor, devolver texto. |
-| 3.6 | **Exportar sin fondo / con plantilla** | Flag para omitir plantilla e imágenes de fondo en `paintWorld` (hoy pinta todo siempre). |
-| 3.7 | **Exportar solo trazos** (sin plantilla ni imágenes de fondo) | Ideal para stickers o overlays; flag en `paintWorld` que pinta solo `page.strokes`. |
-| 3.8 | **Exportar a SVG** | Convertir los trazos de la página a paths SVG; `StrokeEngine.outlineFor` ya devuelve polígonos. |
-| 3.9 | **Previsualización de exportación** | Mostrar un diálogo con la vista previa antes de guardar (PNG/PDF) para que el usuario elija calidad y formato. |
+| 3.2 | ✅ **Compartir** (PNG/PDF/.inklus a otras apps) | `share_plus` v13; menú ⋮ → compartir PNG/PDF/.inklus. |
+| 3.3 | ✅ **Tamaño/DPI de exportación configurable** | `ExportOptions(maxDimension:)` con diálogo: baja/media/alta/máxima (1024–8192 px). |
+| 3.4 | ✅ **Exportar región/selección** | `ExportOptions(region: Rect)` — renderiza solo un rect del mundo. |
+| 3.5 | ✅ **Exportar a texto** (OCR) | `google_mlkit_text_recognition` on-device; solo Android/iOS; `OcrService.recognizeText()` con diálogo + copiar al portapapeles. |
+| 3.6 | ✅ **Exportar sin fondo / con plantilla** | `ExportOptions(transparentBackground: true)` + `paintWorld(omitTemplate:)`. |
+| 3.7 | ✅ **Exportar solo trazos** | `ExportOptions(strokesOnly: true)` + `paintWorld(omitImages:, omitTemplate:)`. |
+| 3.8 | ✅ **Exportar a SVG** | `ExportService.renderPageSvg()` con `package:xml` v7; polígonos de `StrokeEngine.outlineFor` → paths SVG. |
+| 3.9 | ✅ **Previsualización de exportación** | Diálogo con imagen previa antes de guardar (PNG); confirma o cancela. |
 
 ---
 

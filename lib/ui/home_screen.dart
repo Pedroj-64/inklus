@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../logic/canvas_controller.dart';
 import '../models/document.dart';
@@ -12,6 +14,7 @@ import '../models/image_item.dart';
 import '../models/stroke.dart';
 import '../services/drive_sync_service.dart';
 import '../services/export_service.dart';
+import '../services/ocr_service.dart';
 import '../services/image_service.dart';
 import '../services/inklus_format.dart';
 import '../services/storage_service.dart';
@@ -50,12 +53,21 @@ class _HomeScreenState extends State<HomeScreen> {
     // y el scope ya está autorizado; nunca muestra UI).
     _controller.onRemoteSync = (document) async {
       if (!_syncService.isSignedIn) return;
+      // Sync selectiva: solo subir si el cuaderno lo tiene habilitado.
+      final metas = await _storage.loadIndex();
+      final meta = metas.where((m) => m.id == document.id).firstOrNull;
+      if (meta != null && !meta.isSyncEnabled) return;
       try {
         await _syncService.backupDocument(document);
       } catch (_) {
         // Silencioso: el guardado local ya protege los datos.
       }
     };
+    // Notificación de sync completado.
+    _syncService.onSyncComplete = (msg) {
+      if (mounted) _snack(msg);
+    };
+    _loadSyncEnabled();
   }
 
   CanvasController get _c => _controller;
@@ -81,7 +93,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
         final w = img.width.toDouble();
         final h = img.height.toDouble();
-        // Ancho máximo razonable para empezar (se puede redimensionar).
         final fit = w > 520 ? 520 / w : 1.0;
         final center = _c.viewportToWorld(
           Offset(_c.viewportSize.width / 2, _c.viewportSize.height / 2),
@@ -98,7 +109,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       }
-      // Cambia a la herramienta de selección para poder moverlas.
       _c.setTool(ToolType.select);
     } catch (e) {
       _snack('No se pudo insertar la imagen: $e');
@@ -116,33 +126,217 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _exportPng() => _export(() => ExportService.renderPagePng(
-        _c.page,
-        sheetSize: _c.sheetSize,
-        imageCache: _imageService.cache,
-      ), 'inklus_pagina_${_c.pageIndex + 1}.png');
+  // -------------------------------------------------------------------------
+  // Exportación con opciones configurables
+  // -------------------------------------------------------------------------
 
-  Future<void> _exportPdf() => _export(() => ExportService.renderPagePdf(
-        _c.page,
-        sheetSize: _c.sheetSize,
-        imageCache: _imageService.cache,
-      ), 'inklus_pagina_${_c.pageIndex + 1}.pdf');
+  /// Abre el diálogo de opciones de exportación y luego exporta.
+  Future<void> _exportWithOptions(
+    Future<Uint8List> Function(ExportOptions) render,
+    String defaultName, {
+    bool isRegion = false,
+    bool showStrokesOnly = false,
+  }) async {
+    final options = await _showExportOptionsDialog(
+      isRegion: isRegion,
+      showStrokesOnly: showStrokesOnly,
+    );
+    if (options == null) return; // cancelado
+    _export(() => render(options), defaultName);
+  }
 
-  /// Exporta todas las páginas del cuaderno a un único PDF.
-  Future<void> _exportNotebookPdf() => _export(
-        () => ExportService.renderNotebookPdf(
-          _c.document,
-          imageCache: _imageService.cache,
+  Future<ExportOptions?> _showExportOptionsDialog({
+    bool isRegion = false,
+    bool showStrokesOnly = false,
+  }) async {
+    int maxDimension = 2048;
+    bool transparentBg = false;
+    bool strokesOnly = false;
+
+    return showDialog<ExportOptions>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Opciones de exportación'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // DPI / resolución
+              DropdownButton<int>(
+                value: maxDimension,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 1024, child: Text('Baja (1024 px)')),
+                  DropdownMenuItem(value: 2048, child: Text('Media (2048 px)')),
+                  DropdownMenuItem(value: 4096, child: Text('Alta (4096 px)')),
+                  DropdownMenuItem(value: 8192, child: Text('Máxima (8192 px)')),
+                ],
+                onChanged: (v) {
+                  if (v != null) setDialogState(() => maxDimension = v);
+                },
+              ),
+              const SizedBox(height: 12),
+              // Fondo transparente
+              SwitchListTile(
+                title: const Text('Fondo transparente'),
+                subtitle: const Text('Sin plantilla ni papel'),
+                value: transparentBg,
+                onChanged: (v) =>
+                    setDialogState(() => transparentBg = v),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              // Solo trazos
+              if (showStrokesOnly)
+                SwitchListTile(
+                  title: const Text('Solo trazos'),
+                  subtitle: const Text('Sin imágenes ni plantilla'),
+                  value: strokesOnly,
+                  onChanged: (v) =>
+                      setDialogState(() => strokesOnly = v),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                context,
+                ExportOptions(
+                  maxDimension: maxDimension,
+                  transparentBackground: transparentBg,
+                  strokesOnly: strokesOnly,
+                ),
+              ),
+              child: const Text('Exportar'),
+            ),
+          ],
         ),
-        '${_safeName(_c.document.title)}.pdf',
+      ),
+    );
+  }
+
+  Future<void> _exportPng() => _exportWithOptions(
+        (opts) => ExportService.renderPagePng(
+          _c.page,
+          sheetSize: _c.sheetSize,
+          imageCache: _imageService.cache,
+          options: opts,
+        ),
+        'inklus_pagina_${_c.pageIndex + 1}.png',
+        showStrokesOnly: true,
       );
 
-  /// Guarda una copia del cuaderno en formato propio .inklus (autocontenido:
-  /// documento + imágenes embebidas; se puede reimportar o subir a Drive).
+  Future<void> _exportPdf() => _exportWithOptions(
+        (opts) => ExportService.renderPagePdf(
+          _c.page,
+          sheetSize: _c.sheetSize,
+          imageCache: _imageService.cache,
+          options: opts,
+        ),
+        'inklus_pagina_${_c.pageIndex + 1}.pdf',
+        showStrokesOnly: true,
+      );
+
+  Future<void> _exportNotebookPdf() => _exportWithOptions(
+        (opts) => ExportService.renderNotebookPdf(
+          _c.document,
+          imageCache: _imageService.cache,
+          options: opts,
+        ),
+        '${_safeName(_c.document.title)}.pdf',
+        showStrokesOnly: true,
+      );
+
   Future<void> _exportInklusCopy() => _export(
         () => InklusFormat.exportBytes(_c.document),
         '${_safeName(_c.document.title)}.inklus',
       );
+
+  /// Exporta la página actual a SVG (solo trazos).
+  Future<void> _exportSvg() async {
+    try {
+      final svgString = ExportService.renderPageSvg(_c.page);
+      final bytes = Uint8List.fromList(utf8.encode(svgString));
+      final name = 'inklus_pagina_${_c.pageIndex + 1}.svg';
+      await _saveBytes(bytes, name);
+    } catch (e) {
+      _snack('Error al exportar SVG: $e');
+    }
+  }
+
+  /// Reconoce el texto escrito a mano en la página actual (OCR).
+  Future<void> _recognizeText() async {
+    if (!OcrService.isSupported) {
+      _snack('OCR solo está disponible en Android e iOS');
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Reconociendo texto...', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+      ),
+    );
+    try {
+      final result = await OcrService.recognizeText(
+        _c.page,
+        sheetSize: _c.sheetSize,
+        imageCache: _imageService.cache,
+      );
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+
+      if (result.isEmpty) {
+        _snack('No se reconoció texto en esta página');
+        return;
+      }
+
+      // Mostrar resultado y permitir copiar.
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Texto reconocido'),
+          content: SingleChildScrollView(
+            child: SelectableText(
+              result.text,
+              style: const TextStyle(fontSize: 15),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: result.text));
+                Navigator.pop(context);
+                _snack('Texto copiado al portapapeles');
+              },
+              child: const Text('Copiar'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      _snack('Error al reconocer texto: $e');
+    }
+  }
 
   /// Nombre de archivo seguro a partir del título del cuaderno.
   String _safeName(String title) {
@@ -157,6 +351,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Future<Uint8List> Function() render,
     String fileName,
   ) async {
+    // Previsualización: renderizar primero y mostrar antes de guardar.
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -166,12 +361,42 @@ class _HomeScreenState extends State<HomeScreen> {
       final bytes = await render();
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
+
+      // Mostrar previsualización si es imagen (PNG).
+      if (fileName.endsWith('.png')) {
+        final shouldSave = await _showPreviewDialog(bytes, fileName);
+        if (shouldSave != true) return;
+      }
+
       await _saveBytes(bytes, fileName);
     } catch (e) {
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
       _snack('Error al exportar: $e');
     }
+  }
+
+  /// Diálogo de previsualización para exportaciones de imagen.
+  Future<bool?> _showPreviewDialog(Uint8List bytes, String fileName) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Previsualización: $fileName'),
+        content: SingleChildScrollView(
+          child: Image.memory(bytes, fit: BoxFit.contain),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _saveBytes(Uint8List bytes, String fileName) async {
@@ -198,6 +423,59 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
   }
+
+  // -------------------------------------------------------------------------
+  // Compartir (share_plus)
+  // -------------------------------------------------------------------------
+
+  Future<void> _sharePng() async {
+    try {
+      final bytes = await ExportService.renderPagePng(
+        _c.page,
+        sheetSize: _c.sheetSize,
+        imageCache: _imageService.cache,
+      );
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/inklus_pagina_${_c.pageIndex + 1}.png');
+      await file.writeAsBytes(bytes);
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Página de Inklus'));
+    } catch (e) {
+      _snack('Error al compartir: $e');
+    }
+  }
+
+  Future<void> _sharePdf() async {
+    try {
+      final bytes = await ExportService.renderPagePdf(
+        _c.page,
+        sheetSize: _c.sheetSize,
+        imageCache: _imageService.cache,
+      );
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/inklus_pagina_${_c.pageIndex + 1}.pdf');
+      await file.writeAsBytes(bytes);
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Página de Inklus'));
+    } catch (e) {
+      _snack('Error al compartir: $e');
+    }
+  }
+
+  Future<void> _shareInklus() async {
+    try {
+      final bytes = await InklusFormat.exportBytes(_c.document);
+      final dir = await getTemporaryDirectory();
+      final name = '${_safeName(_c.document.title)}.inklus';
+      final file = File('${dir.path}/$name');
+      await file.writeAsBytes(bytes);
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Cuaderno de Inklus'));
+    } catch (e) {
+      _snack('Error al compartir: $e');
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Sync / Drive
+  // -------------------------------------------------------------------------
 
   /// Botón ☁️: inicia sesión o muestra el menú de Drive.
   Future<void> _syncPressed() async {
@@ -229,7 +507,32 @@ class _HomeScreenState extends State<HomeScreen> {
             ListTile(
               leading: const Icon(Icons.cloud_download_outlined),
               title: const Text('Restaurar desde la nube'),
+              subtitle: const Text('Última versión (last-write-wins)'),
               onTap: () => Navigator.pop(context, 'restore'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.history),
+              title: const Text('Ver versiones en Drive'),
+              onTap: () => Navigator.pop(context, 'versions'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.upload_file),
+              title: const Text('Subir archivo .inklus'),
+              onTap: () => Navigator.pop(context, 'uploadFile'),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.sync),
+              title: Text(_syncEnabledForCurrent
+                  ? 'Sync: activada para este cuaderno'
+                  : 'Sync: desactivada para este cuaderno'),
+              onTap: () => Navigator.pop(context, 'toggleSync'),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.switch_account),
+              title: const Text('Cambiar de cuenta'),
+              onTap: () => Navigator.pop(context, 'switchAccount'),
             ),
             ListTile(
               leading: const Icon(Icons.logout),
@@ -246,9 +549,39 @@ class _HomeScreenState extends State<HomeScreen> {
         await _backupNow();
       case 'restore':
         await _restoreFromCloud();
+      case 'versions':
+        await _showVersions();
+      case 'uploadFile':
+        await _uploadInklusFile();
+      case 'toggleSync':
+        await _toggleSyncForCurrent();
+      case 'switchAccount':
+        await _switchAccount();
       case 'signout':
         await _syncService.signOut();
         if (mounted) _snack('Sesión cerrada');
+    }
+  }
+
+  bool _syncEnabledForCurrent = true;
+
+  Future<void> _loadSyncEnabled() async {
+    final metas = await _storage.loadIndex();
+    final meta = metas.where((m) => m.id == _c.document.id).firstOrNull;
+    if (meta != null && mounted) {
+      setState(() => _syncEnabledForCurrent = meta.isSyncEnabled);
+    }
+  }
+
+  Future<void> _toggleSyncForCurrent() async {
+    final doc = _controller.document;
+    final currentEnabled = _syncEnabledForCurrent;
+    await _storage.setSyncEnabled(doc.id, !currentEnabled);
+    await _loadSyncEnabled();
+    if (mounted) {
+      _snack(currentEnabled
+          ? 'Sync desactivada para este cuaderno'
+          : 'Sync activada para este cuaderno');
     }
   }
 
@@ -256,7 +589,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _syncing = true);
     try {
       final ok = await _syncService.signIn();
-      if (!ok) return; // usuario canceló el diálogo de Google
+      if (!ok) return;
       if (mounted) _snack('Conectado como ${_syncService.email}');
       await _backupNow();
     } catch (e) {
@@ -269,7 +602,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _backupNow() async {
     setState(() => _syncing = true);
     try {
-      // Acción explícita del usuario: fuerza el consentimiento si hace falta.
       await _syncService.backupDocument(
         _c.document,
         promptForConsent: true,
@@ -285,7 +617,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _restoreFromCloud() async {
     setState(() => _syncing = true);
     try {
-      final doc = await _syncService.restoreDocument();
+      // Pedir contraseña si el usuario quiere descifrar.
+      final password = await _promptPassword(
+        titulo: 'Restaurar desde Drive',
+        hint: 'Contraseña (dejar vacío si no está cifrado)',
+      );
+      final doc = await _syncService.restoreDocument(
+        password: password?.isEmpty == true ? null : password,
+      );
       if (!mounted) return;
       if (doc == null) {
         _snack('Todavía no hay ninguna copia en Google Drive');
@@ -298,6 +637,147 @@ class _HomeScreenState extends State<HomeScreen> {
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
+  }
+
+  /// Muestra la lista de versiones disponibles en Drive y deja elegir.
+  Future<void> _showVersions() async {
+    setState(() => _syncing = true);
+    try {
+      final versions = await _syncService.listVersions();
+      if (!mounted) return;
+      if (versions.isEmpty) {
+        _snack('No hay versiones en Google Drive');
+        return;
+      }
+      final chosen = await showModalBottomSheet<String>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Versiones en Drive',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: versions.length,
+                  itemBuilder: (context, index) {
+                    final v = versions[index];
+                    final sizeKb = (v.sizeBytes / 1024).round();
+                    return ListTile(
+                      leading: const Icon(Icons.description_outlined),
+                      title: Text(v.name),
+                      subtitle: Text(
+                        '${_formatDate(v.modifiedTime)} · $sizeKb KB',
+                      ),
+                      onTap: () => Navigator.pop(context, v.fileId),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (chosen == null) return;
+
+      final password = await _promptPassword(
+        titulo: 'Descifrar versión',
+        hint: 'Contraseña (dejar vacío si no está cifrado)',
+      );
+      final doc = await _syncService.downloadVersion(
+        chosen,
+        password: password?.isEmpty == true ? null : password,
+      );
+      if (!mounted) return;
+      if (doc == null) {
+        _snack('No se pudo leer esa versión');
+      } else {
+        _c.replaceDocument(doc);
+        _snack('Versión restaurada');
+      }
+    } catch (e) {
+      if (mounted) _snack('Error: $e');
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  /// Sube un archivo .inklus manual a Drive.
+  Future<void> _uploadInklusFile() async {
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['inklus'],
+      );
+      if (files.isEmpty) return;
+      final filePath = files.first.path!;
+      final bytes = await File(filePath).readAsBytes();
+      final name = files.first.name;
+      setState(() => _syncing = true);
+      await _syncService.uploadInklusFile(bytes, name, promptForConsent: true);
+      if (mounted) _snack('Archivo "$name" subido a Google Drive');
+    } catch (e) {
+      if (mounted) _snack('Error al subir: $e');
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  Future<void> _switchAccount() async {
+    setState(() => _syncing = true);
+    try {
+      final ok = await _syncService.switchAccount();
+      if (ok && mounted) {
+        _snack('Conectado como ${_syncService.email}');
+      }
+    } catch (e) {
+      if (mounted) _snack('$e');
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  /// Pide una contraseña al usuario (para cifrado/descifrado).
+  Future<String?> _promptPassword({
+    required String titulo,
+    required String hint,
+  }) async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(titulo),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          obscureText: true,
+          decoration: InputDecoration(hintText: hint),
+          onSubmitted: (v) => Navigator.pop(context, v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, ''),
+            child: const Text('Sin contraseña'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final t = date.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(t.day)}/${two(t.month)}/${t.year} ${two(t.hour)}:${two(t.minute)}';
   }
 
   Future<void> _editTitle() async {
@@ -345,6 +825,16 @@ class _HomeScreenState extends State<HomeScreen> {
         _exportNotebookPdf();
       case 'inklus':
         _exportInklusCopy();
+      case 'svg':
+        _exportSvg();
+      case 'ocr':
+        _recognizeText();
+      case 'sharePng':
+        _sharePng();
+      case 'sharePdf':
+        _sharePdf();
+      case 'shareInklus':
+        _shareInklus();
       case 'clear':
         _confirmClearPage();
       case 'backup':
@@ -436,7 +926,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 imageService: _imageService,
                               ),
                             ),
-                            if (controller.selectedImageId != null && !presentMode)
+                            if (controller.selectedImageId != null &&
+                                !presentMode)
                               Positioned(
                                 top: 12,
                                 right: 12,
@@ -456,14 +947,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                 bottom: 12,
                                 child: _ZoomControls(controller: controller),
                               ),
-                            // Minimapa en lienzos infinitos
                             if (!presentMode && !controller.sheetSize.isEmpty)
                               Positioned(
                                 left: 12,
                                 bottom: 12,
                                 child: MinimapWidget(controller: controller),
                               ),
-                            // Botón salir de presentación
                             if (presentMode)
                               Positioned(
                                 top: 12,
@@ -506,11 +995,48 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildTopBar(BuildContext context) {
     final controller = _c;
-    // Escucha al controlador (título, páginas…) y al servicio de sync
-    // (icono ☁️ cambia al iniciar/cerrar sesión).
     return ListenableBuilder(
       listenable: Listenable.merge([controller, _syncService]),
       builder: (context, _) {
+        // Icono de sync según el estado del cuaderno actual.
+        final syncStatus = _syncService.statusFor(controller.document.id);
+        IconData cloudIcon;
+        Color? cloudColor;
+        String syncTooltip;
+
+        if (_syncing) {
+          cloudIcon = Icons.sync;
+          cloudColor = null;
+          syncTooltip = 'Sincronizando...';
+        } else if (!_syncService.isSignedIn) {
+          cloudIcon = Icons.cloud_upload_outlined;
+          cloudColor = null;
+          syncTooltip = 'Sincronizar con Google';
+        } else {
+          switch (syncStatus) {
+            case SyncStatus.synced:
+              cloudIcon = Icons.cloud_done;
+              cloudColor = const Color(0xFF3B82F6);
+              syncTooltip = 'Sincronizado con Google';
+            case SyncStatus.syncing:
+              cloudIcon = Icons.sync;
+              cloudColor = null;
+              syncTooltip = 'Sincronizando...';
+            case SyncStatus.error:
+              cloudIcon = Icons.cloud_off;
+              cloudColor = const Color(0xFFE53935);
+              syncTooltip = 'Error de sincronización';
+            case SyncStatus.disabled:
+              cloudIcon = Icons.cloud_queue;
+              cloudColor = Colors.black38;
+              syncTooltip = 'Sync desactivada para este cuaderno';
+            case SyncStatus.pending:
+              cloudIcon = Icons.cloud_upload_outlined;
+              cloudColor = null;
+              syncTooltip = 'Sincronizar con Google';
+          }
+        }
+
         return Material(
           color: Colors.white,
           elevation: 2,
@@ -585,28 +1111,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: controller.canRedo ? controller.redo : null,
                 ),
                 IconButton(
-                  tooltip: _syncService.isSignedIn
-                      ? 'Sincronizado con Google (${_syncService.email})'
-                      : 'Sincronizar con Google',
+                  tooltip: syncTooltip,
                   icon: _syncing
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child:
+                              CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Icon(
-                          _syncService.isSignedIn
-                              ? Icons.cloud_done
-                              : Icons.cloud_upload_outlined,
-                          color: _syncService.isSignedIn
-                              ? const Color(0xFF3B82F6)
-                              : null,
-                        ),
+                      : Icon(cloudIcon, color: cloudColor),
                   onPressed: _syncing ? null : _syncPressed,
-                ),                  PopupMenuButton<String>(
+                ),
+                PopupMenuButton<String>(
                   tooltip: 'Más opciones',
                   onSelected: _onMenuAction,
                   itemBuilder: (context) => [
+                    // --- Exportar ---
                     const PopupMenuItem(
                       value: 'png',
                       child: ListTile(
@@ -636,6 +1156,51 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: ListTile(
                         leading: Icon(Icons.save_alt),
                         title: Text('Guardar copia (.inklus)'),
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'svg',
+                      child: ListTile(
+                        leading: Icon(Icons.code_outlined),
+                        title: Text('Exportar trazos (SVG)'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'ocr',
+                      enabled: OcrService.isSupported,
+                      child: ListTile(
+                        leading: Icon(Icons.text_snippet_outlined),
+                        title: Text(OcrService.isSupported
+                            ? 'Reconocer texto (OCR)'
+                            : 'OCR (solo Android/iOS)'),
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    // --- Compartir ---
+                    const PopupMenuItem(
+                      value: 'sharePng',
+                      child: ListTile(
+                        leading: Icon(Icons.share_outlined),
+                        title: Text('Compartir página (PNG)'),
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'sharePdf',
+                      child: ListTile(
+                        leading: Icon(Icons.share_outlined),
+                        title: Text('Compartir página (PDF)'),
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'shareInklus',
+                      child: ListTile(
+                        leading: Icon(Icons.share_outlined),
+                        title: Text('Compartir cuaderno (.inklus)'),
                         dense: true,
                       ),
                     ),
@@ -778,7 +1343,8 @@ class _ZoomControls extends StatelessWidget {
                 IconButton(
                   tooltip: 'Acercar',
                   icon: const Icon(Icons.add),
-                  onPressed: () => controller.zoomAt(1.25, center, controller.viewportSize),
+                  onPressed: () => controller.zoomAt(
+                      1.25, center, controller.viewportSize),
                 ),
                 Text(
                   '${(controller.scale * 100).round()}%',
@@ -790,13 +1356,15 @@ class _ZoomControls extends StatelessWidget {
                 IconButton(
                   tooltip: 'Alejar',
                   icon: const Icon(Icons.remove),
-                  onPressed: () => controller.zoomAt(0.8, center, controller.viewportSize),
+                  onPressed: () => controller.zoomAt(
+                      0.8, center, controller.viewportSize),
                 ),
                 const Divider(height: 4),
                 IconButton(
                   tooltip: 'Ajustar a la vista',
                   icon: const Icon(Icons.fit_screen_outlined),
-                  onPressed: () => controller.fitView(controller.viewportSize),
+                  onPressed: () =>
+                      controller.fitView(controller.viewportSize),
                 ),
               ],
             ),

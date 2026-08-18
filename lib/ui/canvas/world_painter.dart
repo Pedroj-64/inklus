@@ -18,6 +18,9 @@ const deskColor = Color(0xFFEFEDE8);
 /// Se usa tanto en pantalla (con la transformación de vista aplicada por el
 /// llamador) como en la exportación a imagen/PDF (con rect del contenido).
 /// De esta forma lo que ves es exactamente lo que exportas.
+///
+/// [omitTemplate] = true: no dibuja la plantilla (fondo transparente).
+/// [omitImages] = true: no dibuja imágenes (solo trazos).
 void paintWorld(
   Canvas canvas, {
   required Rect visibleWorldRect,
@@ -27,45 +30,50 @@ void paintWorld(
   bool drawSelection = false,
   String? selectedImageId,
   double handleSizeWorld = 24,
+  bool omitTemplate = false,
+  bool omitImages = false,
 }) {
   final template = page.template;
 
-  // ---- Fondo general ----
-  canvas.drawRect(visibleWorldRect, Paint()..color = template.isFinite ? deskColor : paperColor);
+  // ---- Fondo general (omitido si omitTemplate) ----
+  if (!omitTemplate) {
+    canvas.drawRect(visibleWorldRect, Paint()..color = template.isFinite ? deskColor : paperColor);
+  }
 
-  // ---- Plantilla ----
-  switch (template.type) {
-    case TemplateType.blank:
-      break;
-    case TemplateType.sheet:
-      _drawSheet(canvas, sheetSize, page);
-      break;
-    case TemplateType.ruled:
-      _drawRuled(canvas, visibleWorldRect, template);
-      break;
-    case TemplateType.grid:
-      _drawGrid(canvas, visibleWorldRect, template);
-      break;
-    case TemplateType.custom:
-      final img = template.imagePath == null ? null : imageCache[template.imagePath];
-      if (img == null) {
-        // Imagen aún no decodificada: dibuja la silueta de la hoja.
-        if (template.infiniteFill) {
-          _drawGrid(canvas, visibleWorldRect, template);
+  // ---- Plantilla (omitida si omitTemplate) ----
+  if (!omitTemplate) {
+    switch (template.type) {
+      case TemplateType.blank:
+        break;
+      case TemplateType.sheet:
+        _drawSheet(canvas, sheetSize, page);
+        break;
+      case TemplateType.ruled:
+        _drawRuled(canvas, visibleWorldRect, template);
+        break;
+      case TemplateType.grid:
+        _drawGrid(canvas, visibleWorldRect, template);
+        break;
+      case TemplateType.custom:
+        final img = template.imagePath == null ? null : imageCache[template.imagePath];
+        if (img == null) {
+          if (template.infiniteFill) {
+            _drawGrid(canvas, visibleWorldRect, template);
+          } else {
+            _drawSheet(canvas, sheetSize, page);
+          }
+        } else if (template.infiniteFill) {
+          _drawTiledImage(canvas, visibleWorldRect, img);
         } else {
-          _drawSheet(canvas, sheetSize, page);
+          _drawSheet(canvas, sheetSize, page, image: img);
         }
-      } else if (template.infiniteFill) {
-        _drawTiledImage(canvas, visibleWorldRect, img);
-      } else {
-        _drawSheet(canvas, sheetSize, page, image: img);
-      }
-      break;
+        break;
+    }
   }
 
   // ---- Contenido: imágenes y trazos (recortado a la hoja si es finita) ----
   canvas.save();
-  if (template.isFinite) {
+  if (template.isFinite && !omitTemplate) {
     final sheetRect = Rect.fromCenter(
       center: Offset.zero,
       width: sheetSize.width,
@@ -74,17 +82,20 @@ void paintWorld(
     canvas.clipRect(sheetRect);
   }
 
-  for (final item in page.images) {
-    final img = imageCache[item.localPath];
-    if (img == null) continue;
-    canvas.drawImageRect(
-      img,
-      Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
-      item.rect,
-      Paint()..filterQuality = FilterQuality.medium,
-    );
-    if (drawSelection && item.id == selectedImageId) {
-      _drawSelection(canvas, item, handleSizeWorld);
+  // Imágenes (omitidas si omitImages)
+  if (!omitImages) {
+    for (final item in page.images) {
+      final img = imageCache[item.localPath];
+      if (img == null) continue;
+      canvas.drawImageRect(
+        img,
+        Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+        item.rect,
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+      if (drawSelection && item.id == selectedImageId) {
+        _drawSelection(canvas, item, handleSizeWorld);
+      }
     }
   }
 

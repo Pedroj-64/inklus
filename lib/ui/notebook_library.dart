@@ -100,7 +100,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
       page,
       sheetSize: page.template.sheetSize,
       imageCache: _imageService.cache,
-      maxDimension: 480,
+      options: const ExportOptions(maxDimension: 480),
     );
   }
 
@@ -476,24 +476,36 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
   }
 
   Widget _buildGrid(List<NotebookMeta> metas) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(20),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 230,
-        mainAxisExtent: 268,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: metas.length,
-      itemBuilder: (context, index) => _NotebookCard(
-        meta: metas[index],
-        thumb: _thumbFor(metas[index]),
-        onTap: () => _openNotebook(metas[index]),
-        onRename: () => _renameNotebook(metas[index]),
-        onDuplicate: () => _duplicateNotebook(metas[index]),
-        onDelete: () => _deleteNotebook(metas[index]),
-        onSetColor: () => _setNotebookColor(metas[index]),
-      ),
+    return ListenableBuilder(
+      listenable: DriveSyncService.instance,
+      builder: (context, _) {
+        return GridView.builder(
+          padding: const EdgeInsets.all(20),
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 230,
+            mainAxisExtent: 268,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+          ),
+          itemCount: metas.length,
+          itemBuilder: (context, index) {
+            final meta = metas[index];
+            final syncStatus = meta.isSyncEnabled
+                ? DriveSyncService.instance.statusFor(meta.id)
+                : SyncStatus.disabled;
+            return _NotebookCard(
+              meta: meta,
+              thumb: _thumbFor(meta),
+              syncStatus: syncStatus,
+              onTap: () => _openNotebook(meta),
+              onRename: () => _renameNotebook(meta),
+              onDuplicate: () => _duplicateNotebook(meta),
+              onDelete: () => _deleteNotebook(meta),
+              onSetColor: () => _setNotebookColor(meta),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -510,6 +522,7 @@ class _NotebookCard extends StatelessWidget {
   final VoidCallback onDuplicate;
   final VoidCallback onDelete;
   final VoidCallback onSetColor;
+  final SyncStatus syncStatus;
 
   const _NotebookCard({
     required this.meta,
@@ -519,6 +532,7 @@ class _NotebookCard extends StatelessWidget {
     required this.onDuplicate,
     required this.onDelete,
     required this.onSetColor,
+    this.syncStatus = SyncStatus.pending,
   });
 
   @override
@@ -648,14 +662,22 @@ class _NotebookCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    meta.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          meta.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      _SyncIcon(status: syncStatus),
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -685,4 +707,46 @@ String _relativeTime(DateTime time) {
   final t = time.toLocal();
   String two(int n) => n.toString().padLeft(2, '0');
   return '${two(t.day)}/${two(t.month)}/${t.year}';
+}
+
+/// Icono que muestra el estado de sincronización de un cuaderno.
+class _SyncIcon extends StatelessWidget {
+  final SyncStatus status;
+  const _SyncIcon({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    switch (status) {
+      case SyncStatus.synced:
+        return const Icon(
+          Icons.cloud_done,
+          size: 16,
+          color: Color(0xFF3B82F6),
+        );
+      case SyncStatus.syncing:
+        return const SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(strokeWidth: 1.5),
+        );
+      case SyncStatus.error:
+        return const Icon(
+          Icons.sync_problem,
+          size: 16,
+          color: Color(0xFFE53935),
+        );
+      case SyncStatus.disabled:
+        return const Icon(
+          Icons.cloud_off,
+          size: 16,
+          color: Colors.black26,
+        );
+      case SyncStatus.pending:
+        return const Icon(
+          Icons.cloud_upload_outlined,
+          size: 16,
+          color: Colors.black38,
+        );
+    }
+  }
 }

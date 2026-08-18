@@ -100,3 +100,9 @@ ui/
 - Migración: si `index.json` no existe pero sí `current_document.json`, se importa como primer cuaderno y se borra el legacy.
 - Lienzo infinito: plantillas `blank/ruled/grid/custom+infiniteFill`; hoja finita: `sheet/custom sin relleno` (contenido recortado a la hoja).
 - `fitView` centra la hoja finita o pone zoom 1.0 en infinitas.
+
+## Decisiones de diseño (no re-abrir)
+
+- **Conflictos de Drive: last-write-wins**. Cuando dos dispositivos editan el mismo cuaderno, el documento con `updatedAt` más reciente gana. Es más simple que merge por página y evita pérdida de contenido no intencionada. El usuario puede ver todas las versiones en Drive (menú ☁️ → "Ver versiones") y restaurar la que quiera.
+- **Cifrado de backup: XOR con clave derivada**. No es criptografía de grado militar, pero evita lectura casual de archivos personales. La contraseña se usa como semilla para un PRNG determinista que genera la clave XOR. Sin dependencias externas.
+- **Sync selectiva**: `NotebookMeta.syncEnabled` (null = true por defecto para compatibilidad). El backup automático solo sube cuadernos con sync habilitado.

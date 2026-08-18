@@ -43,6 +43,9 @@ dependencies:
   _discoveryapis_commons: ^1.0.7
   http: ^1.6.0
   archive: ^4.0.9
+  share_plus: ^13.3.0
+  google_mlkit_text_recognition: ^0.16.0
+  xml: ^7.0.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
