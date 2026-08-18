@@ -1,0 +1,152 @@
+# ===========================================================================
+# Inklus — .gitignore para open source
+# ===========================================================================
+
+# --- Dart / Flutter ---
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+pubspec.lock          # Se recomienda ignorar en librerías; descomentar si es app
+*.iml
+.metadata
+.vmextension
+
+# --- IDEs ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# --- macOS ---
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# --- Linux ---
+*~
+.directory
+.Trash-*
+.nfs*
+
+# --- Windows ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Android build artifacts ---
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+/android/local.properties
+/android/.gradle/
+/android/captures/
+/android/gradlew
+/android/gradlew.bat
+
+# --- iOS (si se agrega en el futuro) ---
+/ios/Pods/
+/ios/.symlinks/
+/ios/Flutter/Flutter.framework
+/ios/Flutter/Flutter.podspec
+/ios/Runner/GeneratedPluginRegistrant.*
+**/ios/**/*.pbxuser
+**/ios/**/*.mode1v3
+**/ios/**/*.mode2v3
+**/ios/**/*.perspectivev3
+**/ios/**/*sync/
+**/ios/**/.sconsign.dblite
+**/ios/**/.tags*
+**/ios/**/DerivedData/
+**/ios/**/Icon?
+**/ios/**/Pods/
+
+# --- Linux desktop ---
+/linux/flutter/ephemeral/
+
+# --- Web (si se agrega) ---
+/web/favicon.png
+/web/icons/
+/web/manifest.json
+
+# --- Widget Preview ---
+.widget_preview/
+
+# --- Coverage / profiling ---
+/coverage/
+*.trace
+*.systrace
+*.json.trace
+
+# --- Symbolication / obfuscation ---
+app.*.symbols
+app.*.map.json
+
+# ===========================================================================
+# SEGURIDAD — Archivos sensibles que NUNCA deben subirse a GitHub
+# ===========================================================================
+
+# --- Google / Firebase ---
+# google-services.json contiene claves de API de Firebase
+**/google-services.json
+# google-sign-in web client ID (solo usar variable de entorno en CI)
+# El valor está en android/app/src/main/res/values/strings.xml
+
+# --- .env y variables de entorno ---
+.env
+.env.*
+*.env
+**/.env
+
+# --- Keystore / firmas ---
+*.jks
+*.keystore
+key.properties
+**/key.properties
+upload-keystore.jks
+android/app/*.jks
+
+# --- API keys / tokens ---
+*api_key*
+*api-key*
+*secret*
+*token*
+*.pem
+*.p12
+*.pfx
+
+# --- Firebase config (si se reintegra) ---
+firebase-debug.log
+firestore-debug.log
+storage-debug.log
+**/firebase_options.dart
+
+# --- Archivos de sistema / backup ---
+*.bak
+*.backup
+*.tmp
+*.temp
+*.orig
+
+# --- Logs ---
+*.log
+npm-debug.log*
+
+# --- Archivos generados por scripts ---
+/scripts/*.key
+/scripts/*.secret
+
+# --- Notas / docs internas ---
+NOTES.md
+TODO.md
+HACKING.md
+# (mantener README.md, ROADMAP.md, AGENTS.md)

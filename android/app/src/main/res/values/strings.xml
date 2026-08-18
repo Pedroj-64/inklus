@@ -1,0 +1,6 @@
+<resources>
+    <!-- Cliente OAuth web del proyecto Google/Firebase 'inklus'. google_sign_in
+         lo usa en Android para el intercambio de tokens (antes lo generaba el
+         plugin de google-services desde google-services.json). -->
+    <string name="default_web_client_id">895214163532-kbqh115nrc5417lbs3b1sqmsguqqeje4.apps.googleusercontent.com</string>
+</resources>
