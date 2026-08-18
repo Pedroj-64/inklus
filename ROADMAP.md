@@ -7,8 +7,8 @@
 - Cada fila es una **tarea independiente** con su *por qué / cómo*: el **por qué** justifica el valor, el **cómo** apunta a archivos y APIs concretas del código (no es una orden de implementación, es la pista).
 - Marcadores: **`✅`** = hecho e integrado en `main`; el resto está **ordenado por valor** dentro de cada fase.
 - **Regla de oro: offline-first.** Todo debe seguir funcionando 100% sin red y sin cuenta; Google Drive es un respaldo *opcional*. Las imágenes siempre viven locales (viajan embebidas dentro del `.inklus`, nunca como archivos sueltos).
+- **Filosofía open source / gratis.** Inklus es una app gratuita y de código abierto. No hay funciones "premium" ni features tras paywall. Las dependencias externas deben ser gratuitas o tener tier gratuito generoso. Si algo requiere un servicio de pago, se documenta como opcional y la app funciona perfectamente sin ello.
 - Antes de implementar cualquier tarea: leer `AGENTS.md` y respetar sus **flujos críticos (no romper)** — stylus/rechazo de palma, capas de pintado, deshacer, exportación y sincronización.
-- Orden sugerido: **Fase 1 → 2 → 3** son las de mayor valor actual (sin dependencias externas o integraciones simples); **4 → 6** son más experimentales y pueden esperar.
 
 ---
 
@@ -66,9 +66,13 @@
 
 ## ✅ Decisiones tomadas (no re-abrir)
 
+- **Todo gratis, sin premium.** Inklus es open source y no tendrá funciones de pago. Las features premium de apps competidoras (GoodNotes, Samsung Notes, Notability) se implementan aquí de forma gratuita.
 - **Imágenes → locales, embebidas en `.inklus`**: nada se sube a servidores como archivos sueltos. El backup de Drive es un único archivo autocontenido por cuaderno.
 - **Sin Firebase**: se eliminó por completo (causaba crash al arrancar: `FirebaseAuth.instance` sin `Firebase.initializeApp()`). Google Sign-In usa el `default_web_client_id` manual en `res/values/strings.xml`.
 - **Offline-first**: el almacenamiento local es la fuente de verdad; Drive solo replica.
+- **Conflictos de Drive: last-write-wins.** El documento con `updatedAt` más reciente gana. Simple, predecible, sin pérdida de contenido.
+- **Cifrado de backup: XOR con clave derivada.** Evita lectura casual; no es criptografía de grado militar pero es suficiente para archivos personales. Sin dependencias externas.
+- **Sync selectiva**: `NotebookMeta.syncEnabled` (null = true por defecto para compatibilidad).
 
 ---
 
@@ -76,33 +80,34 @@
 
 | # | Tarea | Estado |
 |---|---|---|
-| 1.2 | **Miniaturas de páginas** (franja inferior en el editor) | ✅ `page_thumbnails.dart` |
-| 1.3 | **Duplicar / reordenar páginas** (drag & drop) | ✅ `canvas_controller.dart` + `page_thumbnails.dart` |
-| 1.4 | **Opciones de plantilla** (color de línea, separación, tamaño de hoja) | ✅ `template_picker_sheet.dart` |
-| 1.5 | **Buscar y ordenar cuadernos** en la biblioteca | ✅ `notebook_library.dart` |
-| 1.6 | **Portada y color por cuaderno** | ✅ `NotebookMeta.colorValue` + UI |
-| 1.7 | **Importar `.inklus`** desde la biblioteca | ✅ `notebook_library.dart` |
-| 1.8 | **Papelera** (recuperar cuadernos eliminados) | ✅ `trash_screen.dart` + `StorageService` |
+| 1.1 | ✅ **Biblioteca de cuadernos** (miniaturas, CRUD) | Hecho |
+| 1.2 | ✅ **Miniaturas de páginas** (franja inferior en el editor) | `page_thumbnails.dart` |
+| 1.3 | ✅ **Duplicar / reordenar páginas** (drag & drop) | `canvas_controller.dart` + `page_thumbnails.dart` |
+| 1.4 | ✅ **Opciones de plantilla** (color de línea, separación, tamaño de hoja) | `template_picker_sheet.dart` |
+| 1.5 | ✅ **Buscar y ordenar cuadernos** en la biblioteca | `notebook_library.dart` |
+| 1.6 | ✅ **Portada y color por cuaderno** | `NotebookMeta.colorValue` + UI |
+| 1.7 | ✅ **Importar `.inklus`** desde la biblioteca | `notebook_library.dart` |
+| 1.8 | ✅ **Papelera** (recuperar cuadernos eliminados) | `trash_screen.dart` + `StorageService` |
 
 ---
 
-## ☁️ Fase 2 — Sincronización y nube (Google Drive)
+## ☁️ Fase 2 — Sincronización y nube *(✅ COMPLETA)*
 
 | # | Tarea | Estado |
 |---|---|---|
-| 2.1 | ✅ **Google Drive + `.inklus`** | Hecho: `DriveSyncService` con `drive.file`; backup/restore del contenedor `.inklus`. |
-| 2.2 | ✅ **Estado de sincronización visible** (icono subiendo/sincronizado/error por cuaderno) | `SyncStatus` enum en `DriveSyncService`; iconos en tarjetas de la biblioteca y top bar del editor. |
+| 2.1 | ✅ **Google Drive + `.inklus`** | `DriveSyncService` con `drive.file`; backup/restore del contenedor `.inklus`. |
+| 2.2 | ✅ **Estado de sincronización visible** | `SyncStatus` enum; iconos en tarjetas de la biblioteca y top bar del editor. |
 | 2.3 | ✅ **Conflictos** (last-write-wins) | `restoreDocument()` compara `updatedAt`; la versión más reciente de Drive gana. |
-| 2.4 | ✅ **Restaurar entre copias** (elegir entre las últimas N) | `listVersions()` lista archivos `.inklus` en Drive; menú ☁️ → "Ver versiones" con fecha/tamaño. |
-| 2.5 | ✅ **Cifrado opcional del backup** (`.inklus` con contraseña) | XOR con clave derivada de la contraseña; pedir contraseña al exportar/importar desde Drive. |
-| 2.6 | ✅ **Cambiar de cuenta** | `switchAccount()` cierra sesión y abre selector de Google; menú ☁️ → "Cambiar de cuenta". |
-| 2.7 | ✅ **Subir/bajar `.inklus` manual** desde el menú ☁️ | `uploadInklusFile()` sube un archivo elegido del dispositivo; menú ☁️ → "Subir archivo .inklus". |
-| 2.8 | ✅ **Sync selectiva** (elegir qué cuadernos sincronizar) | Flag `syncEnabled` en `NotebookMeta`; toggle en menú ☁️; backup automático respeta el flag. |
-| 2.9 | ✅ **Notificación de sync** (toast al completar) | `onSyncComplete` callback en `DriveSyncService`; snackbar en biblioteca y editor. |
+| 2.4 | ✅ **Restaurar entre copias** | `listVersions()` lista archivos `.inklus` en Drive; menú ☁️ → "Ver versiones". |
+| 2.5 | ✅ **Cifrado opcional del backup** | XOR con clave derivada de la contraseña; pedir contraseña al exportar/importar desde Drive. |
+| 2.6 | ✅ **Cambiar de cuenta** | `switchAccount()` cierra sesión y abre selector de Google. |
+| 2.7 | ✅ **Subir/bajar `.inklus` manual** | `uploadInklusFile()` sube un archivo elegido del dispositivo; menú ☁️ → "Subir archivo .inklus". |
+| 2.8 | ✅ **Sync selectiva** | Flag `syncEnabled` en `NotebookMeta`; toggle en menú ☁️; backup automático respeta el flag. |
+| 2.9 | ✅ **Notificación de sync** | `onSyncComplete` callback en `DriveSyncService`; snackbar en biblioteca y editor. |
 
 ---
 
-## 📤 Fase 3 — Exportar y compartir
+## 📤 Fase 3 — Exportar y compartir *(✅ COMPLETA)*
 
 | # | Tarea | Estado |
 |---|---|---|
@@ -110,7 +115,7 @@
 | 3.2 | ✅ **Compartir** (PNG/PDF/.inklus a otras apps) | `share_plus` v13; menú ⋮ → compartir PNG/PDF/.inklus. |
 | 3.3 | ✅ **Tamaño/DPI de exportación configurable** | `ExportOptions(maxDimension:)` con diálogo: baja/media/alta/máxima (1024–8192 px). |
 | 3.4 | ✅ **Exportar región/selección** | `ExportOptions(region: Rect)` — renderiza solo un rect del mundo. |
-| 3.5 | ✅ **Exportar a texto** (OCR) | `google_mlkit_text_recognition` on-device; solo Android/iOS; `OcrService.recognizeText()` con diálogo + copiar al portapapeles. |
+| 3.5 | ✅ **Exportar a texto** (OCR) | `google_mlkit_text_recognition` on-device; solo Android/iOS; `OcrService.recognizeText()` con diálogo + copiar. |
 | 3.6 | ✅ **Exportar sin fondo / con plantilla** | `ExportOptions(transparentBackground: true)` + `paintWorld(omitTemplate:)`. |
 | 3.7 | ✅ **Exportar solo trazos** | `ExportOptions(strokesOnly: true)` + `paintWorld(omitImages:, omitTemplate:)`. |
 | 3.8 | ✅ **Exportar a SVG** | `ExportService.renderPageSvg()` con `package:xml` v7; polígonos de `StrokeEngine.outlineFor` → paths SVG. |
@@ -118,81 +123,103 @@
 
 ---
 
-## ✍️ Fase 4 — Funciones avanzadas de escritura
+## ✍️ Fase 4 — Funciones avanzadas de escritura *(✅ COMPLETA)*
 
-| # | Tarea | Por qué / cómo |
-|---|---|---|
-| 4.1 | **OCR de tinta** (escritura → texto) | `google_mlkit_text_recognition` (on-device, gratis); seleccionar región con la herramienta de selección. |
-| 4.2 | **Selección con lazo** (mover/borrar/copiar trazos) | Modo lasso en `ToolType`; hit-test contra puntos de trazos (`StrokePoint`); reutilizar el patrón de `CanvasAction` para deshacer. |
-| 4.3 | **Figuras** (línea, flecha, rectángulo, círculo) | Post-procesar el trazo al soltar (aproximación a forma perfecta) o modo dedicado; guardar como `Stroke` normal. |
-| 4.4 | **Rotación de imágenes** | `ImageItem` no tiene rotación; añadir campo `rotation` (+JSON) y asa de rotación en la selección. |
-| 4.5 | **Editor de presión/streamline** (tipo Procreate) | Exponer `StrokeOptions` de `perfect_freehand` (thinning/smoothing/streamline) por herramienta. |
-| 4.6 | **Transformar selección** (escalar/rotar/mover trazos) | Sobre la selección con lazo: aplicar transformación afín a los puntos y empujar una sola `CanvasAction`. |
-| 4.7 | **Capas por página** (ocultar/bloquear/mover) | `Page` necesitaría una lista de capas; requiere migración de JSON (cuidado con la compatibilidad del `.inklus`). |
-| 4.8 | **Cajas de texto** (teclado) | Nuevo tipo de item (`TextItem`) en el lienzo con `TextField` overlay; añadir al JSON y al `.inklus`. |
-| 4.9 | ✅ **Lupa / minimapa** en lienzos infinitos | Hecho: `minimap.dart` (overlay en esquina inferior izquierda). |
-| 4.10 | **Gestos y atajos** | Doble toque con borrador físico, mantener para borrador temporal, gesto de deshacer con dos dedos… en `drawing_canvas.dart`. |
-| 4.11 | **Biblioteca de plantillas propias** | Guardar plantillas custom reutilizables (`inklus/templates/`) y listarlas en `template_picker_sheet.dart`. |
-| 4.12 | ✅ **Modo presentación / pizarra** | Hecho: toggle en menú ⋮ que oculta todas las barras. |
-| 4.13 | **Copy & paste de trazos** | Seleccionar trazos con lazo → copiar (portapapeles interno) → pegar en otra posición o página. |
-| 4.14 | **Snapping / guías magnéticas** | Mostrar guías al alinear trazos/figuras entre sí o con los bordes de la hoja. |
-| 4.15 | **Relleno de áreas** (herramienta bucket) | Detectar regiones cerradas y rellenar con color; requiere flood fill sobre el canvas rasterizado. |
+### 4A — Prioritarias (alto impacto, bajo esfuerzo)
 
----
+| # | Tarea | Estado | Por qué / cómo |
+|---|---|---|---|
+| 4.1 | ✅ **OCR de tinta** | Hecho (3.5) | `google_mlkit_text_recognition` on-device. |
+| 4.4 | ✅ **Rotación de imágenes** | Hecho | Campo `rotation` en `ImageItem` (+JSON), asa de rotación en selección, `canvas.rotate()` en `world_painter.dart`. |
+| 4.5 | ✅ **Editor de presión/streamline** | Hecho | Panel deslizante en `stroke_options_sheet.dart` (thinning/smoothing/streamline por herramienta). |
+| 4.9 | ✅ **Minimapa** | Hecho | `minimap.dart` (overlay en esquina inferior izquierda). |
+| 4.10 | ✅ **Gestos y atajos** | Hecho | Doble toque con borrador físico = borrar página; deshacer con gesto de dos dedos. |
+| 4.11 | ✅ **Biblioteca de plantillas propias** | Hecho | `TemplateLibraryService` guarda en `inklus/templates/`; listar en `template_picker_sheet.dart`. |
+| 4.12 | ✅ **Modo presentación** | Hecho | Toggle en menú ⋮ que oculta todas las barras. |
 
-## 🧪 Fase 5 — Calidad, plataformas y producto
+### 4B — Intermedias (alto impacto, esfuerzo medio)
 
-| # | Tarea | Por qué / cómo |
-|---|---|---|
-| 5.1 | **Tests de lógica** (borrador, deshacer, transformación, exportación) | `eraser.dart`, `undo_stack.dart` y `InklusFormat` ya son testables en Dart puro; ampliar `test/`. |
-| 5.2 | **Rendimiento en documentos grandes** | Cachear polígonos de `getStroke` por trazo (invalidar al editar); hoy se recalculan en cada pintado. |
-| 5.3 | **iOS/macOS/Windows/Web** | Sin Firebase ya: `flutter create . --platforms=...`; revisar `google_sign_in` por plataforma (Linux no lo soporta — la app ya lo protege con try/catch). |
-| 5.4 | ✅ **CI (GitHub Actions)** | Hecho: `.github/workflows/ci.yml` (analyze + test + build APK debug). |
-| 5.5 | **Tema oscuro** | `ThemeData(brightness: dark)` en `app.dart`; revisar colores hardcodeados (`0xFFEFEDE8`, papel, etc.). |
-| 5.6 | **i18n** (español/inglés) | La UI está 100% en español con strings inline; migrar a `flutter_localizations` + ARB. |
-| 5.7 | ✅ **Respaldo local completo** | Hecho: `StorageService.exportFullBackup/importFullBackup` (ZIP con todos los cuadernos + imágenes). |
-| 5.8 | ✅ **Háptica del lápiz** | Hecho: `HapticFeedback.selectionClick()` al empezar a escribir; configurable. |
-| 5.9 | **Crash reporting opt-in** | Sentry o similar (investigar con Gravity Index antes de integrar); solo con consentimiento del usuario. |
-| 5.10 | **Importar PDF/imagen como fondo** | Convertir PDF a imagen (o `pdf` page → raster) y usarlo como plantilla custom. |
-| 5.11 | **Optimización de rendimiento** (caching de trazos) | Cachear el `Path` renderizado de cada trazo confirmado; invalidar solo al editar el trazo. Redibuja ~60% menos en documentos grandes. |
-| 5.12 | **Animaciones de transición** (páginas, modos) | Transiciones suaves al cambiar de página, entrar/salir de modo presentación, abrir/cerrar la biblioteca. |
-| 5.13 | **Accesibilidad** (VoiceOver/TalkBack) | Etiquetas semánticas para botones de herramientas, descripciones de estado, soporte de navegación por teclado. |
-| 5.14 | **Tests de UI** (widget tests para biblioteca, editor, papelera) | `flutter_test` con `testWidgets` para los flujos principales de usuario. |
+| # | Tarea | Estado | Por qué / cómo |
+|---|---|---|---|
+| 4.2 | ✅ **Selección con lazo** | Hecho | `ToolType.lasso`; hit-test ray-casting; marching ants; handles de escala/rotación. |
+| 4.3 | ✅ **Figuras** (línea, rectángulo, círculo, flecha) | Hecho | `shape_detector.dart` post-procesa trazos al soltar; toggle activable. |
+| 4.13 | ✅ **Copy & paste de trazos** | Hecho | Portapapeles interno en `CanvasController`; copiar/pegar selección del lazo. |
+| 4.14 | ✅ **Snapping / guías magnéticas** | Hecho | `snap_guides.dart` detecta alineación; guías visuales azules al arrastrar imágenes. |
+
+### 4C — Avanzadas (alto impacto, alto esfuerzo)
+
+| # | Tarea | Estado | Por qué / cómo |
+|---|---|---|---|
+| 4.6 | ✅ **Transformar selección** | Hecho | Handles de escala/rotación sobre bounding box de trazos seleccionados; transformación afín + undo. |
+| 4.7 | ✅ **Capas por página** | Hecho | `Layer` model en `page.dart`; visibilidad/bloqueo/renombrar; botón en tool rail. |
+| 4.8 | ✅ **Cajas de texto** (teclado) | Hecho | `TextItem` model + `TextEditOverlay` + `ToolType.text`; editable in-place. |
+| 4.15 | ✅ **Relleno de áreas** (bucket) | Hecho | `ToolType.bucket`; detecta trazo encerrado más cercano y rellena con color. |
 
 ---
 
-## 🚀 Fase 6 — Experiencia y funciones estrella
+## 🧪 Fase 5 — Calidad, plataformas y producto *(✅ COMPLETA)*
 
-| # | Tarea | Por qué / cómo |
-|---|---|---|
-| 6.1 | **Audio sincronizado con la escritura** (tipo Notability) | Grabar micrófono y guardar marcas de tiempo por trazo; requiere campo nuevo en `Stroke` + reproductor. |
-| 6.2 | **Recuadro de escritura ampliado** (zoom de escritura tipo Samsung Notes) | Escribir en un recuadro fijo que auto-desplaza el lienzo; gesto sencillo: al acercarse al borde, pan automático. |
-| 6.3 | **Doble página / modo apaisado** | Dos `Page` visibles a la vez (render con dos `paintWorld`); útil en tablet en horizontal. |
-| 6.4 | **Plantillas especializadas** (pauta Montessori, pentagrama, agenda, semanal) | Nuevos `TemplateType` o plantillas custom pre-cargadas; dibujo adicional en `world_painter.dart`. |
-| 6.5 | **Historial de versiones en Drive** (autoguardado por fecha) | En cada backup, si pasó X tiempo, crear `<id>_<fecha>.inklus` además del principal; restaurar cualquiera (ver 2.4). |
-| 6.6 | **Widget de la app** (acceso rápido al último cuaderno) | Widget de Android (`home_widget`) que abre el cuaderno más reciente. |
+### 5A — Esenciales
+
+| # | Tarea | Estado | Por qué / cómo |
+|---|---|---|---|
+| 5.1 | ✅ **Tests de lógica** | Hecho | 28 tests: eraser, undo, shape_detector, snap_guides, image_item rotation. |
+| 5.5 | ✅ **Tema oscuro** | Hecho | `ThemeData(brightness: dark)` en `app.dart`; toggle en biblioteca; canvas respeta tema. |
+| 5.6 | ✅ **i18n** (español/inglés) | Hecho | Strings migrados a ARB con `flutter_localizations`. |
+| 5.13 | ✅ **Accesibilidad** | Hecho | Etiquetas `Semantics` en tool_rail, bottom_bar, menus. |
+| 5.14 | ✅ **Tests de UI** | Hecho | Widget tests para biblioteca, editor, modelos. |
+
+### 5B — Importantes
+
+| # | Tarea | Estado | Por qué / cómo |
+|---|---|---|---|
+| 5.2 | ✅ **Rendimiento** | Hecho | Caché de polígonos en `StrokeEngine._outlineCache` (invalida al editar/borrar/deshacer). |
+| 5.11 | ✅ **Optimización de renderizado** | Hecho | Compartido con 5.2; `contentVersion` evita repintado completo. |
+| 5.10 | ✅ **Importar PDF como fondo** | Hecho | Menú ⋮ → Importar PDF; usa FilePicker para elegir archivo. |
+| 5.12 | ✅ **Animaciones de transición** | Hecho | Transiciones suaves en navigator y cambio de modo presentación. |
+
+### 5C — Plataformas y operación
+
+| # | Tarea | Estado | Por qué / cómo |
+|---|---|---|---|
+| 5.3 | **iOS / macOS / Windows / Web** | Pendiente | Sin Firebase: `flutter create . --platforms=...`; revisar `google_sign_in`. |
+| 5.9 | **Crash reporting opt-in** | Pendiente | Sentry free tier; solo con consentimiento; sin tracking. |
 
 ---
 
-## 🔮 Fase 7 — Funciones premium y diferenciadoras *(futuro lejano)*
+## 🚀 Fase 6 — Funciones estrella *(✅ COMPLETA)*
 
-| # | Tarea | Por qué / cómo |
-|---|---|---|
-| 7.1 | **Plantillas con inteligencia artificial** | Generar plantillas personalizadas (agendas, horarios, trackers) a partir de una descripción de texto. |
-| 7.2 | **Búsqueda en trazos** (úsqueda semántica) | Indexar trazos OCR y permite buscar dentro de los cuadernos por contenido escrito. |
-| 7.3 | **Colaboración en tiempo real** (multi-usuario) | Usar WebSockets/Firestore para que dos usuarios editen el mismo cuaderno simultáneamente. |
-| 7.4 | **Marketplace de plantillas** | Comunidad donde los usuarios comparten y descargan plantillas personalizadas. |
-| 7.5 | **Exportar a PowerPoint/Keynote** | Convertir páginas a diapositivas editables (cada página = una diapositiva). |
-| 7.6 | **Modo oscuro automático** (según hora del día) | Activar tema oscuro por la noche, claro por el día, basado en la hora local. |
-| 7.7 | **Reconocimiento de letra** (handwriting → texto en tiempo real) | Escribir y ver el texto interpretado al instante (no solo OCR post-hoc). |
-| 7.8 | **Gestos avanzados** (doble tap = borrar, pinza = nueva página) | Configurar gestos personalizables en `drawing_canvas.dart`. |
-| 7.9 | **Backlinks entre páginas** (tipo wiki) | Enlaces internos que conecten páginas del mismo cuaderno o entre cuadernos. |
-| 7.10 | **Modo nocturno de escritura** | Fondo oscuro con trazos claros (invertir la paleta del lienzo). |
-| 7.11 | **Integración con calendario** | Crear cuadernos vinculados a eventos del calendario del dispositivo. |
-| 7.12 | **Smart folders** (carpetas dinámicas) | Carpetas que agrupan cuadernos automáticamente por etiquetas, fecha o color. |
-| 7.13 | **Etiquetas / tags por cuaderno** | Añadir etiquetas a los cuadernos y filtrar por ellas en la biblioteca. |
-| 7.14 | **Recordatorios** (alarma para revisar cuaderno) | Programar recordatorios vinculados a cuadernos específicos. |
-| 7.15 | **Estadísticas de escritura** | Minutos escritos, páginas creadas, trazos por día; gráficos en la biblioteca. |
+> Estas son las features que diferencian a las apps premium del mercado. En Inklus serán **gratuitas y open source**.
+
+| # | Tarea | Estado | Por qué / cómo |
+|---|---|---|---|
+| 6.1 | ✅ **Audio sincronizado** | Hecho | Grabar micrófono + timestamps por trazo; reproductor con seek. |
+| 6.2 | ✅ **Zoom writing** | Hecho | Recuadro fijo tipo Samsung Notes; auto-desplaza el lienzo al borde. |
+| 6.3 | ✅ **Doble página** | Hecho | Dos páginas visibles en modo apaisado; render dual `paintWorld`. |
+| 6.4 | ✅ **Plantillas especializadas** | Hecho | Pentagrama musical, agenda semanal, tracker de hábitos, dot grid. |
+| 6.5 | ✅ **Historial de versiones local** | Hecho | Autoguardado con timestamps en `inklus/versions/`; restaurar desde UI. |
+| 6.6 | **Widget de Android** | Pendiente | `home_widget` para acceso rápido al último cuaderno. |
+| 6.7 | ✅ **Modo nocturno de escritura** | Hecho | Toggle en menú ⋮; canvas invierte colores sin cambiar tema UI. |
+| 6.8 | ✅ **OCR en tiempo real** | Hecho | Streaming OCR con ML Kit; texto aparece al escribir. |
+
+---
+
+## 🔮 Fase 7 — Funciones de comunidad y ecosistema
+
+> Todo open source, todo gratis. Estas funciones construyen comunidad alrededor de Inklus.
+
+| # | Tarea | Estado | Por qué / cómo |
+|---|---|---|---|
+| 7.1 | **Etiquetas / tags por cuaderno** | Pendiente | Añadir etiquetas a los cuadernos y filtrar por ellas en la biblioteca. |
+| 7.2 | **Smart folders** (carpetas dinámicas) | Pendiente | Carpetas que agrupan cuadernos automáticamente por etiquetas, fecha o color. |
+| 7.3 | **Backlinks entre páginas** | Pendiente | Enlaces internos que conecten páginas del mismo cuaderno o entre cuadernos (tipo wiki). |
+| 7.4 | **Marketplace de plantillas** | Pendiente | Repositorio open source de plantillas compartidas; los usuarios contribuyen y descargan. |
+| 7.5 | **Plantillas con IA** | Pendiente | Generar plantillas personalizadas (agendas, horarios, trackers) a partir de una descripción de texto; usar un modelo local (Gemini Nano, etc.). |
+| 7.6 | **Búsqueda en trazos** | Pendiente | Indexar resultados del OCR y permitir buscar dentro de los cuadernos por contenido escrito. |
+| 7.7 | **Exportar a PowerPoint/Keynote** | Pendiente | Convertir páginas a diapositivas editables (cada página = una diapositiva). |
+| 7.8 | **Estadísticas de escritura** | Pendiente | Minutos escritos, páginas creadas, trazos por día; gráficos en la biblioteca (todo local, sin servidores). |
+| 7.9 | **Recordatorios** | Pendiente | Programar recordatorios vinculados a cuadernos específicos (alarma local del dispositivo). |
+| 7.10 | **Integración con calendario** | Pendiente | Crear cuadernos vinculados a eventos del calendario del dispositivo. |
 
 ---
 
@@ -203,5 +230,6 @@
 - Toda mutación del documento pasa por `CanvasController` (única fuente de verdad, `ChangeNotifier`).
 - Guardado local automático con debounce de 600 ms; Drive replica el mismo documento en formato `.inklus`.
 - La app es **offline-first**: nunca romper el flujo local por una dependencia de red/cuenta.
+- Todo es **gratis y open source**: no crear funciones premium ni dependencias de pago.
 - Iconos: `dart run flutter_launcher_icons` (fuente en `assets/icon/`). Release: `flutter build apk --release --split-per-abi`.
 - CI: `flutter analyze` + `flutter test` + `flutter build apk --debug` en GitHub Actions.

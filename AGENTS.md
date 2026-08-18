@@ -19,14 +19,18 @@ dart run flutter_launcher_icons   # regenerar iconos desde assets/icon/
 ## Arquitectura (lib/)
 
 ```
-models/      Stroke, StrokePoint, Page, Document, ImageItem, PageTemplate (todo JSON)
+models/      Stroke, StrokePoint, Page, Document, ImageItem, PageTemplate,
+             TextItem, Layer (todo JSON; Page soporta capas)
 logic/
   canvas_controller.dart   ★ Estado central ChangeNotifier: herramienta/color/tamaño,
                              transformación vista, trazo activo, deshacer, páginas,
-                             guardado local + onRemoteSync
+                             guardado local + onRemoteSync, capas, portapapeles,
+                             detección de formas, guías snap, bucket fill
   stroke_engine.dart       perfect_freehand: polígono por herramienta (opciones por tool)
   eraser.dart              borra puntos dentro del radio y PARTE el trazo en fragmentos
-  undo_stack.dart          acciones reversibles (CanvasAction)
+  undo_stack.dart          acciones reversibles (CanvasAction) — incluye textItems
+  shape_detector.dart      detecta línea/rectángulo/círculo/flecha al soltar un trazo
+  snap_guides.dart         guías magnéticas: detecta alineación con trazos/hoja/imágenes
 services/
   storage_service.dart     ★ índice de cuadernos: <appSupport>/inklus/index.json +
                              documents/<id>.json (el debounce 600ms vive en el controlador);
@@ -41,13 +45,18 @@ services/
                              scope drive.file (google_sign_in 7), sesión silenciosa
                              (One Tap), backup/restore del JSON en carpeta 'Inklus';
                              las imágenes NUNCA se suben (quedan locales)
+  template_library_service.dart  biblioteca de plantillas propias: guardar/cargar en inkls/templates/
 ui/
   notebook_library.dart    pantalla de inicio: lista de cuadernos con miniaturas + CRUD;
                              abre el editor con Navigator.push(HomeScreen(document: doc))
   home_screen.dart         editor: top bar (botón volver), riel, canvas, zoom, bottom bar, ☁️
-  canvas/drawing_canvas.dart  ★ Listener (stylus/palma) + GestureDetector (zoom 2 dedos) + 2 capas
-  canvas/world_painter.dart   pintado de plantilla/imágenes/trazos (compartido con export)
-  widgets/                 tool_rail, bottom_bar (paleta+HSV+tamaños), template_picker_sheet
+  canvas/drawing_canvas.dart  ★ Listener (stylus/palma) + GestureDetector (zoom 2 dedos) + 2 capas;
+                             lazo, figuras, transformar selección, snap, bucket fill, cajas de texto
+  canvas/world_painter.dart   pintado de plantilla/imágenes/trazos/texto (compartido con export);
+                             respeta visibilidad de capas; dibuja rellenos (bucket)
+  widgets/                 tool_rail (con lazo, bucket, capas, texto), bottom_bar (paleta+HSV+tamaños+
+                             detección de formas+copy/paste), template_picker_sheet,
+                             stroke_options_sheet, layers_sheet, text_edit_overlay
 ```
 
 ## ★ Flujos críticos (no romper)
@@ -91,7 +100,7 @@ ui/
 
 ## Modelo de datos (JSON)
 
-`Document{id,title,createdAt,updatedAt,pages[]}` → `Page{id,name,template,strokes[],images[]}` → `Stroke{id,tool,color,size,points[{x,y,p}]}`, `ImageItem{id,path,x,y,w,h}`, `PageTemplate{type,lineColor,spacing,imagePath,infiniteFill,customW,customH}`. Trazos en **coordenadas de mundo**.
+`Document{id,title,createdAt,updatedAt,pages[]}` → `Page{id,name,template,strokes[],images[],textItems[],layers[]}` → `Stroke{id,tool,color,size,points[{x,y,p}],fillColor,layer}`, `ImageItem{id,path,x,y,w,h,rotation,layer}`, `TextItem{id,x,y,w,text,fontSize,color,layer}`, `PageTemplate{type,lineColor,spacing,imagePath,infiniteFill,customW,customH}`, `Layer{name,visible,locked}`. Trazos e imágenes en **coordenadas de mundo**; las capas filtran visibilidad.
 
 ## Reglas de negocio
 
@@ -103,6 +112,7 @@ ui/
 
 ## Decisiones de diseño (no re-abrir)
 
+- **Todo gratis, sin premium.** Inklus es open source y no tendrá funciones de pago. Las features premium de GoodNotes/Samsung Notes/Notability se implementan aquí de forma gratuita.
 - **Conflictos de Drive: last-write-wins**. Cuando dos dispositivos editan el mismo cuaderno, el documento con `updatedAt` más reciente gana. Es más simple que merge por página y evita pérdida de contenido no intencionada. El usuario puede ver todas las versiones en Drive (menú ☁️ → "Ver versiones") y restaurar la que quiera.
 - **Cifrado de backup: XOR con clave derivada**. No es criptografía de grado militar, pero evita lectura casual de archivos personales. La contraseña se usa como semilla para un PRNG determinista que genera la clave XOR. Sin dependencias externas.
 - **Sync selectiva**: `NotebookMeta.syncEnabled` (null = true por defecto para compatibilidad). El backup automático solo sube cuadernos con sync habilitado.

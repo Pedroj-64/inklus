@@ -1,9 +1,10 @@
+import 'dart:math';
 import 'dart:ui';
 
 /// Imagen insertada sobre el lienzo (subida del dispositivo).
 ///
 /// La imagen se copia a la carpeta de datos de la app y aquí solo se guarda
-/// la referencia [localPath] más su posición/tamaño en el "mundo".
+/// la referencia [localPath] más su posición/tamaño/rotación en el "mundo".
 class ImageItem {
   final String id;
   final String localPath;
@@ -16,6 +17,12 @@ class ImageItem {
   double width;
   double height;
 
+  /// Rotación en radianes (sentido horario).
+  double rotation;
+
+  /// Índice de la capa a la que pertenece esta imagen (0 = capa por defecto).
+  final int layerIndex;
+
   ImageItem({
     required this.id,
     required this.localPath,
@@ -23,6 +30,8 @@ class ImageItem {
     required this.y,
     required this.width,
     required this.height,
+    this.rotation = 0,
+    this.layerIndex = 0,
   });
 
   Rect get rect => Rect.fromCenter(
@@ -31,7 +40,20 @@ class ImageItem {
         height: height,
       );
 
-  bool contains(Offset worldPoint) => rect.inflate(6).contains(worldPoint);
+  bool contains(Offset worldPoint) {
+    // Para rotación: transforma el punto al espacio local de la imagen.
+    if (rotation == 0) return rect.inflate(6).contains(worldPoint);
+    final cosA = cos(-rotation);
+    final sinA = sin(-rotation);
+    final d = worldPoint - Offset(x, y);
+    final local = Offset(d.dx * cosA - d.dy * sinA, d.dx * sinA + d.dy * cosA);
+    final localRect = Rect.fromCenter(
+      center: Offset.zero,
+      width: width,
+      height: height,
+    );
+    return localRect.inflate(6).contains(local);
+  }
 
   ImageItem copyWith({
     String? localPath,
@@ -39,6 +61,8 @@ class ImageItem {
     double? y,
     double? width,
     double? height,
+    double? rotation,
+    int? layerIndex,
   }) =>
       ImageItem(
         id: id,
@@ -47,6 +71,8 @@ class ImageItem {
         y: y ?? this.y,
         width: width ?? this.width,
         height: height ?? this.height,
+        rotation: rotation ?? this.rotation,
+        layerIndex: layerIndex ?? this.layerIndex,
       );
 
   factory ImageItem.fromJson(Map<String, dynamic> json) => ImageItem(
@@ -56,6 +82,8 @@ class ImageItem {
         y: (json['y'] as num).toDouble(),
         width: (json['w'] as num).toDouble(),
         height: (json['h'] as num).toDouble(),
+        rotation: (json['rotation'] as num?)?.toDouble() ?? 0,
+        layerIndex: (json['layer'] as num?)?.toInt() ?? 0,
       );
 
   Map<String, dynamic> toJson() => {
@@ -65,5 +93,7 @@ class ImageItem {
         'y': y,
         'w': width,
         'h': height,
+        if (rotation != 0) 'rotation': rotation,
+        if (layerIndex != 0) 'layer': layerIndex,
       };
 }

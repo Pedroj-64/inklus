@@ -15,23 +15,42 @@ import '../models/stroke.dart';
 class StrokeEngine {
   const StrokeEngine._();
 
+  // Caché de polígonos calculados para trazos confirmados.
+  // Clave = stroke.id, valor = polígono (lista de Offset).
+  static final Map<String, List<Offset>> _outlineCache = {};
+
+  /// Invalida la caché de un trazo (llamar al editar/eliminar).
+  static void invalidate(String strokeId) => _outlineCache.remove(strokeId);
+
+  /// Invalida toda la caché.
+  static void invalidateAll() => _outlineCache.clear();
+
   /// Opciones de `perfect_freehand` para una herramienta dada.
-  static StrokeOptions optionsFor(ToolType tool, double size) {
+  ///
+  /// Si se proporcionan [thinning], [smoothing] o [streamline], se usan
+  /// como overrides de los valores por defecto de cada herramienta.
+  static StrokeOptions optionsFor(
+    ToolType tool,
+    double size, {
+    double? thinning,
+    double? smoothing,
+    double? streamline,
+  }) {
     switch (tool) {
       case ToolType.pen:
         return StrokeOptions(
           size: size,
-          thinning: 0,
-          smoothing: 0.5,
-          streamline: 0.45,
+          thinning: thinning ?? 0,
+          smoothing: smoothing ?? 0.5,
+          streamline: streamline ?? 0.45,
           simulatePressure: false,
         );
       case ToolType.pencil:
         return StrokeOptions(
           size: size,
-          thinning: 0.55,
-          smoothing: 0.5,
-          streamline: 0.5,
+          thinning: thinning ?? 0.55,
+          smoothing: smoothing ?? 0.5,
+          streamline: streamline ?? 0.5,
           simulatePressure: false,
           // Puntas afiladas, estilo lápiz de grafito.
           start: StrokeEndOptions.start(taperEnabled: true, customTaper: 0.35),
@@ -40,29 +59,36 @@ class StrokeEngine {
       case ToolType.highlighter:
         return StrokeOptions(
           size: size,
-          thinning: 0,
-          smoothing: 0.6,
-          streamline: 0.75,
+          thinning: thinning ?? 0,
+          smoothing: smoothing ?? 0.6,
+          streamline: streamline ?? 0.75,
           simulatePressure: false,
           isComplete: true,
         );
       case ToolType.eraser:
       case ToolType.select:
-        // El borrador no se renderiza con getStroke (se usa cursor), pero
-        // devolvemos algo válido por si acaso.
+      case ToolType.lasso:
+      case ToolType.bucket:
+      case ToolType.text:
+        // Herramientas que no generan trazos con getStroke.
         return StrokeOptions(size: size, thinning: 0, simulatePressure: false);
     }
   }
 
   /// Polígono (lista de puntos) que envuelve el trazo, listo para rellenar.
+  /// Usa caché para trazos confirmados (misma ID, mismos puntos).
   static List<Offset> outlineFor(Stroke stroke) {
+    final cached = _outlineCache[stroke.id];
+    if (cached != null) return cached;
     final points = stroke.points
         .map((p) => PointVector(p.x, p.y, p.pressure))
         .toList();
-    return getStroke(
+    final outline = getStroke(
       points,
       options: optionsFor(stroke.tool, stroke.size),
     );
+    _outlineCache[stroke.id] = outline;
+    return outline;
   }
 
   /// Polígono del trazo en progreso (aún sin confirmar).

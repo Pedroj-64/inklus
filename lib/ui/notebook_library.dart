@@ -20,7 +20,9 @@ import 'trash_screen.dart';
 /// ordenar y asignar color de portada. Al tocar un cuaderno se navega al
 /// editor ([HomeScreen]); al volver, se refresca la lista.
 class NotebookLibraryScreen extends StatefulWidget {
-  const NotebookLibraryScreen({super.key});
+  final VoidCallback? onToggleTheme;
+
+  const NotebookLibraryScreen({super.key, this.onToggleTheme});
 
   @override
   State<NotebookLibraryScreen> createState() => _NotebookLibraryScreenState();
@@ -320,11 +322,9 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
   Widget build(BuildContext context) {
     final metas = _metas;
     final filtered = metas == null ? null : _filteredMetas;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: const Color(0xFFEFEDE8),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 2,
         title: const Row(
           children: [
             Icon(Icons.edit, color: Color(0xFF3B82F6)),
@@ -347,6 +347,12 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
             tooltip: 'Importar cuaderno (.inklus)',
             icon: const Icon(Icons.file_download_outlined),
             onPressed: _importInklus,
+          ),
+          // Botón tema claro/oscuro
+          IconButton(
+            tooltip: isDark ? 'Modo claro' : 'Modo oscuro',
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+            onPressed: widget.onToggleTheme,
           ),
           // Contador de cuadernos
           if (metas != null && metas.isNotEmpty)

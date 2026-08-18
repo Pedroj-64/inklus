@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import '../models/stroke.dart';
+import 'stroke_engine.dart';
 
 /// Borrador a nivel de trazo.
 ///
@@ -44,6 +45,8 @@ class StrokeEraser {
         result.add(stroke); // intacto
         continue;
       }
+      // Invalida la caché del trazo original (fue modificado).
+      StrokeEngine.invalidate(stroke.id);
       // Parte los puntos conservados en fragmentos contiguos.
       var runStart = 0;
       while (runStart < kept.length) {

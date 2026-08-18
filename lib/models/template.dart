@@ -8,7 +8,7 @@ import 'dart:ui' show Color, Size;
 /// - [grid]: cuadrícula tipo cuaderno, infinita.
 /// - [custom]: plantilla de usuario (imagen subida del dispositivo). Puede
 ///   usarse como hoja fija o como relleno infinito (se repite al escribir).
-enum TemplateType { blank, sheet, ruled, grid, custom }
+enum TemplateType { blank, sheet, ruled, grid, custom, music, planner, habit, dots }
 
 TemplateType templateTypeFromName(String name) => TemplateType.values
     .firstWhere((t) => t.name == name, orElse: () => TemplateType.blank);

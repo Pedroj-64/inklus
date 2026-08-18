@@ -10,6 +10,9 @@ enum ToolType {
   highlighter, // resaltador: trazo ancho y translúcido
   eraser, // borrador
   select, // mover/redimensionar imágenes (no genera trazos)
+  lasso, // selección de trazos con lazo
+  bucket, // relleno de áreas
+  text, // cajas de texto
 }
 
 ToolType toolTypeFromName(String name) =>
@@ -52,12 +55,21 @@ class Stroke {
   final int colorValue; // ARGB
   final double size; // diámetro base en unidades de mundo
 
+  /// Si es mayor que 0, el trazo tiene un relleno de color (bucket fill).
+  /// El valor es el color ARGB del relleno.
+  final int? fillColorValue;
+
+  /// Índice de la capa a la que pertenece este trazo (0 = capa por defecto).
+  final int layerIndex;
+
   Stroke({
     required this.id,
     required this.points,
     required this.tool,
     required this.colorValue,
     required this.size,
+    this.fillColorValue,
+    this.layerIndex = 0,
   });
 
   Color get color => Color(colorValue);
@@ -68,6 +80,9 @@ class Stroke {
     ToolType? tool,
     int? colorValue,
     double? size,
+    int? fillColorValue,
+    bool clearFillColor = false,
+    int? layerIndex,
   }) =>
       Stroke(
         id: id ?? this.id,
@@ -75,6 +90,8 @@ class Stroke {
         tool: tool ?? this.tool,
         colorValue: colorValue ?? this.colorValue,
         size: size ?? this.size,
+        fillColorValue: clearFillColor ? null : (fillColorValue ?? this.fillColorValue),
+        layerIndex: layerIndex ?? this.layerIndex,
       );
 
   factory Stroke.fromJson(Map<String, dynamic> json) => Stroke(
@@ -85,6 +102,8 @@ class Stroke {
         tool: toolTypeFromName(json['tool'] as String),
         colorValue: (json['color'] as num).toInt(),
         size: (json['size'] as num).toDouble(),
+        fillColorValue: (json['fillColor'] as num?)?.toInt(),
+        layerIndex: (json['layer'] as num?)?.toInt() ?? 0,
       );
 
   Map<String, dynamic> toJson() => {
@@ -93,5 +112,7 @@ class Stroke {
         'tool': tool.name,
         'color': colorValue,
         'size': size,
+        if (fillColorValue != null) 'fillColor': fillColorValue,
+        if (layerIndex != 0) 'layer': layerIndex,
       };
 }

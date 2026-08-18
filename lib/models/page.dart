@@ -1,14 +1,54 @@
 import 'image_item.dart';
 import 'stroke.dart';
 import 'template.dart';
+import 'text_item.dart';
+
+/// Metadatos de una capa dentro de una página.
+class Layer {
+  String name;
+  bool visible;
+  bool locked;
+
+  Layer({
+    required this.name,
+    this.visible = true,
+    this.locked = false,
+  });
+
+  Layer copyWith({String? name, bool? visible, bool? locked}) => Layer(
+        name: name ?? this.name,
+        visible: visible ?? this.visible,
+        locked: locked ?? this.locked,
+      );
+
+  factory Layer.fromJson(Map<String, dynamic> json) => Layer(
+        name: json['name'] as String? ?? 'Capa',
+        visible: json['visible'] as bool? ?? true,
+        locked: json['locked'] as bool? ?? false,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'visible': visible,
+        'locked': locked,
+      };
+}
 
 /// Una página del cuaderno: conjunto de trazos e imágenes sobre una plantilla.
+///
+/// Soporta capas: cada trazo e imagen puede pertenecer a una capa diferente.
+/// La capa por defecto es la 0 (siempre existe). Si el JSON no tiene capas,
+/// se crea una capa "Capa 1" por defecto para compatibilidad.
 class Page {
   final String id;
   String name;
   final List<Stroke> strokes;
   final List<ImageItem> images;
+  final List<TextItem> textItems;
   PageTemplate template;
+
+  /// Lista de capas de esta página. Siempre hay al menos una.
+  List<Layer> layers;
 
   Page({
     required this.id,
@@ -16,7 +56,10 @@ class Page {
     required this.strokes,
     required this.images,
     required this.template,
-  });
+    List<Layer>? layers,
+    List<TextItem>? textItems,
+  })  : layers = layers ?? [Layer(name: 'Capa 1')],
+        textItems = textItems ?? [];
 
   factory Page.blank({String? id, String? name, PageTemplate? template}) =>
       Page(
@@ -34,12 +77,17 @@ class Page {
       .toString()
       .padLeft(5, '0');
 
+  /// Índice de la capa activa (la última seleccionada).
+  int activeLayerIndex = 0;
+
   Page copyWith({
     String? id,
     String? name,
     List<Stroke>? strokes,
     List<ImageItem>? images,
     PageTemplate? template,
+    List<Layer>? layers,
+    List<TextItem>? textItems,
   }) =>
       Page(
         id: id ?? this.id,
@@ -47,6 +95,8 @@ class Page {
         strokes: strokes ?? this.strokes,
         images: images ?? this.images,
         template: template ?? this.template,
+        layers: layers ?? this.layers,
+        textItems: textItems ?? this.textItems,
       );
 
   factory Page.fromJson(Map<String, dynamic> json) => Page(
@@ -60,6 +110,12 @@ class Page {
             .toList(),
         template: PageTemplate.fromJson(
             json['template'] as Map<String, dynamic>? ?? const {}),
+        layers: (json['layers'] as List?)
+            ?.map((l) => Layer.fromJson(l as Map<String, dynamic>))
+            .toList(),
+        textItems: (json['textItems'] as List? ?? [])
+            .map((t) => TextItem.fromJson(t as Map<String, dynamic>))
+            .toList(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -68,5 +124,7 @@ class Page {
         'strokes': strokes.map((s) => s.toJson()).toList(),
         'images': images.map((i) => i.toJson()).toList(),
         'template': template.toJson(),
+        'layers': layers.map((l) => l.toJson()).toList(),
+        'textItems': textItems.map((t) => t.toJson()).toList(),
       };
 }

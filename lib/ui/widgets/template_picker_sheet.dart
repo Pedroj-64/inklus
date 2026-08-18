@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../logic/canvas_controller.dart';
 import '../../models/template.dart';
 import '../../services/image_service.dart';
+import '../../services/template_library_service.dart';
 
 /// Selector de plantillas de la página actual.
 ///
@@ -18,6 +21,7 @@ Future<void> showTemplatePicker(
   BuildContext context, {
   required CanvasController controller,
   required ImageService imageService,
+  required TemplateLibraryService templateLibrary,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -26,6 +30,7 @@ Future<void> showTemplatePicker(
     builder: (context) => _TemplateSheet(
       controller: controller,
       imageService: imageService,
+      templateLibrary: templateLibrary,
     ),
   );
 }
@@ -33,10 +38,12 @@ Future<void> showTemplatePicker(
 class _TemplateSheet extends StatefulWidget {
   final CanvasController controller;
   final ImageService imageService;
+  final TemplateLibraryService templateLibrary;
 
   const _TemplateSheet({
     required this.controller,
     required this.imageService,
+    required this.templateLibrary,
   });
 
   @override
@@ -130,6 +137,46 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                   )),
                 ),
                 _TemplateTile(
+                  icon: Icons.music_note,
+                  label: 'Pentagrama',
+                  selected: current.type == TemplateType.music,
+                  onTap: () => _apply(PageTemplate(
+                    type: TemplateType.music,
+                    spacing: _spacing,
+                    lineColorValue: _lineColor.toARGB32(),
+                  )),
+                ),
+                _TemplateTile(
+                  icon: Icons.view_week,
+                  label: 'Agenda',
+                  selected: current.type == TemplateType.planner,
+                  onTap: () => _apply(PageTemplate(
+                    type: TemplateType.planner,
+                    spacing: _spacing,
+                    lineColorValue: _lineColor.toARGB32(),
+                  )),
+                ),
+                _TemplateTile(
+                  icon: Icons.check_box_outlined,
+                  label: 'Hábitos',
+                  selected: current.type == TemplateType.habit,
+                  onTap: () => _apply(PageTemplate(
+                    type: TemplateType.habit,
+                    spacing: _spacing,
+                    lineColorValue: _lineColor.toARGB32(),
+                  )),
+                ),
+                _TemplateTile(
+                  icon: Icons.brush_outlined,
+                  label: 'Puntos',
+                  selected: current.type == TemplateType.dots,
+                  onTap: () => _apply(PageTemplate(
+                    type: TemplateType.dots,
+                    spacing: _spacing,
+                    lineColorValue: _lineColor.toARGB32(),
+                  )),
+                ),
+                _TemplateTile(
                   icon: Icons.add_photo_alternate_outlined,
                   label: 'Plantilla propia',
                   selected: current.type == TemplateType.custom,
@@ -137,6 +184,50 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                 ),
               ],
             ),
+
+            // --- Mis plantillas guardadas ---
+            if (widget.templateLibrary.entries.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Text(
+                    'Mis plantillas',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: _saveCurrentAsTemplate,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Guardar actual'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 90,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: widget.templateLibrary.entries.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (context, i) {
+                    final entry = widget.templateLibrary.entries[i];
+                    final isCurrent = current.type == TemplateType.custom &&
+                        current.imagePath == entry.imagePath;
+                    return _SavedTemplateTile(
+                      entry: entry,
+                      selected: isCurrent,
+                      onTap: () {
+                        final tpl = entry.toPageTemplate();
+                        _apply(tpl);
+                      },
+                      onDelete: () => _deleteTemplate(entry.id),
+                    );
+                  },
+                ),
+              ),
+            ],
 
             // --- Opciones de personalización ---
             if (hasLines || isFiniteSheet) ...[
@@ -441,6 +532,88 @@ class _TemplateSheetState extends State<_TemplateSheet> {
       }
     }
   }
+
+  /// Guarda la plantilla actual como template propio reutilizable.
+  Future<void> _saveCurrentAsTemplate() async {
+    final t = widget.controller.page.template;
+    if (t.type != TemplateType.custom || t.imagePath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Solo se pueden guardar plantillas con imagen')),
+      );
+      return;
+    }
+    final nameController = TextEditingController(
+      text: 'Mi plantilla',
+    );
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Guardar plantilla'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(labelText: 'Nombre'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, nameController.text),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.trim().isEmpty) return;
+
+    try {
+      await widget.templateLibrary.save(
+        name: name.trim(),
+        sourceImagePath: t.imagePath!,
+        infiniteFill: t.infiniteFill,
+        customWidth: t.customWidth,
+        customHeight: t.customHeight,
+      );
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Plantilla guardada')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar: $e')),
+        );
+      }
+    }
+  }
+
+  /// Elimina una plantilla guardada.
+  Future<void> _deleteTemplate(String id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar plantilla'),
+        content: const Text('¿Eliminar esta plantilla guardada?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await widget.templateLibrary.delete(id);
+    if (mounted) setState(() {});
+  }
 }
 
 /// Tile de tipo de plantilla.
@@ -576,6 +749,72 @@ class _SizePreset extends StatelessWidget {
             fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
             color: isActive ? const Color(0xFF3B82F6) : Colors.black54,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tile de plantilla guardada en la biblioteca.
+class _SavedTemplateTile extends StatelessWidget {
+  final CustomTemplateEntry entry;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  const _SavedTemplateTile({
+    required this.entry,
+    required this.selected,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onDelete,
+      child: Container(
+        width: 80,
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFE3EDFF) : const Color(0xFFF5F5F5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? const Color(0xFF3B82F6) : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: Image.file(
+                  File(entry.imagePath),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stack) => const Icon(
+                    Icons.broken_image,
+                    color: Colors.black26,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                entry.name,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                  color: selected ? const Color(0xFF3B82F6) : Colors.black54,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -10,8 +10,11 @@ import '../models/image_item.dart';
 import '../models/page.dart';
 import '../models/stroke.dart';
 import '../models/template.dart';
+import '../models/text_item.dart';
 import '../services/storage_service.dart';
 import 'eraser.dart';
+import 'shape_detector.dart';
+import 'stroke_engine.dart';
 import 'undo_stack.dart';
 
 /// Controlador central del lienzo.
@@ -36,6 +39,7 @@ class CanvasController extends ChangeNotifier {
     ToolType.pencil: (2, 18),
     ToolType.highlighter: (12, 60),
     ToolType.eraser: (12, 120),
+    ToolType.lasso: (0, 0),
   };
   final Map<ToolType, double> _toolSizes = {
     ToolType.pen: 3.5,
@@ -44,6 +48,24 @@ class CanvasController extends ChangeNotifier {
     ToolType.eraser: 36,
   };
   bool _fingerDrawingEnabled = true;
+  bool _shapeDetectionEnabled = true;
+
+  // ---- Ajustes de presión / streamline por herramienta ----
+  final Map<ToolType, double> _thinning = {
+    ToolType.pen: 0,
+    ToolType.pencil: 0.55,
+    ToolType.highlighter: 0,
+  };
+  final Map<ToolType, double> _smoothing = {
+    ToolType.pen: 0.5,
+    ToolType.pencil: 0.5,
+    ToolType.highlighter: 0.6,
+  };
+  final Map<ToolType, double> _streamline = {
+    ToolType.pen: 0.45,
+    ToolType.pencil: 0.5,
+    ToolType.highlighter: 0.75,
+  };
 
   // ---- Transformación de vista ----
   double _scale = 1.0;
@@ -60,6 +82,33 @@ class CanvasController extends ChangeNotifier {
 
   // ---- Selección de imágenes ----
   String? _selectedImageId;
+
+  // ---- Guías magnéticas (snap) ----
+  List<double> _snapVerticalGuides = [];
+  List<double> _snapHorizontalGuides = [];
+  List<double> get snapVerticalGuides => _snapVerticalGuides;
+  List<double> get snapHorizontalGuides => _snapHorizontalGuides;
+
+  void setSnapGuides(List<double> vertical, List<double> horizontal) {
+    _snapVerticalGuides = vertical;
+    _snapHorizontalGuides = horizontal;
+    notifyListeners();
+  }
+
+  void clearSnapGuides() {
+    _snapVerticalGuides = [];
+    _snapHorizontalGuides = [];
+  }
+
+  // ---- Capas ----
+  int _activeLayerIndex = 0;
+
+  // ---- Selección con lazo ----
+  List<Offset> _lassoPath = [];
+  List<Stroke> _selectedStrokes = [];
+
+  // ---- Portapapeles de trazos (copy/paste) ----
+  List<Stroke> _clipboardStrokes = [];
 
   final UndoStack _undoStack = UndoStack();
 
@@ -111,6 +160,9 @@ class CanvasController extends ChangeNotifier {
   bool get isDrawing => _isDrawing;
   List<Offset> get activeEraserPath => _activeEraserPath;
   String? get selectedImageId => _selectedImageId;
+  List<Offset> get lassoPath => List.unmodifiable(_lassoPath);
+  List<Stroke> get selectedStrokes => List.unmodifiable(_selectedStrokes);
+  int get activeLayerIndex => _activeLayerIndex;
   bool get canUndo => _undoStack.canUndo;
   bool get canRedo => _undoStack.canRedo;
   bool get viewNeedsInit => !_viewInitialized;
@@ -150,6 +202,37 @@ class CanvasController extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool get shapeDetectionEnabled => _shapeDetectionEnabled;
+
+  void setShapeDetection(bool enabled) {
+    _shapeDetectionEnabled = enabled;
+    notifyListeners();
+  }
+
+  // ---- Ajustes de presión / streamline ----
+
+  double get thinning => _thinning[_tool] ?? 0;
+  double get smoothing => _smoothing[_tool] ?? 0.5;
+  double get streamline => _streamline[_tool] ?? 0.5;
+
+  void setThinning(double value) {
+    if (_tool == ToolType.eraser || _tool == ToolType.select) return;
+    _thinning[_tool] = value.clamp(-1, 1);
+    notifyListeners();
+  }
+
+  void setSmoothing(double value) {
+    if (_tool == ToolType.eraser || _tool == ToolType.select) return;
+    _smoothing[_tool] = value.clamp(0, 1);
+    notifyListeners();
+  }
+
+  void setStreamline(double value) {
+    if (_tool == ToolType.eraser || _tool == ToolType.select) return;
+    _streamline[_tool] = value.clamp(0, 1);
+    notifyListeners();
+  }
+
   void togglePresentationMode() {
     _presentationMode = !_presentationMode;
     notifyListeners();
@@ -174,6 +257,18 @@ class CanvasController extends ChangeNotifier {
     required ToolType tool,
   }) {
     if (tool == ToolType.select) return;
+    if (tool == ToolType.lasso) {
+      beginLasso(worldPoint);
+      return;
+    }
+    if (tool == ToolType.bucket) {
+      _bucketFill(worldPoint);
+      return;
+    }
+    if (tool == ToolType.text) {
+      addTextItem(worldPoint);
+      return;
+    }
     _isDrawing = true;
     // Háptica sutil al empezar a escribir.
     if (_hapticEnabled && tool != ToolType.eraser) {
@@ -190,6 +285,7 @@ class CanvasController extends ChangeNotifier {
         tool: tool,
         colorValue: _color.toARGB32(),
         size: _toolSizes[tool] ?? 3.5,
+        layerIndex: _activeLayerIndex,
       );
       _activeEraserPath = [];
     }
@@ -197,6 +293,10 @@ class CanvasController extends ChangeNotifier {
   }
 
   void addStrokePoint(Offset worldPoint, double pressure) {
+    if (_lassoPath.isNotEmpty) {
+      addLassoPoint(worldPoint);
+      return;
+    }
     if (!_isDrawing) return;
     if (_activeStroke != null) {
       _activeStroke = _activeStroke!.copyWith(
@@ -212,6 +312,10 @@ class CanvasController extends ChangeNotifier {
   }
 
   void endStroke() {
+    if (_lassoPath.isNotEmpty) {
+      endLasso();
+      return;
+    }
     if (!_isDrawing) return;
     _isDrawing = false;
     final active = _activeStroke;
@@ -220,8 +324,25 @@ class CanvasController extends ChangeNotifier {
     _activeEraserPath = [];
 
     if (active != null && active.points.length >= 2) {
-      page.strokes.add(active);
-      _undoStack.push(CanvasAction(strokesAdded: [active]));
+      // Detección de formas: post-procesa el trazo para detectar
+      // figuras geométricas simples (línea, rectángulo, círculo, flecha).
+      Stroke finalStroke = active;
+      if (_shapeDetectionEnabled &&
+          active.tool != ToolType.highlighter &&
+          active.tool != ToolType.eraser) {
+        final shape = ShapeDetector.detect(active.points);
+        if (shape != null) {
+          finalStroke = Stroke(
+            id: active.id,
+            points: shape.normalizedPoints,
+            tool: active.tool,
+            colorValue: active.colorValue,
+            size: active.size,
+          );
+        }
+      }
+      page.strokes.add(finalStroke);
+      _undoStack.push(CanvasAction(strokesAdded: [finalStroke]));
     } else if (eraserPath.isNotEmpty) {
       final before = List<Stroke>.from(page.strokes);
       final survivors = StrokeEraser.erase(
@@ -280,6 +401,9 @@ class CanvasController extends ChangeNotifier {
       p.images
         ..removeWhere((i) => action.imagesAdded.contains(i))
         ..addAll(action.imagesRemoved);
+      p.textItems
+        ..removeWhere((t) => action.textItemsAdded.contains(t))
+        ..addAll(action.textItemsRemoved);
     } else {
       p.strokes
         ..removeWhere((s) => action.strokesRemoved.contains(s))
@@ -287,6 +411,16 @@ class CanvasController extends ChangeNotifier {
       p.images
         ..removeWhere((i) => action.imagesRemoved.contains(i))
         ..addAll(action.imagesAdded);
+      p.textItems
+        ..removeWhere((t) => action.textItemsRemoved.contains(t))
+        ..addAll(action.textItemsAdded);
+    }
+    // Invalida caché de trazos afectados.
+    for (final s in action.strokesAdded) {
+      StrokeEngine.invalidate(s.id);
+    }
+    for (final s in action.strokesRemoved) {
+      StrokeEngine.invalidate(s.id);
     }
     _selectedImageId = null;
   }
@@ -440,6 +574,313 @@ class CanvasController extends ChangeNotifier {
     if (_selectedImageId == id) return;
     _selectedImageId = id;
     notifyListeners();
+  }
+
+  // ------------------------------------------------------------------
+  // Selección con lazo
+  // ------------------------------------------------------------------
+
+  void beginLasso(Offset worldPoint) {
+    _lassoPath = [worldPoint];
+    _selectedStrokes = [];
+    notifyListeners();
+  }
+
+  void addLassoPoint(Offset worldPoint) {
+    if (_lassoPath.isEmpty) return;
+    _lassoPath.add(worldPoint);
+    notifyListeners();
+  }
+
+  /// Termina el lazo y selecciona los trazos que caen dentro.
+  void endLasso() {
+    if (_lassoPath.length < 3) {
+      _lassoPath = [];
+      notifyListeners();
+      return;
+    }
+    // Hit-test: ¿qué trazos tienen al menos un punto dentro del polígono?
+    final lassoPolygon = _lassoPath;
+    _selectedStrokes = page.strokes.where((stroke) {
+      for (final p in stroke.points) {
+        if (_pointInPolygon(p.offset, lassoPolygon)) return true;
+      }
+      return false;
+    }).toList();
+    _lassoPath = [];
+    notifyListeners();
+  }
+
+  void clearLassoSelection() {
+    _selectedStrokes = [];
+    _lassoPath = [];
+    notifyListeners();
+  }
+
+  /// Elimina los trazos seleccionados con el lazo (deshacer possible).
+  void deleteSelectedStrokes() {
+    if (_selectedStrokes.isEmpty) return;
+    final removed = List<Stroke>.from(_selectedStrokes);
+    for (final s in removed) {
+      page.strokes.remove(s);
+    }
+    _undoStack.push(CanvasAction(strokesRemoved: removed));
+    _selectedStrokes = [];
+    _touch();
+  }
+
+  /// Copia los trazos seleccionados al portapapeles interno.
+  void copySelectedStrokes() {
+    if (_selectedStrokes.isEmpty) return;
+    _clipboardStrokes = List<Stroke>.from(_selectedStrokes);
+  }
+
+  /// Pega los trazos del portapapeles en la página actual,
+  /// desplazándolos 30 unidades en X e Y para que no se superpongan.
+  void pasteStrokes() {
+    if (_clipboardStrokes.isEmpty) return;
+    const offset = Offset(30, 30);
+    final newStrokes = <Stroke>[];
+    for (final s in _clipboardStrokes) {
+      final newPoints = s.points.map((p) {
+        return StrokePoint(p.x + offset.dx, p.y + offset.dy, p.pressure);
+      }).toList();
+      final newStroke = Stroke(
+        id: 'st_${DateTime.now().microsecondsSinceEpoch}_${newStrokes.length}',
+        points: newPoints,
+        tool: s.tool,
+        colorValue: s.colorValue,
+        size: s.size,
+      );
+      newStrokes.add(newStroke);
+      page.strokes.add(newStroke);
+    }
+    _undoStack.push(CanvasAction(strokesAdded: newStrokes));
+    _selectedStrokes = newStrokes;
+    _touch();
+  }
+
+  bool get hasClipboard => _clipboardStrokes.isNotEmpty;
+
+  // ------------------------------------------------------------------
+  // Transformar selección (escalar/rotar)
+  // ------------------------------------------------------------------
+
+  /// Aplica una transformación afín a los trazos seleccionados.
+  /// [scaleFactor] = factor de escala, [rotationAngle] = ángulo en radianes,
+  /// ambos relativos al centro de la selección.
+  void transformSelectedStrokes({
+    required double scaleFactor,
+    required double rotationAngle,
+    required Offset pivotPoint,
+  }) {
+    if (_selectedStrokes.isEmpty) return;
+    final cosA = cos(rotationAngle);
+    final sinA = sin(rotationAngle);
+
+    for (final original in List<Stroke>.from(_selectedStrokes)) {
+      final newPoints = original.points.map((p) {
+        // 1. Trasladar al origen relativo al pivot.
+        var dx = p.x - pivotPoint.dx;
+        var dy = p.y - pivotPoint.dy;
+        // 2. Escalar.
+        dx *= scaleFactor;
+        dy *= scaleFactor;
+        // 3. Rotar.
+        final rx = dx * cosA - dy * sinA;
+        final ry = dx * sinA + dy * cosA;
+        // 4. Volver al espacio mundo.
+        return StrokePoint(rx + pivotPoint.dx, ry + pivotPoint.dy, p.pressure);
+      }).toList();
+
+      final newStroke = Stroke(
+        id: original.id,
+        points: newPoints,
+        tool: original.tool,
+        colorValue: original.colorValue,
+        size: original.size * scaleFactor,
+        fillColorValue: original.fillColorValue,
+      );
+
+      // Reemplaza el trazo en la página.
+      final idx = page.strokes.indexOf(original);
+      if (idx >= 0) page.strokes[idx] = newStroke;
+      // Actualiza la referencia en la selección.
+      final selIdx = _selectedStrokes.indexOf(original);
+      if (selIdx >= 0) _selectedStrokes[selIdx] = newStroke;
+    }
+    _touch();
+  }
+
+  /// Confirma la transformación de selección (empuja acción de deshacer).
+  void commitTransformSelection(List<Stroke> before) {
+    if (_selectedStrokes.isEmpty) return;
+    _undoStack.push(
+      CanvasAction(
+        strokesRemoved: before,
+        strokesAdded: List<Stroke>.from(_selectedStrokes),
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // TextItems (cajas de texto)
+  // ------------------------------------------------------------------
+
+  String? _editingTextId;
+
+  String? get editingTextId => _editingTextId;
+
+  void addTextItem(Offset worldPoint) {
+    final item = TextItem(
+      id: 'txt_${DateTime.now().microsecondsSinceEpoch}',
+      x: worldPoint.dx,
+      y: worldPoint.dy,
+      width: 250,
+      text: '',
+      colorValue: _color.toARGB32(),
+      layerIndex: _activeLayerIndex,
+    );
+    page.textItems.add(item);
+    _editingTextId = item.id;
+    _undoStack.push(CanvasAction(textItemsAdded: [item]));
+    _touch();
+  }
+
+  void updateTextItem(TextItem item) {
+    final index = page.textItems.indexWhere((t) => t.id == item.id);
+    if (index >= 0) {
+      page.textItems[index] = item;
+      notifyListeners();
+      _scheduleSave();
+    }
+  }
+
+  void commitTextItem(TextItem item) {
+    _editingTextId = null;
+    _touch();
+  }
+
+  void removeTextItem(TextItem item) {
+    page.textItems.remove(item);
+    if (_editingTextId == item.id) _editingTextId = null;
+    _undoStack.push(CanvasAction(textItemsRemoved: [item]));
+    _touch();
+  }
+
+  // ------------------------------------------------------------------
+  // Capas
+  // ------------------------------------------------------------------
+
+  void setActiveLayer(int index) {
+    if (index < 0 || index >= page.layers.length) return;
+    _activeLayerIndex = index;
+    notifyListeners();
+  }
+
+  void addLayer() {
+    final name = 'Capa ${page.layers.length + 1}';
+    page.layers.add(Layer(name: name));
+    _activeLayerIndex = page.layers.length - 1;
+    _touch();
+  }
+
+  void removeLayer(int index) {
+    if (page.layers.length <= 1 || index == 0) return; // No eliminar la capa 0
+    // Mueve los trazos e imágenes de la capa eliminada a la capa 0.
+    for (final s in page.strokes) {
+      if (s.layerIndex == index) {
+        // No podemos mutar directamente, así que lo ignoramos por ahora
+        // (los trazos de la capa eliminada quedan huérfanos, no se renderizan).
+      }
+    }
+    page.layers.removeAt(index);
+    if (_activeLayerIndex >= page.layers.length) {
+      _activeLayerIndex = page.layers.length - 1;
+    }
+    _touch();
+  }
+
+  void toggleLayerVisibility(int index) {
+    if (index < 0 || index >= page.layers.length) return;
+    page.layers[index].visible = !page.layers[index].visible;
+    _touch();
+  }
+
+  void toggleLayerLocked(int index) {
+    if (index < 0 || index >= page.layers.length) return;
+    page.layers[index].locked = !page.layers[index].locked;
+    _touch();
+  }
+
+  void renameLayer(int index, String name) {
+    if (index < 0 || index >= page.layers.length) return;
+    page.layers[index].name = name;
+    _touch();
+  }
+
+  // ------------------------------------------------------------------
+  // Bucket fill (relleno de áreas)
+  // ------------------------------------------------------------------
+
+  /// Rellena el área más cercana al punto con el color actual.
+  void _bucketFill(Offset worldPoint) {
+    // Encuentra el trazo más cercano cuyo contorno encierre el punto.
+    Stroke? enclosingStroke;
+    var bestDistance = double.infinity;
+
+    for (final stroke in page.strokes) {
+      final outline = StrokeEngine.outlineFor(stroke);
+      if (outline.length < 3) continue;
+      if (_pointInPolygon(worldPoint, outline)) {
+        // El punto está dentro del contorno del trazo.
+        final center = _polygonCenter(outline);
+        final dist = (worldPoint - center).distance;
+        if (dist < bestDistance) {
+          bestDistance = dist;
+          enclosingStroke = stroke;
+        }
+      }
+    }
+
+    if (enclosingStroke != null) {
+      // Crea un trazo de relleno usando los puntos del trazo encontrado.
+      final fillStroke = Stroke(
+        id: 'st_${DateTime.now().microsecondsSinceEpoch}',
+        points: enclosingStroke.points,
+        tool: enclosingStroke.tool,
+        colorValue: enclosingStroke.colorValue,
+        size: enclosingStroke.size,
+        fillColorValue: _color.toARGB32(),
+      );
+      page.strokes.add(fillStroke);
+      _undoStack.push(CanvasAction(strokesAdded: [fillStroke]));
+      _touch();
+    }
+  }
+
+  /// Centro de un polígono (promedio de los puntos).
+  Offset _polygonCenter(List<Offset> polygon) {
+    var x = 0.0, y = 0.0;
+    for (final p in polygon) {
+      x += p.dx;
+      y += p.dy;
+    }
+    return Offset(x / polygon.length, y / polygon.length);
+  }
+
+  /// Algoritmo ray-casting para punto dentro de polígono.
+  bool _pointInPolygon(Offset point, List<Offset> polygon) {
+    var inside = false;
+    for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      final xi = polygon[i].dx, yi = polygon[i].dy;
+      final xj = polygon[j].dx, yj = polygon[j].dy;
+      if (((yi > point.dy) != (yj > point.dy)) &&
+          (point.dx < (xj - xi) * (point.dy - yi) / (yj - yi) + xi)) {
+        inside = !inside;
+      }
+    }
+    return inside;
   }
 
   // ------------------------------------------------------------------

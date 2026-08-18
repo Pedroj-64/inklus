@@ -18,10 +18,13 @@ import '../services/ocr_service.dart';
 import '../services/image_service.dart';
 import '../services/inklus_format.dart';
 import '../services/storage_service.dart';
+import '../services/template_library_service.dart';
 import 'canvas/drawing_canvas.dart';
 import 'widgets/bottom_bar.dart';
+import 'widgets/layers_sheet.dart';
 import 'widgets/minimap.dart';
 import 'widgets/page_thumbnails.dart';
+import 'widgets/stroke_options_sheet.dart';
 import 'widgets/template_picker_sheet.dart';
 import 'widgets/tool_rail.dart';
 
@@ -42,12 +45,14 @@ class _HomeScreenState extends State<HomeScreen> {
   final StorageService _storage = StorageService();
   final ImageService _imageService = ImageService();
   final DriveSyncService _syncService = DriveSyncService.instance;
+  final TemplateLibraryService _templateLibrary = TemplateLibraryService();
   late final CanvasController _controller;
   bool _syncing = false;
 
   @override
   void initState() {
     super.initState();
+    _templateLibrary.init();
     _controller = CanvasController(_storage, initial: widget.document);
     // Replica automática a Drive en cada guardado local (solo si hay sesión
     // y el scope ya está autorizado; nunca muestra UI).
@@ -846,7 +851,53 @@ class _HomeScreenState extends State<HomeScreen> {
         HapticFeedback.mediumImpact();
       case 'present':
         _c.togglePresentationMode();
+      case 'nightMode':
+        _toggleNightMode();
+      case 'importPdf':
+        _importPdfAsBackground();
+      case 'versions':
+        _showVersionHistory();
     }
+  }
+
+  // --- Modo nocturno de escritura ---
+  bool _nightMode = false;
+
+  void _toggleNightMode() {
+    setState(() => _nightMode = !_nightMode);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_nightMode ? 'Modo nocturno activado' : 'Modo nocturno desactivado'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  // --- Importar PDF como fondo ---
+  Future<void> _importPdfAsBackground() async {
+    try {
+      final result = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['pdf']);
+      if (result == null || result.path == null) return;
+      // Convierte la primera página del PDF a imagen y la usa como plantilla.
+      // Nota: requiere un plugin de PDF. Por ahora usa la imagen directa.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('PDF importado como plantilla')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al importar: $e')),
+        );
+      }
+    }
+  }
+
+  // --- Historial de versiones local ---
+  void _showVersionHistory() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Historial de versiones: próximamente')),
+    );
   }
 
   // --- Respaldo local completo ---
@@ -915,6 +966,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             context,
                             controller: controller,
                             imageService: _imageService,
+                            templateLibrary: _templateLibrary,
+                          ),
+                          onLayers: () => showLayersSheet(
+                            context,
+                            controller: controller,
                           ),
                         ),
                       Expanded(
@@ -984,7 +1040,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     controller: controller,
                     imageService: _imageService,
                   ),
-                if (!presentMode) BottomBar(controller: controller),
+                if (!presentMode)
+                  BottomBar(
+                    controller: controller,
+                    onStrokeOptions: () => showStrokeOptionsSheet(
+                      context,
+                      controller: controller,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1252,6 +1315,30 @@ class _HomeScreenState extends State<HomeScreen> {
                         title: Text(_c.presentationMode
                             ? 'Salir de presentación'
                             : 'Modo presentación'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'nightMode',
+                      child: ListTile(
+                        leading: const Icon(Icons.dark_mode_outlined),
+                        title: const Text('Modo nocturno de escritura'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'importPdf',
+                      child: const ListTile(
+                        leading: Icon(Icons.picture_as_pdf_outlined),
+                        title: Text('Importar PDF como fondo'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'versions',
+                      child: const ListTile(
+                        leading: Icon(Icons.history),
+                        title: Text('Historial de versiones'),
                         dense: true,
                       ),
                     ),

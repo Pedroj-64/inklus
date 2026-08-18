@@ -30,8 +30,9 @@ const _toolLabels = {
 /// Barra inferior: color + tamaño + opciones de escritura.
 class BottomBar extends StatelessWidget {
   final CanvasController controller;
+  final VoidCallback? onStrokeOptions;
 
-  const BottomBar({super.key, required this.controller});
+  const BottomBar({super.key, required this.controller, this.onStrokeOptions});
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +109,66 @@ class BottomBar extends StatelessWidget {
                 ],
 
                 const Spacer(),
+
+                // ---- Acciones de selección con lazo ----
+                if (controller.selectedStrokes.isNotEmpty) ...[
+                  Tooltip(
+                    message: 'Copiar trazos seleccionados',
+                    child: IconButton(
+                      onPressed: controller.copySelectedStrokes,
+                      icon: const Icon(Icons.copy, size: 20, color: Color(0xFF3B82F6)),
+                    ),
+                  ),
+                  Tooltip(
+                    message: 'Eliminar trazos seleccionados',
+                    child: IconButton(
+                      onPressed: controller.deleteSelectedStrokes,
+                      icon: const Icon(Icons.delete_outline, size: 20, color: Color(0xFFE53935)),
+                    ),
+                  ),
+                ],
+                if (controller.hasClipboard && controller.selectedStrokes.isEmpty)
+                  Tooltip(
+                    message: 'Pegar trazos',
+                    child: IconButton(
+                      onPressed: controller.pasteStrokes,
+                      icon: const Icon(Icons.paste, size: 20, color: Color(0xFF3B82F6)),
+                    ),
+                  ),
+
+                // ---- Opciones de trazo (presión/streamline) ----
+                if (!isEraser && !isSelect && controller.tool != ToolType.lasso)
+                  Tooltip(
+                    message: 'Opciones de trazo',
+                    child: IconButton(
+                      onPressed: onStrokeOptions,
+                      icon: const Icon(
+                        Icons.tune,
+                        size: 22,
+                        color: Colors.black38,
+                      ),
+                    ),
+                  ),
+
+                // ---- Detección de formas (alternable) ----
+                if (!isEraser && !isSelect && controller.tool != ToolType.lasso)
+                  Tooltip(
+                    message: controller.shapeDetectionEnabled
+                        ? 'Detección de formas: activada'
+                        : 'Detección de formas: desactivada',
+                    child: IconButton(
+                      onPressed: () => controller.setShapeDetection(
+                        !controller.shapeDetectionEnabled,
+                      ),
+                      icon: Icon(
+                        Icons.change_history,
+                        size: 22,
+                        color: controller.shapeDetectionEnabled
+                            ? const Color(0xFF3B82F6)
+                            : Colors.black38,
+                      ),
+                    ),
+                  ),
 
                 // ---- Dibujar con el dedo (alternable) ----
                 Tooltip(

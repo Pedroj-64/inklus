@@ -5,10 +5,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide Page;
 
 import '../../logic/canvas_controller.dart';
+import '../../logic/snap_guides.dart';
+import '../../logic/stroke_engine.dart';
 import '../../models/image_item.dart';
 import '../../models/page.dart';
 import '../../models/stroke.dart';
 import '../../services/image_service.dart';
+import '../widgets/text_edit_overlay.dart';
 import 'world_painter.dart';
 
 /// ---------------------------------------------------------------------------
@@ -26,6 +29,7 @@ class CanvasPainter extends CustomPainter {
   final Map<String, ui.Image> imageCache;
   final double scale;
   final Offset translate;
+  final bool isDark;
 
   CanvasPainter({
     required this.page,
@@ -34,6 +38,7 @@ class CanvasPainter extends CustomPainter {
     required this.imageCache,
     required this.scale,
     required this.translate,
+    this.isDark = false,
   });
 
   @override
@@ -53,6 +58,7 @@ class CanvasPainter extends CustomPainter {
       page: page,
       sheetSize: sheetSize,
       imageCache: imageCache,
+      isDark: isDark,
     );
     canvas.restore();
   }
@@ -64,7 +70,8 @@ class CanvasPainter extends CustomPainter {
       oldDelegate.sheetSize != sheetSize ||
       oldDelegate.scale != scale ||
       oldDelegate.translate != translate ||
-      oldDelegate.imageCache != imageCache;
+      oldDelegate.imageCache != imageCache ||
+      oldDelegate.isDark != isDark;
 }
 
 /// ---------------------------------------------------------------------------
@@ -103,7 +110,72 @@ class ActiveLayerPainter extends CustomPainter {
       );
     }
 
-    // Selección de imagen (borde + asa de redimensionado).
+    // Lazo en progreso (trazo punteado del lazo).
+    final lassoPath = controller.lassoPath;
+    if (lassoPath.length >= 2) {
+      final path = Path()..moveTo(lassoPath.first.dx, lassoPath.first.dy);
+      for (var i = 1; i < lassoPath.length; i++) {
+        path.lineTo(lassoPath[i].dx, lassoPath[i].dy);
+      }
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = const Color(0xFF3B82F6)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5 / scale
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+
+    // Trazos seleccionados con el lazo (resaltados).
+    final selectedStrokes = controller.selectedStrokes;
+    if (selectedStrokes.isNotEmpty) {
+      for (final stroke in selectedStrokes) {
+        final outline = StrokeEngine.outlineFor(stroke);
+        if (outline.length < 3) continue;
+        final path = Path()..addPolygon(outline, true);
+        canvas.drawPath(
+          path,
+          Paint()
+            ..color = const Color(0xFF3B82F6).withValues(alpha: 0.25)
+            ..style = PaintingStyle.fill,
+        );
+      }
+      // Dashed border around selected strokes (marching ants simplificado).
+      if (selectedStrokes.isNotEmpty) {
+        var left = double.infinity, top = double.infinity;
+        var right = double.negativeInfinity, bottom = double.negativeInfinity;
+        for (final s in selectedStrokes) {
+          for (final p in s.points) {
+            if (p.x < left) left = p.x;
+            if (p.y < top) top = p.y;
+            if (p.x > right) right = p.x;
+            if (p.y > bottom) bottom = p.y;
+          }
+        }
+        final bounds = Rect.fromLTRB(left, top, right, bottom);
+        if (!bounds.isEmpty) {
+          final inflated = bounds.inflate(8 / scale);
+          _drawMarchingAnts(canvas, inflated, scale);
+          // Handle de escala (esquina inferior derecha).
+          final r = 11 / scale;
+          canvas.drawCircle(inflated.bottomRight, r,
+            Paint()..color = const Color(0xFF3B82F6));
+          canvas.drawCircle(inflated.bottomRight, r, Paint()
+            ..style = PaintingStyle.stroke..strokeWidth = 2 / scale..color = Colors.white);
+          // Handle de rotación (centro superior).
+          final rotH = Offset(inflated.center.dx, inflated.top - r * 3);
+          canvas.drawLine(inflated.topCenter, rotH,
+            Paint()..color = const Color(0xFF3B82F6)..strokeWidth = 2 / scale);
+          canvas.drawCircle(rotH, r, Paint()..color = const Color(0xFF3B82F6));
+          canvas.drawCircle(rotH, r, Paint()
+            ..style = PaintingStyle.stroke..strokeWidth = 2 / scale..color = Colors.white);
+        }
+      }
+    }
+
+    // Selección de imagen (borde + asa de redimensionado + asa de rotación).
     final selectedId = controller.selectedImageId;
     if (selectedId != null) {
       for (final item in controller.page.images) {
@@ -116,6 +188,7 @@ class ActiveLayerPainter extends CustomPainter {
             ..strokeWidth = 2.5 / scale
             ..color = const Color(0xFF3B82F6),
         );
+        // Asa de redimensionado (esquina inferior derecha).
         final handle = rect.bottomRight;
         final r = 11 / scale;
         canvas.drawCircle(
@@ -131,11 +204,48 @@ class ActiveLayerPainter extends CustomPainter {
             ..strokeWidth = 2 / scale
             ..color = Colors.white,
         );
+        // Asa de rotación (línea hacia arriba desde el centro superior).
+        final rotHandle = Offset(
+          rect.center.dx,
+          rect.top - r * 3,
+        );
+        canvas.drawLine(
+          rect.topCenter,
+          rotHandle,
+          Paint()
+            ..color = const Color(0xFF3B82F6)
+            ..strokeWidth = 2 / scale,
+        );
+        canvas.drawCircle(
+          rotHandle,
+          r,
+          Paint()..color = const Color(0xFF3B82F6),
+        );
+        canvas.drawCircle(
+          rotHandle,
+          r,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2 / scale
+            ..color = Colors.white,
+        );
         break;
       }
     }
 
     canvas.restore();
+
+    // ---- Guías magnéticas (snap) ----
+    final guidePaint = Paint()
+      ..color = const Color(0xFF3B82F6).withValues(alpha: 0.6)
+      ..strokeWidth = 1.5 / scale
+      ..style = PaintingStyle.stroke;
+    for (final x in controller.snapVerticalGuides) {
+      canvas.drawLine(Offset(x, -10000), Offset(x, 10000), guidePaint);
+    }
+    for (final y in controller.snapHorizontalGuides) {
+      canvas.drawLine(Offset(-10000, y), Offset(10000, y), guidePaint);
+    }
 
     // ---- Cursor del borrador (espacio de pantalla, tamaño constante) ----
     if (eraserPath.isNotEmpty) {
@@ -175,6 +285,40 @@ class ActiveLayerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(ActiveLayerPainter oldDelegate) => true;
+
+  /// Dibuja un borde de "marching ants" (línea punteada animada).
+  void _drawMarchingAnts(Canvas canvas, Rect rect, double scale) {
+    final paint = Paint()
+      ..color = const Color(0xFF3B82F6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2 / scale
+      ..strokeCap = StrokeCap.round;
+    final dashLength = 8.0 / scale;
+    final gapLength = 4.0 / scale;
+    final path = Path();
+    // Top
+    _addDashedLine(path, rect.topLeft, rect.topRight, dashLength, gapLength);
+    // Right
+    _addDashedLine(path, rect.topRight, rect.bottomRight, dashLength, gapLength);
+    // Bottom
+    _addDashedLine(path, rect.bottomRight, rect.bottomLeft, dashLength, gapLength);
+    // Left
+    _addDashedLine(path, rect.bottomLeft, rect.topLeft, dashLength, gapLength);
+    canvas.drawPath(path, paint);
+  }
+
+  void _addDashedLine(Path path, Offset start, Offset end, double dash, double gap) {
+    final length = (end - start).distance;
+    final dir = (end - start) / length;
+    var pos = 0.0;
+    while (pos < length) {
+      final p1 = start + dir * pos;
+      final p2 = start + dir * min(pos + dash, length);
+      path.moveTo(p1.dx, p1.dy);
+      path.lineTo(p2.dx, p2.dy);
+      pos += dash + gap;
+    }
+  }
 }
 
 /// ---------------------------------------------------------------------------
@@ -218,9 +362,27 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   // Interacción con imágenes (herramienta select).
   bool _movingImage = false;
   bool _resizingImage = false;
+  bool _rotatingImage = false;
   ImageItem? _imageGestureOriginal;
   Offset _imageGestureStartWorld = Offset.zero;
   Rect _imageGestureStartRect = Rect.zero;
+  double _imageGestureStartRotation = 0;
+
+  // ---- Gestos y atajos ----
+  DateTime? _lastInvertedStylusTapTime;
+  // Para detectar dos-dedos tap (undo): rastrea pointers y tiempos.
+  final Set<int> _twoFingerPointers = {};
+  DateTime? _twoFingerStartTime;
+
+  // ---- Transformar selección ----
+  bool _transformingSelection = false;
+  bool _scalingSelection = false;
+  bool _rotatingSelection = false;
+  Offset _transformStartWorld = Offset.zero;
+  Rect _transformSelectionBounds = Rect.zero;
+  List<Stroke> _transformStrokesBefore = [];
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -266,6 +428,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                             imageCache: widget.imageService.cache,
                             scale: widget.controller.scale,
                             translate: widget.controller.translate,
+                            isDark: Theme.of(context).brightness == Brightness.dark,
                           ),
                         );
                       },
@@ -282,6 +445,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                       ),
                     ),
                   ),
+                  // Overlay de edición de texto.
+                  TextEditOverlay(controller: widget.controller),
                 ],
               ),
             ),
@@ -327,19 +492,37 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       _stylusDown = kind != PointerDeviceKind.mouse;
       _drawingPointer = event.pointer;
 
-      if (widget.controller.tool == ToolType.select &&
-          kind != PointerDeviceKind.invertedStylus) {
+      if (kind == PointerDeviceKind.invertedStylus) {
+        // ---- Atajo: doble toque con borrador físico = borrar página ----
+        final now = DateTime.now();
+        final last = _lastInvertedStylusTapTime;
+        if (last != null && now.difference(last).inMilliseconds < 350) {
+          _lastInvertedStylusTapTime = null;
+          if (widget.controller.pageCount > 1) {
+            widget.controller.deleteCurrentPage();
+          }
+          return; // No comienza trazo
+        }
+        _lastInvertedStylusTapTime = now;
+        // InvertedStylus = borrador automático
+        widget.controller.beginStroke(world, event.pressure, tool: ToolType.eraser);
+      } else if (widget.controller.tool == ToolType.select) {
         _handleSelectDown(event.localPosition, world, event.pointer);
       } else {
-        final tool = kind == PointerDeviceKind.invertedStylus
-            ? ToolType.eraser // punta trasera del lápiz = borrador automático
-            : widget.controller.tool;
-        widget.controller.beginStroke(world, event.pressure, tool: tool);
+        // Lasso y herramientas de escritura: beginStroke gestiona internamente.
+        _drawingPointer = event.pointer;
+        widget.controller.beginStroke(world, event.pressure, tool: widget.controller.tool);
       }
     } else if (kind == PointerDeviceKind.touch) {
       // REchazo de palma: mientras un stylus esté en contacto, todo touch
       // se ignora por completo (no dibuja, no panea, no selecciona).
       if (_stylusDown || _transforming) return;
+
+      // ---- Atajo: dos dedos tap = deshacer ----
+      _twoFingerPointers.add(event.pointer);
+      if (_twoFingerPointers.length == 2) {
+        _twoFingerStartTime = DateTime.now();
+      }
 
       if (widget.controller.tool == ToolType.select) {
         _handleSelectDown(event.localPosition, world, event.pointer);
@@ -352,7 +535,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
   void _onPointerMove(PointerMoveEvent event) {
-    if (_movingImage || _resizingImage) {
+    if (_movingImage || _resizingImage || _rotatingImage) {
       _handleSelectMove(event.localPosition);
       return;
     }
@@ -365,10 +548,31 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
   void _onPointerUp(PointerUpEvent event) {
-    if (event.pointer != _drawingPointer && !_movingImage && !_resizingImage) {
+    // ---- Atajo: dos dedos tap = deshacer ----
+    _twoFingerPointers.remove(event.pointer);
+    if (_twoFingerPointers.isEmpty && _twoFingerStartTime != null) {
+      final elapsed = DateTime.now().difference(_twoFingerStartTime!);
+      _twoFingerStartTime = null;
+      if (elapsed.inMilliseconds < 300 && !_transforming && !_stylusDown) {
+        widget.controller.undo();
+        return;
+      }
+    }
+
+    // ---- Transformar selección: confirmar ----
+    if (_scalingSelection || _rotatingSelection) {
+      widget.controller.commitTransformSelection(_transformStrokesBefore);
+      _scalingSelection = false;
+      _rotatingSelection = false;
+      _transformingSelection = false;
+      _drawingPointer = null;
       return;
     }
-    if (_movingImage || _resizingImage) {
+
+    if (event.pointer != _drawingPointer && !_movingImage && !_resizingImage && !_rotatingImage) {
+      return;
+    }
+    if (_movingImage || _resizingImage || _rotatingImage) {
       _commitImageGesture();
       return;
     }
@@ -381,7 +585,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
-    if (_movingImage || _resizingImage) {
+    _twoFingerPointers.remove(event.pointer);
+    if (_movingImage || _resizingImage || _rotatingImage) {
       _cancelImageGesture();
       return;
     }
@@ -436,9 +641,34 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     _drawingPointer = pointer;
     final controller = widget.controller;
     final selectedId = controller.selectedImageId;
+    final selectedStrokes = controller.selectedStrokes;
     final handleWorld = 30 / controller.scale;
 
-    // 1) ¿Toca el asa de redimensionado de la imagen seleccionada?
+    // 0) ¿Hay trazos seleccionados con lazo? Detectar handles de transformación.
+    if (selectedStrokes.isNotEmpty && selectedId == null) {
+      final bounds = _computeSelectionBounds(selectedStrokes);
+      _transformSelectionBounds = bounds;
+      final handleSize = handleWorld * 1.5;
+
+      // ¿Toca el handle de rotación (centro superior)?
+      final rotHandle = Offset(bounds.center.dx, bounds.top - handleSize * 2);
+      if ((world - rotHandle).distance <= handleSize) {
+        _rotatingSelection = true;
+        _transformStartWorld = world;
+        _transformStrokesBefore = List<Stroke>.from(selectedStrokes);
+        return;
+      }
+      // ¿Toca el handle de escala (esquina inferior derecha)?
+      final scaleHandle = bounds.bottomRight;
+      if ((world - scaleHandle).distance <= handleSize) {
+        _scalingSelection = true;
+        _transformStartWorld = world;
+        _transformStrokesBefore = List<Stroke>.from(selectedStrokes);
+        return;
+      }
+    }
+
+    // 1) ¿Toca el asa de rotación de la imagen seleccionada?
     if (selectedId != null) {
       ImageItem? selected;
       for (final i in controller.page.images) {
@@ -447,13 +677,28 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
           break;
         }
       }
-      if (selected != null &&
-          (world - selected.rect.bottomRight).distance <= handleWorld) {
-        _resizingImage = true;
-        _imageGestureOriginal = selected;
-        _imageGestureStartWorld = world;
-        _imageGestureStartRect = selected.rect;
-        return;
+      if (selected != null) {
+        final rotHandle = Offset(
+          selected.rect.center.dx,
+          selected.rect.top - handleWorld * 1.5,
+        );
+        if ((world - rotHandle).distance <= handleWorld) {
+          _rotatingImage = true;
+          _imageGestureOriginal = selected;
+          _imageGestureStartWorld = world;
+          _imageGestureStartRect = selected.rect;
+          _imageGestureStartRotation = selected.rotation;
+          return;
+        }
+        // ¿Toca el asa de redimensionado?
+        if ((world - selected.rect.bottomRight).distance <= handleWorld) {
+          _resizingImage = true;
+          _imageGestureOriginal = selected;
+          _imageGestureStartWorld = world;
+          _imageGestureStartRect = selected.rect;
+          _imageGestureStartRotation = selected.rotation;
+          return;
+        }
       }
     }
 
@@ -471,6 +716,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       _imageGestureOriginal = hit;
       _imageGestureStartWorld = world;
       _imageGestureStartRect = hit.rect;
+      _imageGestureStartRotation = hit.rotation;
     } else {
       controller.selectImage(null);
     }
@@ -478,10 +724,50 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
 
   void _handleSelectMove(Offset local) {
     final world = widget.controller.viewportToWorld(local, _viewport);
+
+    // Transformar selección de trazos.
+    if (_transformingSelection || _scalingSelection || _rotatingSelection) {
+      final pivot = _transformSelectionBounds.center;
+      if (_scalingSelection) {
+        final startDist = (_transformStartWorld - pivot).distance;
+        final currentDist = (world - pivot).distance;
+        if (startDist > 1) {
+          final factor = currentDist / startDist;
+          widget.controller.transformSelectedStrokes(
+            scaleFactor: factor,
+            rotationAngle: 0,
+            pivotPoint: pivot,
+          );
+          _transformStartWorld = world;
+        }
+      } else if (_rotatingSelection) {
+        final startAngle = (_transformStartWorld - pivot).direction;
+        final currentAngle = (world - pivot).direction;
+        final delta = currentAngle - startAngle;
+        widget.controller.transformSelectedStrokes(
+          scaleFactor: 1,
+          rotationAngle: delta,
+          pivotPoint: pivot,
+        );
+        _transformStartWorld = world;
+      }
+      return;
+    }
+
     final original = _imageGestureOriginal;
     if (original == null) return;
 
-    if (_resizingImage) {
+    if (_rotatingImage) {
+      // Rotación: calcula el ángulo desde el centro de la imagen.
+      final center = _imageGestureStartRect.center;
+      final startAngle = (world - center).direction -
+          (_imageGestureStartWorld - center).direction;
+      widget.controller.updateImageLive(
+        original.copyWith(
+          rotation: _imageGestureStartRotation + startAngle,
+        ),
+      );
+    } else if (_resizingImage) {
       // Redimensionado manteniendo el aspect ratio.
       final deltaW = (world.dx - _imageGestureStartWorld.dx);
       final newWidth = max(40.0, _imageGestureStartRect.width + deltaW);
@@ -495,10 +781,26 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       );
     } else if (_movingImage) {
       final delta = world - _imageGestureStartWorld;
+      final candidateCenter = Offset(
+        _imageGestureStartRect.center.dx + delta.dx,
+        _imageGestureStartRect.center.dy + delta.dy,
+      );
+      // Snapping: ajusta a guías si está cerca.
+      final snap = SnapGuides.compute(
+        candidateCenter: candidateCenter,
+        candidateBounds: original.rect,
+        strokes: widget.controller.page.strokes,
+        images: widget.controller.page.images,
+        sheetSize: widget.controller.sheetSize,
+      );
+      widget.controller.setSnapGuides(snap.verticalGuides, snap.horizontalGuides);
+      final adjusted = snap.snappedPoint != Offset.zero
+          ? snap.snappedPoint
+          : candidateCenter;
       widget.controller.updateImageLive(
         original.copyWith(
-          x: _imageGestureStartRect.center.dx + delta.dx,
-          y: _imageGestureStartRect.center.dy + delta.dy,
+          x: adjusted.dx,
+          y: adjusted.dy,
         ),
       );
     }
@@ -506,11 +808,13 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
 
   void _commitImageGesture() {
     final original = _imageGestureOriginal;
-    final moved = _movingImage || _resizingImage;
+    final moved = _movingImage || _resizingImage || _rotatingImage;
     _movingImage = false;
     _resizingImage = false;
+    _rotatingImage = false;
     _imageGestureOriginal = null;
     _drawingPointer = null;
+    widget.controller.clearSnapGuides();
     if (original == null) return;
 
     // Busca el item actual (modificado en vivo) para confirmar el cambio.
@@ -529,7 +833,24 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   void _cancelImageGesture() {
     _movingImage = false;
     _resizingImage = false;
+    _rotatingImage = false;
     _imageGestureOriginal = null;
     _drawingPointer = null;
+  }
+
+  /// Calcula el rectángulo delimitador de los trazos seleccionados.
+  Rect _computeSelectionBounds(List<Stroke> strokes) {
+    if (strokes.isEmpty) return Rect.zero;
+    var left = double.infinity, top = double.infinity;
+    var right = double.negativeInfinity, bottom = double.negativeInfinity;
+    for (final s in strokes) {
+      for (final p in s.points) {
+        if (p.x < left) left = p.x;
+        if (p.y < top) top = p.y;
+        if (p.x > right) right = p.x;
+        if (p.y > bottom) bottom = p.y;
+      }
+    }
+    return Rect.fromLTRB(left, top, right, bottom);
   }
 }

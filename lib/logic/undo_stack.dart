@@ -1,28 +1,35 @@
 import '../models/image_item.dart';
 import '../models/stroke.dart';
+import '../models/text_item.dart';
 
 /// Una acción reversible sobre la página.
 ///
-/// Deshacer = quitar [strokesAdded]/[imagesAdded] y restaurar
-/// [strokesRemoved]/[imagesRemoved]. Rehacer = operación inversa.
+/// Deshacer = quitar [strokesAdded]/[imagesAdded]/[textItemsAdded] y restaurar
+/// [strokesRemoved]/[imagesRemoved]/[textItemsRemoved]. Rehacer = operación inversa.
 class CanvasAction {
   final List<Stroke> strokesAdded;
   final List<Stroke> strokesRemoved;
   final List<ImageItem> imagesAdded;
   final List<ImageItem> imagesRemoved;
+  final List<TextItem> textItemsAdded;
+  final List<TextItem> textItemsRemoved;
 
   const CanvasAction({
     this.strokesAdded = const [],
     this.strokesRemoved = const [],
     this.imagesAdded = const [],
     this.imagesRemoved = const [],
+    this.textItemsAdded = const [],
+    this.textItemsRemoved = const [],
   });
 
   bool get isEmpty =>
       strokesAdded.isEmpty &&
       strokesRemoved.isEmpty &&
       imagesAdded.isEmpty &&
-      imagesRemoved.isEmpty;
+      imagesRemoved.isEmpty &&
+      textItemsAdded.isEmpty &&
+      textItemsRemoved.isEmpty;
 }
 
 /// Pila de deshacer/rehacer con tope de acciones.
