@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../logic/canvas_controller.dart';
 import '../../models/page.dart';
+import '../../utils/theme_colors.dart';
 
 /// Panel de gestión de capas de la página actual.
 ///
@@ -60,10 +61,10 @@ class _LayersSheet extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
-              const Text(
+              SizedBox(height: 4),
+              Text(
                 'Capa activa: toca para seleccionar. Mantén para opciones.',
-                style: TextStyle(fontSize: 12, color: Colors.black54),
+                style: TextStyle(fontSize: 12, color: ThemeColors.of(context).textSecondary),
               ),
               const SizedBox(height: 12),
               ListView.builder(
@@ -168,7 +169,7 @@ class _LayerTile extends StatelessWidget {
           color: isActive ? const Color(0xFFE3EDFF) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isActive ? kAccentColor : Colors.black12,
+            color: isActive ? kAccentColor : ThemeColors.of(context).borderLight,
           ),
         ),
         child: Row(
@@ -189,7 +190,7 @@ class _LayerTile extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: isActive ? Colors.white : Colors.black54,
+                    color: isActive ? Colors.white : ThemeColors.of(context).textSecondary,
                   ),
                 ),
               ),
@@ -211,7 +212,7 @@ class _LayerTile extends StatelessWidget {
               icon: Icon(
                 layer.visible ? Icons.visibility : Icons.visibility_off,
                 size: 20,
-                color: layer.visible ? kAccentColor : Colors.black38,
+                color: layer.visible ? kAccentColor : ThemeColors.of(context).iconTertiary,
               ),
               tooltip: layer.visible ? 'Ocultar capa' : 'Mostrar capa',
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
@@ -222,7 +223,7 @@ class _LayerTile extends StatelessWidget {
               icon: Icon(
                 layer.locked ? Icons.lock : Icons.lock_open,
                 size: 20,
-                color: layer.locked ? Colors.orange : Colors.black38,
+                color: layer.locked ? Colors.orange : ThemeColors.of(context).iconTertiary,
               ),
               tooltip: layer.locked ? 'Desbloquear' : 'Bloquear',
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),

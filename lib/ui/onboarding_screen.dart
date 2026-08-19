@@ -1,6 +1,7 @@
 import '../constants.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/theme_colors.dart';
 
 /// Pantalla de onboarding que se muestra la primera vez que se abre la app.
 ///
@@ -152,7 +153,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           style: TextStyle(
                             fontSize: isSmall ? 22 : 26,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                            color: ThemeColors.of(context).textPrimary,
                           ),
                         ),
                         const SizedBox(height: 12),

@@ -6,6 +6,7 @@ import '../../logic/canvas_controller.dart';
 import '../../models/page.dart';
 import '../../services/export_service.dart';
 import '../../services/image_service.dart';
+import '../../utils/theme_colors.dart';
 
 /// Franja horizontal de miniaturas de páginas en la parte inferior del editor.
 ///
@@ -92,7 +93,7 @@ class _PageThumbnailsStripState extends State<PageThumbnailsStrip> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(Icons.keyboard_arrow_down, size: 18,
-                      color: isDark ? Colors.white54 : Colors.black54),
+                      color: isDark ? Colors.white54 : ThemeColors.of(context).textSecondary),
                 ),
               ),
               // Botón duplicar página
@@ -253,7 +254,7 @@ class _PageThumb extends StatelessWidget {
                   border: Border.all(
                     color: isCurrent
                         ? kAccentColor
-                        : Colors.black12,
+                        : ThemeColors.of(context).borderLight,
                     width: isCurrent ? 2.5 : 1,
                   ),
                   color: Theme.of(context).brightness == Brightness.dark
@@ -283,7 +284,7 @@ class _PageThumb extends StatelessWidget {
                       if (snapshot.hasError) {
                         return Icon(
                           Icons.broken_image_outlined,
-                          color: Theme.of(context).brightness == Brightness.dark ? Colors.white24 : Colors.black26,
+                          color: Theme.of(context).brightness == Brightness.dark ? Colors.white24 : ThemeColors.of(context).border,
                           size: 24,
                         );
                       }
@@ -310,7 +311,7 @@ class _PageThumb extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: isCurrent
                           ? kAccentColor
-                          : Colors.black54,
+                          : ThemeColors.of(context).textSecondary,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -382,7 +383,7 @@ class _ActionChip extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(icon, size: 20,
-              color: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54),
+              color: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : ThemeColors.of(context).textSecondary),
         ),
       ),
     );

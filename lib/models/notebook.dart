@@ -14,6 +14,9 @@ class Notebook {
   /// Color de portada del cuaderno (ARGB). null = sin color asignado.
   int? colorValue;
 
+  /// Estilo de portada (simple, circle, waves, dots, lines).
+  String coverStyle;
+
   /// Etiquetas del cuaderno (para organización y filtrado).
   List<String> tags;
 
@@ -24,6 +27,7 @@ class Notebook {
     required this.id,
     required this.title,
     this.colorValue,
+    this.coverStyle = 'simple',
     List<String>? tags,
     List<Note>? notes,
   })  : tags = tags ?? [],
@@ -67,6 +71,7 @@ class Notebook {
         id: json['id'] as String,
         title: json['title'] as String? ?? 'Mi cuaderno',
         colorValue: (json['color'] as num?)?.toInt(),
+        coverStyle: json['coverStyle'] as String? ?? 'simple',
         tags: (json['tags'] as List? ?? [])
             .map((t) => t as String)
             .toList(),
@@ -83,6 +88,7 @@ class Notebook {
         'title': title,
         'noteIds': notes.map((n) => n.id).toList(),
         if (colorValue != null) 'color': colorValue,
+        if (coverStyle != 'simple') 'coverStyle': coverStyle,
         if (tags.isNotEmpty) 'tags': tags,
       };
 

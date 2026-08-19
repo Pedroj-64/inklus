@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../constants.dart';
 import '../../logic/canvas_controller.dart';
 import '../../models/stroke.dart';
+import '../../utils/theme_colors.dart';
 
 /// Barra vertical de herramientas colapsable tipo Canva.
 ///
@@ -258,10 +259,14 @@ class _ExpandedRail extends StatelessWidget {
             ),
             // Grupo: herramientas especiales
             _ToolButton(
-              icon: Icons.straighten,
-              tooltip: 'Regla virtual',
+              icon: controller.rulerType == RulerType.protractor
+                  ? Icons.contrast
+                  : Icons.straighten,
+              tooltip: controller.rulerType == RulerType.protractor
+                  ? 'Transportador'
+                  : 'Regla virtual',
               selected: controller.rulerEnabled,
-              onTap: controller.toggleRuler,
+              onTap: controller.cycleRulerType,
             ),
             _ToolButton(
               icon: Icons.search,
@@ -325,7 +330,7 @@ class _ToolButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final color =
-        selected ? kAccentColor : (isDark ? Colors.white60 : Colors.black54);
+        selected ? kAccentColor : (isDark ? Colors.white60 : ThemeColors.of(context).textSecondary);
     return Tooltip(
       message: tooltip,
       child: Padding(

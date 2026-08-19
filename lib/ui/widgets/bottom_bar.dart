@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../constants.dart';
 import '../../logic/canvas_controller.dart';
 import '../../models/stroke.dart';
+import '../../utils/theme_colors.dart';
 import 'color_wheel_picker.dart';
 
 /// Paleta de colores por defecto.
@@ -24,13 +25,14 @@ class BottomBar extends StatelessWidget {
         final isEraser = controller.tool == ToolType.eraser;
         final isSelect = controller.tool == ToolType.select;
         final range = controller.sizeRange;
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final tc = ThemeColors.of(context);
+        final isDark = tc.isDark;
         return Container(
           decoration: BoxDecoration(
             color: isDark ? kSurfaceDark : Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(15),
+                color: tc.shadow,
                 blurRadius: 10,
                 offset: const Offset(0, -2),
               ),
@@ -118,10 +120,14 @@ class BottomBar extends StatelessWidget {
                       ],
                       // ---- Regla y lupa ----
                       _ToggleIcon(
-                        icon: Icons.straighten,
-                        tooltip: 'Regla',
+                        icon: controller.rulerType == RulerType.protractor
+                            ? Icons.contrast
+                            : Icons.straighten,
+                        tooltip: controller.rulerType == RulerType.protractor
+                            ? 'Transportador'
+                            : 'Regla',
                         active: controller.rulerEnabled,
-                        onTap: controller.toggleRuler,
+                        onTap: controller.cycleRulerType,
                       ),
                       _ToggleIcon(
                         icon: Icons.search,
@@ -135,7 +141,7 @@ class BottomBar extends StatelessWidget {
                         _ActionIcon(
                           icon: Icons.tune,
                           tooltip: 'Opciones de trazo',
-                          color: Colors.black45,
+                          color: tc.iconSecondary,
                           onTap: onStrokeOptions ?? () {},
                         ),
                     ],
@@ -150,17 +156,18 @@ class BottomBar extends StatelessWidget {
                           Icon(
                             isEraser ? Icons.cleaning_services : Icons.circle,
                             size: 14,
-                            color: Colors.black38,
+                            color: tc.iconTertiary,
                           ),
                           Expanded(
                             child: SliderTheme(
                               data: SliderThemeData(
                                 trackHeight: 3,
                                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),              activeTrackColor: kAccentColor,
-                inactiveTrackColor: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
-                thumbColor: kAccentColor,
-                overlayColor: kAccentColor.withAlpha(30),
+                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                                activeTrackColor: kAccentColor,
+                                inactiveTrackColor: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+                                thumbColor: kAccentColor,
+                                overlayColor: kAccentColor.withAlpha(30),
                               ),
                               child: Slider(
                                 value: controller.toolSize,
@@ -173,7 +180,7 @@ class BottomBar extends StatelessWidget {
                           Icon(
                             isEraser ? Icons.cleaning_services : Icons.circle,
                             size: 22,
-                            color: Colors.black38,
+                            color: tc.iconTertiary,
                           ),
                         ],
                       ),
@@ -201,6 +208,7 @@ class _ColorSwatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -211,7 +219,7 @@ class _ColorSwatch extends StatelessWidget {
           shape: BoxShape.circle,
           color: color,
           border: Border.all(
-            color: selected ? kAccentColor : Colors.black26,
+            color: selected ? kAccentColor : tc.border,
             width: selected ? 2.5 : 1,
           ),
           boxShadow: selected
@@ -239,6 +247,7 @@ class _CustomColorSwatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
     return InkWell(
       onTap: () => showCustomColorDialog(context, controller),
       customBorder: const CircleBorder(),
@@ -247,7 +256,7 @@ class _CustomColorSwatch extends StatelessWidget {
         height: 34,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.black26),
+          border: Border.all(color: tc.border),
           gradient: const SweepGradient(
             colors: [
               Colors.red,
@@ -316,8 +325,8 @@ Future<void> showCustomColorDialog(
                   // Color actual
                   Column(
                     children: [
-                      const Text('Actual',
-                          style: TextStyle(fontSize: 11, color: Colors.black54)),
+                      Text('Actual',
+                          style: TextStyle(fontSize: 11, color: ThemeColors.of(context).textSecondary)),
                       const SizedBox(height: 4),
                       Container(
                         width: 40,
@@ -325,20 +334,20 @@ Future<void> showCustomColorDialog(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: previousColor,
-                          border: Border.all(color: Colors.black26, width: 1.5),
+                          border: Border.all(color: ThemeColors.of(context).border, width: 1.5),
                         ),
                       ),
                     ],
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Icon(Icons.arrow_forward, size: 16, color: Colors.black38),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(Icons.arrow_forward, size: 16, color: ThemeColors.of(context).iconTertiary),
                   ),
                   // Color nuevo
                   Column(
                     children: [
-                      const Text('Nuevo',
-                          style: TextStyle(fontSize: 11, color: Colors.black54)),
+                      Text('Nuevo',
+                          style: TextStyle(fontSize: 11, color: ThemeColors.of(context).textSecondary)),
                       const SizedBox(height: 4),
                       Container(
                         width: 40,
@@ -346,7 +355,7 @@ Future<void> showCustomColorDialog(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: hsv.toColor(),
-                          border: Border.all(color: Colors.black26, width: 1.5),
+                          border: Border.all(color: ThemeColors.of(context).border, width: 1.5),
                         ),
                       ),
                     ],
@@ -498,13 +507,116 @@ Future<void> showCustomColorDialog(
       ),
     ),
   );
-  if (result != null) controller.setColor(result);
+
+  if (result != null) {
+    controller.setColor(result);
+  }
+  hexController.dispose();
 }
 
-/// Slider de color con gradiente visual y etiqueta de valor.
-///
-/// Muestra un gradiente de fondo que refleja el efecto del slider
-/// (arcoíris para matiz, gris→puro para saturación, negro→color para brillo).
+// ---------------------------------------------------------------------------
+// Widgets auxiliares
+// ---------------------------------------------------------------------------
+
+class _ActionIcon extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionIcon({
+    required this.icon,
+    required this.tooltip,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton(
+        icon: Icon(icon, size: 20),
+        color: color,
+        onPressed: onTap,
+        padding: const EdgeInsets.all(4),
+        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      ),
+    );
+  }
+}
+
+class _ToggleIcon extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _ToggleIcon({
+    required this.icon,
+    required this.tooltip,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton(
+        icon: Icon(icon, size: 20),
+        color: active ? kAccentColor : ThemeColors.of(context).iconSecondary,
+        onPressed: onTap,
+        padding: const EdgeInsets.all(4),
+        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      ),
+    );
+  }
+}
+
+class _ModeButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ModeButton({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? Theme.of(context).colorScheme.primary.withAlpha(30)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16,
+                color: selected ? kAccentColor : ThemeColors.of(context).iconSecondary),
+            const SizedBox(width: 4),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                    color: selected ? kAccentColor : ThemeColors.of(context).textSecondary)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _HsvSliderWithGradient extends StatelessWidget {
   final String label;
   final double value;
@@ -529,178 +641,32 @@ class _HsvSliderWithGradient extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Etiqueta + valor
         Row(
           children: [
-            Text(
-              label,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
+            Text(label,
+                style: TextStyle(fontSize: 12, color: ThemeColors.of(context).textSecondary)),
             const Spacer(),
-            Text(
-              valueLabel,
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
-            ),
+            Text(valueLabel,
+                style: TextStyle(fontSize: 12, color: ThemeColors.of(context).textSecondary)),
           ],
         ),
-        const SizedBox(height: 4),
-        // Slider con gradiente de fondo
+        const SizedBox(height: 2),
         SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackHeight: 16,
-            thumbShape: const RoundSliderThumbShape(
-              enabledThumbRadius: 9,
-              elevation: 2,
-            ),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
-            overlayColor: Colors.black12,
-            inactiveTrackColor: Colors.transparent,
+          data: SliderThemeData(
+            trackHeight: 6,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
             activeTrackColor: Colors.transparent,
-            thumbColor: Colors.white,
+            inactiveTrackColor: Colors.transparent,
           ),
-          child: Container(
-            height: 16,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              gradient: gradient,
-              border: Border.all(color: Colors.black12, width: 0.5),
-            ),
-            child: Slider(
-              value: value.clamp(min, max),
-              min: min,
-              max: max,
-              onChanged: onChanged,
-            ),
+          child: Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            onChanged: onChanged,
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Botón de modo en el selector de color (Rueda / Sliders).
-class _ModeButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ModeButton({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? kAccentColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: selected ? Colors.white : Colors.black54,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: selected ? Colors.white : Colors.black54,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Icono de acción simple en la bottom bar.
-class _ActionIcon extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionIcon({
-    required this.icon,
-    required this.tooltip,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final effectiveColor = isDark && color == Colors.black45 ? Colors.white54 : color;
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, size: 20, color: effectiveColor),
-        ),
-      ),
-    );
-  }
-}
-
-/// Icono toggle (activar/desactivar) en la bottom bar.
-class _ToggleIcon extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _ToggleIcon({
-    required this.icon,
-    required this.tooltip,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: BoxDecoration(
-            color: active
-                ? (isDark ? kAccentDark : kAccentLight)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            icon,
-            size: 20,
-            color: active ? kAccentColor : (isDark ? Colors.white38 : Colors.black38),
-          ),
-        ),
-      ),
     );
   }
 }

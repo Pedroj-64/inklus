@@ -1,5 +1,6 @@
 import '../../constants.dart';
 import 'package:flutter/material.dart';
+import '../../utils/theme_colors.dart';
 
 /// Bottom sheet para gestionar las etiquetas de un cuaderno.
 ///
@@ -124,7 +125,7 @@ class _TagEditorSheetState extends State<_TagEditorSheet> {
                 ),
               ),
             ),
-            const Text(
+            Text(
               'Etiquetas del cuaderno',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
@@ -132,12 +133,12 @@ class _TagEditorSheetState extends State<_TagEditorSheet> {
 
             // Tags seleccionadas.
             if (_selected.isNotEmpty) ...[
-              const Text(
+              Text(
                 'Etiquetas activas',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black54,
+                  color: ThemeColors.of(context).textSecondary,
                 ),
               ),
               const SizedBox(height: 8),
@@ -168,12 +169,12 @@ class _TagEditorSheetState extends State<_TagEditorSheet> {
 
             // Tags disponibles.
             if (_available.isNotEmpty) ...[
-              const Text(
+              Text(
                 'Otras etiquetas',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black54,
+                  color: ThemeColors.of(context).textSecondary,
                 ),
               ),
               const SizedBox(height: 8),

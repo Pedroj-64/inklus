@@ -8,6 +8,7 @@ import '../../logic/canvas_controller.dart';
 import '../../models/template.dart';
 import '../../services/image_service.dart';
 import '../../services/template_library_service.dart';
+import '../../utils/theme_colors.dart';
 
 /// Selector de plantillas de la página actual.
 ///
@@ -76,11 +77,9 @@ class _TemplateSheetState extends State<_TemplateSheet> {
         current.type == TemplateType.ruled || current.type == TemplateType.grid;
     final isFiniteSheet = current.isFinite;
     // B6: tipos que soportan toggle entre infinito y finito.
-    final supportsInfiniteToggle = current.type == TemplateType.ruled ||
-        current.type == TemplateType.grid ||
-        current.type == TemplateType.dots ||
-        current.type == TemplateType.planner ||
-        current.type == TemplateType.custom;
+    // Todos los tipos excepto blank, sheet soportan toggle infinito/finito.
+    final supportsInfiniteToggle = current.type != TemplateType.blank &&
+        current.type != TemplateType.sheet;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -110,7 +109,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -120,7 +119,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                       ),
                       Text(
                         'Infinitas se alargan al escribir',
-                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                        style: TextStyle(fontSize: 12, color: ThemeColors.of(context).textSecondary),
                       ),
                     ],
                   ),
@@ -148,65 +147,37 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                   icon: Icons.subject,
                   label: 'Rayas',
                   selected: current.type == TemplateType.ruled,
-                  onTap: () => _apply(PageTemplate(
-                    type: TemplateType.ruled,
-                    spacing: _spacing,
-                    lineColorValue: _lineColor.toARGB32(),
-                    infiniteFill: true,
-                  )),
+                  onTap: () => _selectTemplate(TemplateType.ruled),
                 ),
                 _TemplateTile(
                   icon: Icons.grid_on,
                   label: 'Cuadrícula',
                   selected: current.type == TemplateType.grid,
-                  onTap: () => _apply(PageTemplate(
-                    type: TemplateType.grid,
-                    spacing: _spacing,
-                    lineColorValue: _lineColor.toARGB32(),
-                    infiniteFill: true,
-                  )),
+                  onTap: () => _selectTemplate(TemplateType.grid),
                 ),
                 _TemplateTile(
                   icon: Icons.brush_outlined,
                   label: 'Puntos',
                   selected: current.type == TemplateType.dots,
-                  onTap: () => _apply(PageTemplate(
-                    type: TemplateType.dots,
-                    spacing: _spacing,
-                    lineColorValue: _lineColor.toARGB32(),
-                    infiniteFill: true,
-                  )),
+                  onTap: () => _selectTemplate(TemplateType.dots),
                 ),
                 _TemplateTile(
                   icon: Icons.music_note,
                   label: 'Pentagrama',
                   selected: current.type == TemplateType.music,
-                  onTap: () => _apply(PageTemplate(
-                    type: TemplateType.music,
-                    spacing: _spacing,
-                    lineColorValue: _lineColor.toARGB32(),
-                  )),
+                  onTap: () => _selectTemplate(TemplateType.music),
                 ),
                 _TemplateTile(
                   icon: Icons.view_week,
                   label: 'Agenda',
                   selected: current.type == TemplateType.planner,
-                  onTap: () => _apply(PageTemplate(
-                    type: TemplateType.planner,
-                    spacing: _spacing,
-                    lineColorValue: _lineColor.toARGB32(),
-                    infiniteFill: true,
-                  )),
+                  onTap: () => _selectTemplate(TemplateType.planner),
                 ),
                 _TemplateTile(
                   icon: Icons.check_box_outlined,
                   label: 'Hábitos',
                   selected: current.type == TemplateType.habit,
-                  onTap: () => _apply(PageTemplate(
-                    type: TemplateType.habit,
-                    spacing: _spacing,
-                    lineColorValue: _lineColor.toARGB32(),
-                  )),
+                  onTap: () => _selectTemplate(TemplateType.habit),
                 ),
               ],
             ),
@@ -297,7 +268,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  const Text(
+                  Text(
                     'Color de línea',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
@@ -310,7 +281,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                       decoration: BoxDecoration(
                         color: _lineColor,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.black26),
+                        border: Border.all(color: ThemeColors.of(context).border),
                       ),
                     ),
                   ),
@@ -444,6 +415,16 @@ class _TemplateSheetState extends State<_TemplateSheet> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.controller.fitView(widget.controller.viewportSize);
     });
+  }
+
+  /// Selecciona un tipo de plantilla y aplica el valor actual de _infiniteFill.
+  void _selectTemplate(TemplateType type) {
+    _apply(PageTemplate(
+      type: type,
+      spacing: _spacing,
+      lineColorValue: _lineColor.toARGB32(),
+      infiniteFill: _infiniteFill,
+    ));
   }
 
   /// Aplica la plantilla actual con los valores de personalización sin cerrar.
@@ -748,7 +729,7 @@ class _TemplateTile extends StatelessWidget {
               child: Icon(
                 icon,
                 size: 26,
-                color: selected ? kAccentColor : Colors.black45,
+                color: selected ? kAccentColor : ThemeColors.of(context).textHint,
               ),
             ),
             const SizedBox(height: 8),
@@ -758,7 +739,7 @@ class _TemplateTile extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                color: selected ? kAccentColor : Colors.black54,
+                color: selected ? kAccentColor : ThemeColors.of(context).textSecondary,
               ),
             ),
           ],
@@ -793,7 +774,7 @@ class _ColorDot extends StatelessWidget {
           color: color,
           shape: BoxShape.circle,
           border: Border.all(
-            color: showBorder || selected ? Colors.black26 : Colors.transparent,
+            color: showBorder || selected ? ThemeColors.of(context).border : Colors.transparent,
             width: selected ? 3 : 1,
           ),
           boxShadow: selected
@@ -850,7 +831,7 @@ class _SizePreset extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-            color: isActive ? kAccentColor : Colors.black54,
+            color: isActive ? kAccentColor : ThemeColors.of(context).textSecondary,
           ),
         ),
       ),
@@ -896,9 +877,9 @@ class _SavedTemplateTile extends StatelessWidget {
                 child: Image.file(
                   File(entry.imagePath),
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stack) => const Icon(
+                  errorBuilder: (context, error, stack) => Icon(
                     Icons.broken_image,
-                    color: Colors.black26,
+                    color: ThemeColors.of(context).border,
                   ),
                 ),
               ),
@@ -910,7 +891,7 @@ class _SavedTemplateTile extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-                  color: selected ? kAccentColor : Colors.black54,
+                  color: selected ? kAccentColor : ThemeColors.of(context).textSecondary,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

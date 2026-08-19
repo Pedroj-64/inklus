@@ -196,8 +196,14 @@ const int kMaxUndoDepth = 60;
 // Regla virtual
 // ---------------------------------------------------------------------------
 
+/// Tipos de regla disponibles.
+enum RulerType { straight, protractor }
+
 /// Longitud de la regla en unidades de mundo.
 const double kRulerLength = 600;
+
+/// Radio del transportador en unidades de mundo.
+const double kProtractorRadius = 300;
 
 /// Ancho del cuerpo de la regla en pantalla (px).
 const double kRulerScreenWidth = 18.0;

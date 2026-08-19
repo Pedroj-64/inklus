@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../services/reminder_service.dart';
 import '../services/storage_service.dart';
+import '../utils/theme_colors.dart';
 
 /// Pantalla de recordatorios.
 ///
@@ -333,14 +334,14 @@ class _ReminderCard extends StatelessWidget {
                 _formatDateTime(reminder.dateTime),
                 style: TextStyle(
                   fontSize: 13,
-                  color: isPending && isPast ? Colors.orange : Colors.black54,
+                  color: isPending && isPast ? Colors.orange : ThemeColors.of(context).textSecondary,
                 ),
               ),
               if (reminder.message.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Text(
                   reminder.message,
-                  style: const TextStyle(fontSize: 12, color: Colors.black45),
+                  style: TextStyle(fontSize: 12, color: ThemeColors.of(context).textHint),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../logic/canvas_controller.dart';
 import '../../models/stroke.dart';
+import '../../utils/theme_colors.dart';
 
 /// Panel de opciones de escritura: ajusta los parámetros de presión,
 /// suavizado y streamline de la herramienta actual.
@@ -64,19 +65,19 @@ class _StrokeOptionsSheet extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 4),
-              const Text(
+              SizedBox(height: 4),
+              Text(
                 'Ajusta la presión, suavizado y fluidez del trazo.',
-                style: TextStyle(fontSize: 12, color: Colors.black54),
+                style: TextStyle(fontSize: 12, color: ThemeColors.of(context).textSecondary),
               ),
               const SizedBox(height: 16),
               if (!isEditable)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
                   child: Center(
                     child: Text(
                       'El borrador y la selección no tienen opciones de trazo.',
-                      style: TextStyle(color: Colors.black38),
+                      style: TextStyle(color: ThemeColors.of(context).iconTertiary),
                     ),
                   ),
                 )
@@ -173,9 +174,9 @@ class _OptionSlider extends StatelessWidget {
                   ),
                   Text(
                     description,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
-                      color: Colors.black45,
+                      color: ThemeColors.of(context).textHint,
                     ),
                   ),
                 ],
@@ -183,13 +184,12 @@ class _OptionSlider extends StatelessWidget {
             ),
             SizedBox(
               width: 44,
-              child: Text(
-                value.toStringAsFixed(2),
+              child: Text(                  value.toStringAsFixed(2),
                 textAlign: TextAlign.right,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black54,
+                  color: ThemeColors.of(context).textSecondary,
                 ),
               ),
             ),
@@ -254,7 +254,7 @@ class _QuickSizeRow extends StatelessWidget {
                     : Colors.grey.withAlpha(20),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: isSelected ? kAccentColor : Colors.black12,
+                  color: isSelected ? kAccentColor : ThemeColors.of(context).borderLight,
                 ),
               ),
               child: Column(
@@ -266,7 +266,7 @@ class _QuickSizeRow extends StatelessWidget {
                     height: size.clamp(4.0, 20.0),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: isSelected ? kAccentColor : Colors.black45,
+                      color: isSelected ? kAccentColor : ThemeColors.of(context).textHint,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -275,7 +275,7 @@ class _QuickSizeRow extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? kAccentColor : Colors.black54,
+                      color: isSelected ? kAccentColor : ThemeColors.of(context).textSecondary,
                     ),
                   ),
                 ],

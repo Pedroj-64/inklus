@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../constants.dart';
 import '../../logic/canvas_controller.dart';
+import '../../utils/theme_colors.dart';
 
 /// Minimapa que muestra la posición actual del viewport dentro del mundo.
 ///
@@ -30,7 +31,7 @@ class MinimapWidget extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.black12),
+              border: Border.all(color: ThemeColors.of(context).borderLight),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.1),
@@ -45,6 +46,7 @@ class MinimapWidget extends StatelessWidget {
                 translate: controller.translate,
                 viewportSize: controller.viewportSize,
                 sheetSize: controller.sheetSize,
+                isDark: Theme.of(context).brightness == Brightness.dark,
               ),
             ),
           ),
@@ -59,12 +61,14 @@ class _MinimapPainter extends CustomPainter {
   final Offset translate;
   final Size viewportSize;
   final Size sheetSize;
+  final bool isDark;
 
   _MinimapPainter({
     required this.scale,
     required this.translate,
     required this.viewportSize,
     required this.sheetSize,
+    this.isDark = false,
   });
 
   @override
@@ -114,7 +118,7 @@ class _MinimapPainter extends CustomPainter {
       canvas.drawRect(
         sheetMiniRect,
         Paint()
-          ..color = Colors.black12
+          ..color = isDark ? Colors.white12 : Colors.black12
           ..style = PaintingStyle.stroke
           ..strokeWidth = 0.5,
       );

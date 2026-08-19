@@ -2,6 +2,7 @@ import '../constants.dart';
 import 'package:flutter/material.dart';
 
 import '../services/writing_stats_service.dart';
+import '../utils/theme_colors.dart';
 
 /// Pantalla de estadísticas de escritura.
 ///
@@ -170,7 +171,7 @@ class _SummaryRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   item.label,
-                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                  style: TextStyle(fontSize: 11, color: ThemeColors.of(context).textSecondary),
                 ),
               ],
             ),
@@ -285,7 +286,7 @@ class _LegendDot extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+        Text(label, style: TextStyle(fontSize: 11, color: ThemeColors.of(context).textSecondary)),
       ],
     );
   }
@@ -362,12 +363,12 @@ class _ActivityChart extends StatelessWidget {
             if (data.isNotEmpty)
               Text(
                 _formatDate(data.first.date),
-                style: const TextStyle(fontSize: 10, color: Colors.black38),
+                style: TextStyle(fontSize: 10, color: ThemeColors.of(context).iconTertiary),
               ),
             if (data.length > 1)
               Text(
                 _formatDate(data.last.date),
-                style: const TextStyle(fontSize: 10, color: Colors.black38),
+                style: TextStyle(fontSize: 10, color: ThemeColors.of(context).iconTertiary),
               ),
           ],
         ),

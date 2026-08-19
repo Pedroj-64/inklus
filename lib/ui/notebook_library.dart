@@ -16,8 +16,10 @@ import '../utils/date_utils.dart' as date_util;
 import 'note_list_screen.dart';
 import 'trash_screen.dart';
 import 'widgets/smart_folders_sheet.dart';
-import '../models/template.dart';
 import 'widgets/tag_editor_sheet.dart';
+import '../utils/theme_colors.dart';
+import 'create_notebook_screen.dart';
+import 'widgets/notebook_covers.dart';
 
 /// Biblioteca de cuadernos (pantalla de inicio).
 ///
@@ -136,107 +138,23 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
 
   Future<void> _createNotebook() async {
     final count = (_metas?.length ?? 0) + 1;
-    final result = await _showCreateNotebookDialog(count);
+    final result = await Navigator.of(context).push<CreateNotebookResult>(
+      MaterialPageRoute(
+        builder: (_) => CreateNotebookScreen(notebookCount: count),
+      ),
+    );
     if (result == null) return;
     final nb = await _storage.createNotebook(
       title: result.name,
       template: result.template,
+      coverStyle: result.coverStyle.name,
+      colorValue: result.coverColorValue,
     );
     if (!mounted) return;
     await _reload();
     await _openNotebookById(nb.id);
   }
 
-  /// Diálogo para crear un cuaderno con nombre y plantilla inicial.
-  Future<_CreateNotebookResult?> _showCreateNotebookDialog(int count) async {
-    final nameController = TextEditingController(text: 'Cuaderno $count');
-    var selectedTemplate = const PageTemplate();
-
-    return showDialog<_CreateNotebookResult>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: kAccentColor.withAlpha(20),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.menu_book_outlined, size: 20, color: kAccentColor),
-              ),
-              const SizedBox(width: 12),
-              const Text('Nuevo cuaderno'),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Nombre
-                TextField(
-                  controller: nameController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Nombre',
-                    hintText: 'Mi cuaderno',
-                  ),
-                  onSubmitted: (_) {
-                    if (nameController.text.trim().isNotEmpty) {
-                      Navigator.pop(
-                        context,
-                        _CreateNotebookResult(
-                          name: nameController.text.trim(),
-                          template: selectedTemplate,
-                        ),
-                      );
-                    }
-                  },
-                ),
-                const SizedBox(height: 20),
-                // Plantilla inicial
-                const Text(
-                  'Plantilla inicial',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Grid de plantillas
-                _TemplateGrid(
-                  selected: selectedTemplate.type,
-                  onSelect: (t) => setDialogState(() {
-                    selectedTemplate = selectedTemplate.copyWith(type: t);
-                  }),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final name = nameController.text.trim();
-                if (name.isEmpty) return;
-                Navigator.pop(
-                  context,
-                  _CreateNotebookResult(name: name, template: selectedTemplate),
-                );
-              },
-              child: const Text('Crear'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Future<void> _renameNotebook(NotebookMeta meta) async {
     final name = await _promptText(
@@ -328,12 +246,12 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
                                 : Colors.black)
                             : (Theme.of(context).brightness == Brightness.dark
                                 ? Colors.white24
-                                : Colors.black26),
+                                : ThemeColors.of(context).border),
                         width: isSelected ? 3 : 1,
                       ),
                     ),
                     child: c.$2 == null
-                        ? Icon(Icons.close, size: 20, color: Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black38)
+                        ? Icon(Icons.close, size: 20, color: Theme.of(context).brightness == Brightness.dark ? Colors.white38 : ThemeColors.of(context).iconTertiary)
                         : isSelected
                             ? const Icon(Icons.check, size: 20, color: Colors.white)
                             : null,
@@ -735,7 +653,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
               style: TextStyle(
                 color: Theme.of(context).brightness == Brightness.dark
                     ? Colors.white54
-                    : Colors.black54,
+                    : ThemeColors.of(context).textSecondary,
                 height: 1.4,
               ),
             ),
@@ -871,11 +789,12 @@ class _NotebookCard extends StatelessWidget {
                           ],
                         );
                       }
-                      // Sin contenido: portada estética con gradiente.
+                      // Sin contenido: portada estética.
                       return _NotebookCover(
                         color: color,
                         title: meta.title,
                         isDark: isDark,
+                        coverStyle: meta.coverStyle,
                       );
                     },
                   ),
@@ -982,7 +901,7 @@ class _NotebookCard extends StatelessWidget {
                       fontSize: 12,
                       color: Theme.of(context).brightness == Brightness.dark
                           ? Colors.white54
-                          : Colors.black54,
+                          : ThemeColors.of(context).textSecondary,
                     ),
                   ),
                   // Tags del cuaderno.
@@ -1053,13 +972,13 @@ class _SyncIcon extends StatelessWidget {
         return Icon(
           Icons.cloud_off,
           size: 16,
-          color: Theme.of(context).brightness == Brightness.dark ? Colors.white24 : Colors.black26,
+          color: Theme.of(context).brightness == Brightness.dark ? Colors.white24 : ThemeColors.of(context).border,
         );
       case SyncStatus.pending:
         return Icon(
           Icons.cloud_upload_outlined,
           size: 16,
-          color: Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black38,
+          color: Theme.of(context).brightness == Brightness.dark ? Colors.white38 : ThemeColors.of(context).iconTertiary,
         );
     }
   }
@@ -1084,7 +1003,7 @@ class _SortOption extends StatelessWidget {
     return ListTile(
       leading: Icon(
         icon,
-        color: selected ? kAccentColor : (Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54),
+        color: selected ? kAccentColor : (Theme.of(context).brightness == Brightness.dark ? Colors.white54 : ThemeColors.of(context).textSecondary),
       ),
       title: Text(
         label,
@@ -1101,113 +1020,19 @@ class _SortOption extends StatelessWidget {
   }
 }
 
-/// Resultado del diálogo de creación de cuaderno.
-class _CreateNotebookResult {
-  final String name;
-  final PageTemplate template;
-
-  _CreateNotebookResult({required this.name, required this.template});
-}
-
-/// Grid de selección de plantillas para el diálogo de creación.
-class _TemplateGrid extends StatelessWidget {
-  final TemplateType selected;
-  final ValueChanged<TemplateType> onSelect;
-
-  const _TemplateGrid({required this.selected, required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final templates = <(TemplateType, IconData, String, bool)>[
-      (TemplateType.blank, Icons.landscape, 'Infinito en blanco', false),
-      (TemplateType.ruled, Icons.format_list_bulleted, 'Rayas', false),
-      (TemplateType.grid, Icons.grid_on, 'Cuadrícula', false),
-      (TemplateType.dots, Icons.grain, 'Puntos', false),
-      (TemplateType.sheet, Icons.description, 'Hoja fija (A4)', true),
-      (TemplateType.music, Icons.music_note, 'Pentagrama', false),
-      (TemplateType.planner, Icons.calendar_today, 'Planificador', false),
-      (TemplateType.habit, Icons.checklist, 'Tracker de hábitos', false),
-    ];
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        childAspectRatio: 0.85,
-      ),
-      itemCount: templates.length,
-      itemBuilder: (context, index) {
-        final (type, icon, label, isFinite) = templates[index];
-        final isSelected = selected == type;
-        return GestureDetector(
-          onTap: () => onSelect(type),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? kAccentColor.withAlpha(20)
-                  : (isDark ? Colors.white.withAlpha(8) : Colors.grey.withAlpha(25)),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isSelected ? kAccentColor : Colors.black12,
-                width: isSelected ? 2 : 1,
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 28,
-                  color: isSelected ? kAccentColor : (isDark ? Colors.white60 : Colors.black54),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color: isSelected ? kAccentColor : (isDark ? Colors.white70 : Colors.black87),
-                  ),
-                ),
-                if (isFinite)
-                  Container(
-                    margin: const EdgeInsets.only(top: 2),
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withAlpha(25),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: const Text(
-                      'Fija',
-                      style: TextStyle(fontSize: 8, color: Colors.orange),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
 /// Portada estética para cuadernos sin contenido.
 /// Muestra un gradiente con icono y título estilizado.
 class _NotebookCover extends StatelessWidget {
   final Color? color;
   final String title;
   final bool isDark;
+  final String coverStyle;
 
   const _NotebookCover({
     required this.color,
     required this.title,
     required this.isDark,
+    this.coverStyle = 'simple',
   });
 
   @override
@@ -1215,98 +1040,39 @@ class _NotebookCover extends StatelessWidget {
     final baseColor = color ?? (isDark
         ? const Color(0xFF4A6FA5)
         : const Color(0xFF6B9BD2));
-    final gradient = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        baseColor,
-        baseColor.withAlpha(180),
-        baseColor.withAlpha(120),
-      ],
+
+    // Convierte el string coverStyle a CoverStyle enum.
+    final style = CoverStyle.values.firstWhere(
+      (s) => s.name == coverStyle,
+      orElse: () => CoverStyle.simple,
     );
 
-    return Container(
-      decoration: BoxDecoration(gradient: gradient),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Patrón decorativo sutil
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _CoverPatternPainter(
-                color: Colors.white.withAlpha(20),
-              ),
-            ),
-          ),
-          // Icono central
-          Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(30),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.menu_book_outlined,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                      shadows: [
-                        Shadow(blurRadius: 4, color: Colors.black26),
-                      ],
-                    ),
-                  ),
-                ),
+    return CustomPaint(
+      painter: NotebookCoverPainter(
+        style: style,
+        color: baseColor,
+        isDark: isDark,
+      ),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              shadows: [
+                Shadow(blurRadius: 4, color: ThemeColors.of(context).border),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-/// Pintor de patrón decorativo para la portada del cuaderno.
-class _CoverPatternPainter extends CustomPainter {
-  final Color color;
-  _CoverPatternPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-
-    // Líneas diagonales decorativas
-    final spacing = 20.0;
-    for (double i = -size.height; i < size.width + size.height; i += spacing) {
-      canvas.drawLine(
-        Offset(i, 0),
-        Offset(i + size.height, size.height),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _CoverPatternPainter oldDelegate) =>
-      oldDelegate.color != color;
-}

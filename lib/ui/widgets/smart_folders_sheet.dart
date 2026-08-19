@@ -2,6 +2,7 @@ import '../../constants.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/storage_service.dart';
+import '../../utils/theme_colors.dart';
 
 /// Tipo de carpeta dinámica.
 enum SmartFolderType {
@@ -204,14 +205,14 @@ class _SmartFoldersSheet extends StatelessWidget {
             // Por color.
             if (allColors.isNotEmpty) ...[
               const SizedBox(height: 12),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
                   'POR COLOR',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: Colors.black45,
+                    color: ThemeColors.of(context).textHint,
                     letterSpacing: 0.8,
                   ),
                 ),
@@ -254,14 +255,14 @@ class _SmartFoldersSheet extends StatelessWidget {
             // Por etiqueta.
             if (allTags.isNotEmpty) ...[
               const SizedBox(height: 12),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
                   'POR ETIQUETA',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: Colors.black45,
+                    color: ThemeColors.of(context).textHint,
                     letterSpacing: 0.8,
                   ),
                 ),

@@ -10,6 +10,7 @@ import '../services/export_service.dart';
 import '../services/image_service.dart';
 import '../services/storage_service.dart';
 import 'home_screen.dart';
+import '../utils/theme_colors.dart';
 
 /// Pantalla que muestra la lista de apuntes (notes) dentro de un cuaderno.
 ///
@@ -317,7 +318,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
               style: TextStyle(
                 color: Theme.of(context).brightness == Brightness.dark
                     ? Colors.white54
-                    : Colors.black54,
+                    : ThemeColors.of(context).textSecondary,
                 height: 1.4,
               ),
             ),
@@ -378,7 +379,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
                             if (snapshot.hasError) {
                               return Icon(
                                 Icons.description_outlined,
-                                color: isDark ? Colors.white30 : Colors.black26,
+                                color: isDark ? Colors.white30 : ThemeColors.of(context).border,
                                 size: 36,
                               );
                             }
@@ -477,7 +478,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
                               '$pageCount página${pageCount == 1 ? '' : 's'} · $timeAgo',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: isDark ? Colors.white54 : Colors.black54,
+                                color: isDark ? Colors.white54 : ThemeColors.of(context).textSecondary,
                               ),
                             ),
                           ],
@@ -563,7 +564,7 @@ class _CompactTemplateGrid extends StatelessWidget {
               border: Border.all(
                 color: isSelected
                     ? kAccentColor
-                    : Colors.black12,
+                    : ThemeColors.of(context).borderLight,
                 width: isSelected ? 2 : 1,
               ),
             ),
@@ -575,7 +576,7 @@ class _CompactTemplateGrid extends StatelessWidget {
                   size: 22,
                   color: isSelected
                       ? kAccentColor
-                      : (isDark ? Colors.white60 : Colors.black54),
+                      : (isDark ? Colors.white60 : ThemeColors.of(context).textSecondary),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -587,7 +588,7 @@ class _CompactTemplateGrid extends StatelessWidget {
                         isSelected ? FontWeight.w600 : FontWeight.normal,
                     color: isSelected
                         ? kAccentColor
-                        : (isDark ? Colors.white70 : Colors.black87),
+                        : (isDark ? Colors.white70 : ThemeColors.of(context).textPrimary),
                   ),
                 ),
               ],

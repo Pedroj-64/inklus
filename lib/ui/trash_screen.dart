@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/storage_service.dart';
 import '../utils/date_utils.dart' as date_util;
+import '../utils/theme_colors.dart';
 
 /// Pantalla de papelera: muestra los cuadernos eliminados y permite
 /// recuperarlos o eliminarlos definitivamente.
@@ -151,7 +152,7 @@ class _TrashScreenState extends State<TrashScreen> {
           const SizedBox(height: 8),
           Text(
             'Los cuadernos que elimines aparecerán aquí.',
-            style: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+            style: TextStyle(color: isDark ? Colors.white54 : ThemeColors.of(context).textSecondary),
           ),
         ],
       ),
@@ -221,7 +222,7 @@ class _TrashThumb extends StatelessWidget {
       ),
       child: Icon(
         Icons.description_outlined,
-        color: hasColor ? color : (Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black38),
+        color: hasColor ? color : (Theme.of(context).brightness == Brightness.dark ? Colors.white38 : ThemeColors.of(context).iconTertiary),
         size: 24,
       ),
     );

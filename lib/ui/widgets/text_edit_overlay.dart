@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../logic/canvas_controller.dart';
 import '../../models/text_item.dart';
+import '../../utils/theme_colors.dart';
 
 /// Overlay de edición de texto que se superpone al lienzo.
 ///
@@ -121,7 +122,7 @@ class _TextEditOverlayState extends State<TextEditOverlay> {
                     decoration: InputDecoration(
                       hintText: 'Escribe aquí...',
                       hintStyle: TextStyle(
-                        color: Colors.black26,
+                        color: ThemeColors.of(context).border,
                         fontSize: fontSize,
                       ),
                       border: InputBorder.none,

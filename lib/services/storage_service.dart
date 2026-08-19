@@ -27,12 +27,16 @@ class NotebookMeta {
   /// Etiquetas del cuaderno.
   final List<String> tags;
 
+  /// Estilo de portada (simple, circle, waves, dots, lines).
+  final String coverStyle;
+
   const NotebookMeta({
     required this.id,
     required this.title,
     required this.updatedAt,
     this.colorValue,
     this.syncEnabled,
+    this.coverStyle = 'simple',
     List<String>? tags,
   })  : tags = tags ?? const [];
 
@@ -44,6 +48,7 @@ class NotebookMeta {
     DateTime? updatedAt,
     int? colorValue,
     bool? syncEnabled,
+    String? coverStyle,
     List<String>? tags,
   }) =>
       NotebookMeta(
@@ -52,6 +57,7 @@ class NotebookMeta {
         updatedAt: updatedAt ?? this.updatedAt,
         colorValue: colorValue ?? this.colorValue,
         syncEnabled: syncEnabled ?? this.syncEnabled,
+        coverStyle: coverStyle ?? this.coverStyle,
         tags: tags ?? this.tags,
       );
 
@@ -63,6 +69,7 @@ class NotebookMeta {
                 DateTime.fromMillisecondsSinceEpoch(0),
         colorValue: (json['color'] as num?)?.toInt(),
         syncEnabled: json['syncEnabled'] as bool?,
+        coverStyle: json['coverStyle'] as String? ?? 'simple',
         tags: (json['tags'] as List? ?? [])
             .map((t) => t as String)
             .toList(),
@@ -72,9 +79,11 @@ class NotebookMeta {
         'id': id,
         'title': title,
         'updatedAt': updatedAt.toIso8601String(),
-        if (colorValue != null) 'color': colorValue,    if (syncEnabled != null) 'syncEnabled': syncEnabled,
-    if (tags.isNotEmpty) 'tags': tags,
-  };
+        if (colorValue != null) 'color': colorValue,
+        if (syncEnabled != null) 'syncEnabled': syncEnabled,
+        if (coverStyle != 'simple') 'coverStyle': coverStyle,
+        if (tags.isNotEmpty) 'tags': tags,
+      };
 }
 
 /// Persistencia local de cuadernos (JSON en la carpeta de datos de la app).
@@ -584,6 +593,7 @@ class StorageService {
   Future<Notebook> createNotebook({
     String? title,
     int? colorValue,
+    String coverStyle = 'simple',
     List<String>? tags,
     PageTemplate? template,
   }) async {
@@ -595,6 +605,7 @@ class StorageService {
       id: newId('nb'),
       title: title ?? 'Mi cuaderno',
       colorValue: colorValue,
+      coverStyle: coverStyle,
       tags: tags,
       notes: [note],
     );

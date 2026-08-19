@@ -6,6 +6,7 @@ import '../services/drive_sync_service.dart';
 import '../services/storage_service.dart';
 import 'writing_stats_screen.dart';
 import 'reminder_screen.dart';
+import '../utils/theme_colors.dart';
 
 /// Pantalla de configuración / ajustes de la app.
 ///
@@ -151,7 +152,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           : 'Inicia sesión para respaldar tus cuadernos',
                       style: TextStyle(
                         color: isSignedIn
-                            ? Colors.black54
+                            ? ThemeColors.of(context).textSecondary
                             : Colors.grey.shade500,
                       ),
                     ),
@@ -206,7 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: const Text('Modo oscuro'),
                 subtitle: Text(
                   isDark ? 'Activado' : 'Desactivado',
-                  style: const TextStyle(color: Colors.black54),
+                  style: TextStyle(color: ThemeColors.of(context).textSecondary),
                 ),
                 value: isDark,
                 onChanged: (_) => widget.onToggleTheme?.call(),

@@ -85,6 +85,7 @@ class CanvasController extends ChangeNotifier {
 
   // ---- Regla virtual ----
   bool _rulerEnabled = false;
+  RulerType _rulerType = RulerType.straight;
   Offset _rulerCenter = Offset.zero;
   double _rulerAngle = 0; // radianes
   bool _rulerDragging = false;
@@ -176,6 +177,7 @@ class CanvasController extends ChangeNotifier {
 
   // ---- Regla ----
   bool get rulerEnabled => _rulerEnabled;
+  RulerType get rulerType => _rulerType;
   Offset get rulerCenter => _rulerCenter;
   double get rulerAngle => _rulerAngle;
   double get rulerLength => kRulerLength;
@@ -241,6 +243,15 @@ class CanvasController extends ChangeNotifier {
         viewportSize,
       );
     }
+    notifyListeners();
+  }
+
+  /// Cicla entre los tipos de regla (recta → transportador → recta...).
+  void cycleRulerType() {
+    final types = RulerType.values;
+    final idx = types.indexOf(_rulerType);
+    _rulerType = types[(idx + 1) % types.length];
+    if (!_rulerEnabled) _rulerEnabled = true;
     notifyListeners();
   }
 

@@ -34,6 +34,7 @@ import 'widgets/stroke_options_sheet.dart';
 import 'widgets/template_picker_sheet.dart';
 import 'widgets/tool_rail.dart';
 import 'writing_stats_screen.dart';
+import '../utils/theme_colors.dart';
 
 /// Editor de un cuaderno (pantalla principal de escritura).
 ///
@@ -1266,8 +1267,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.keyboard_arrow_up, size: 18, color: isDark ? Colors.white54 : Colors.black38),
-                          Text('Páginas', style: TextStyle(fontSize: 11, color: isDark ? Colors.white54 : Colors.black38)),
+                          Icon(Icons.keyboard_arrow_up, size: 18, color: isDark ? Colors.white54 : ThemeColors.of(context).iconTertiary),
+                          Text('Páginas', style: TextStyle(fontSize: 11, color: isDark ? Colors.white54 : ThemeColors.of(context).iconTertiary)),
                         ],
                       ),
                     ),
@@ -1323,7 +1324,7 @@ class _HomeScreenState extends State<HomeScreen> {
               syncTooltip = 'Error de sincronización';
             case SyncStatus.disabled:
               cloudIcon = Icons.cloud_queue;
-              cloudColor = Colors.black38;
+              cloudColor = ThemeColors.of(context).iconTertiary;
               syncTooltip = 'Sync desactivada para este cuaderno';
             case SyncStatus.pending:
               cloudIcon = Icons.cloud_upload_outlined;
@@ -1706,7 +1707,7 @@ class _ZoomControls extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
+                    color: isDark ? Colors.white : ThemeColors.of(context).textPrimary,
                   ),
                 ),
                 IconButton(

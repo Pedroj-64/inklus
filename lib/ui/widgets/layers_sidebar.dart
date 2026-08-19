@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../constants.dart';
 import '../../logic/canvas_controller.dart';
 import '../../models/page.dart';
+import '../../utils/theme_colors.dart';
 
 /// Sidebar docked para gestión de capas.
 ///
@@ -177,7 +178,7 @@ class _LayerTile extends StatelessWidget {
         border: Border.all(
           color: isActive
               ? kAccentColor
-              : (isDark ? Colors.white12 : Colors.black12),
+              : (isDark ? Colors.white12 : ThemeColors.of(context).borderLight),
         ),
       ),
       child: InkWell(
@@ -208,7 +209,7 @@ class _LayerTile extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: isActive ? Colors.white : Colors.black54,
+                          color: isActive ? Colors.white : ThemeColors.of(context).textSecondary,
                         ),
                       ),
                     ),
@@ -234,7 +235,7 @@ class _LayerTile extends StatelessWidget {
                       size: 18,
                       color: layer.visible
                           ? kAccentColor
-                          : Colors.black38,
+                          : ThemeColors.of(context).iconTertiary,
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -244,7 +245,7 @@ class _LayerTile extends StatelessWidget {
                     child: Icon(
                       layer.locked ? Icons.lock : Icons.lock_open,
                       size: 18,
-                      color: layer.locked ? Colors.orange : Colors.black38,
+                      color: layer.locked ? Colors.orange : ThemeColors.of(context).iconTertiary,
                     ),
                   ),
                   // Eliminar
@@ -267,10 +268,10 @@ class _LayerTile extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 6),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.opacity,
                         size: 14,
-                        color: Colors.black45,
+                        color: ThemeColors.of(context).textHint,
                       ),
                       const SizedBox(width: 4),
                       Expanded(
@@ -296,9 +297,9 @@ class _LayerTile extends StatelessWidget {
                         width: 32,
                         child: Text(
                           '${(layer.opacity * 100).round()}%',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 10,
-                            color: Colors.black54,
+                            color: ThemeColors.of(context).textSecondary,
                           ),
                           textAlign: TextAlign.right,
                         ),
