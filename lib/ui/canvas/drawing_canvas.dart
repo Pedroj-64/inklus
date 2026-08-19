@@ -347,6 +347,11 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   Rect _transformSelectionBounds = Rect.zero;
   List<Stroke> _transformStrokesBefore = [];
 
+  // ---- Mover trazos seleccionados (herramienta select) ----
+  bool _movingStrokes = false;
+  Offset _strokeMoveStartWorld = Offset.zero;
+  List<Stroke> _strokesBeforeMove = [];
+
 
 
   @override
@@ -538,7 +543,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
   void _onPointerMove(PointerMoveEvent event) {
-    if (_movingImage || _resizingImage || _rotatingImage) {
+    if (_movingImage || _resizingImage || _rotatingImage || _movingStrokes ||
+        _scalingSelection || _rotatingSelection) {
       _handleSelectMove(event.localPosition);
       return;
     }
@@ -572,7 +578,11 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       return;
     }
 
-    if (event.pointer != _drawingPointer && !_movingImage && !_resizingImage && !_rotatingImage) {
+    if (event.pointer != _drawingPointer && !_movingImage && !_resizingImage && !_rotatingImage && !_movingStrokes) {
+      return;
+    }
+    if (_movingStrokes) {
+      _commitStrokeMove();
       return;
     }
     if (_movingImage || _resizingImage || _rotatingImage) {
@@ -589,6 +599,10 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
 
   void _onPointerCancel(PointerCancelEvent event) {
     _twoFingerPointers.remove(event.pointer);
+    if (_movingStrokes) {
+      _cancelStrokeMove();
+      return;
+    }
     if (_movingImage || _resizingImage || _rotatingImage) {
       _cancelImageGesture();
       return;
@@ -720,9 +734,20 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       _imageGestureStartWorld = world;
       _imageGestureStartRect = hit.rect;
       _imageGestureStartRotation = hit.rotation;
-    } else {
-      controller.selectImage(null);
+      return;
     }
+
+    // 3) ¿Toca algún trazo? Seleccionar y permitir mover.
+    if (controller.selectStrokeAt(world)) {
+      _movingStrokes = true;
+      _strokeMoveStartWorld = world;
+      _strokesBeforeMove = List<Stroke>.from(controller.selectedStrokes);
+      return;
+    }
+
+    // 4) No se tocó nada: deseleccionar todo.
+    controller.selectImage(null);
+    controller.clearLassoSelection();
   }
 
   void _handleSelectMove(Offset local) {
@@ -754,6 +779,13 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         );
         _transformStartWorld = world;
       }
+      return;
+    }
+
+    // Mover trazos seleccionados (delta total desde el inicio).
+    if (_movingStrokes) {
+      final delta = world - _strokeMoveStartWorld;
+      widget.controller.moveSelectedStrokes(delta, before: _strokesBeforeMove);
       return;
     }
 
@@ -831,15 +863,39 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     if (current != null && moved) {
       widget.controller.commitImageChange(original, current);
     }
-  }
-
-  void _cancelImageGesture() {
+  }  void _cancelImageGesture() {
     _movingImage = false;
     _resizingImage = false;
     _rotatingImage = false;
     _imageGestureOriginal = null;
     _drawingPointer = null;
   }
+
+  void _commitStrokeMove() {
+    if (_strokesBeforeMove.isNotEmpty) {
+      // Solo empujar undo si hubo movimiento real.
+      final delta = widget.controller.selectedStrokes.isNotEmpty
+          ? widget.controller.selectedStrokes.first.points.first.offset -
+            _strokesBeforeMove.first.points.first.offset
+          : Offset.zero;
+      if (delta.distance > 0.5) {
+        widget.controller.commitMoveStrokes(_strokesBeforeMove);
+      }
+    }
+    _movingStrokes = false;
+    _strokesBeforeMove = [];
+    _drawingPointer = null;
+  }
+
+  void _cancelStrokeMove() {
+    if (_strokesBeforeMove.isNotEmpty) {
+      widget.controller.restoreStrokeSelection(_strokesBeforeMove);
+    }
+    _movingStrokes = false;
+    _strokesBeforeMove = [];
+    _drawingPointer = null;
+  }
+
 
   /// Calcula el rectángulo delimitador de los trazos seleccionados.
   Rect _computeSelectionBounds(List<Stroke> strokes) {

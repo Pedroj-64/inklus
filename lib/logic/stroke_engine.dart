@@ -131,4 +131,67 @@ class StrokeEngine {
     }
     return stroke.color;
   }
+
+  // ------------------------------------------------------------------
+  // Hit-test de trazos (herramienta select)
+  // ------------------------------------------------------------------
+
+  /// Distancia mínima desde [worldPoint] hasta el trazo [stroke].
+  ///
+  /// Itera los segmentos entre puntos consecutivos y calcula la distancia
+  /// perpendicular al segmento (o la distancia a los extremos). El resultado
+  /// se usa como hit-test: si la distancia es menor que `stroke.size / 2`,
+  /// el punto está "sobre" el trazo.
+  static double distanceToStroke(Offset worldPoint, Stroke stroke) {
+    if (stroke.points.isEmpty) return double.infinity;
+    var minDist = double.infinity;
+    for (var i = 0; i < stroke.points.length - 1; i++) {
+      final a = stroke.points[i].offset;
+      final b = stroke.points[i + 1].offset;
+      final dist = _pointToSegmentDistance(worldPoint, a, b);
+      if (dist < minDist) minDist = dist;
+    }
+    // También check el primer y último punto.
+    final first = stroke.points.first.offset;
+    final last = stroke.points.last.offset;
+    final dFirst = (worldPoint - first).distance;
+    final dLast = (worldPoint - last).distance;
+    if (dFirst < minDist) minDist = dFirst;
+    if (dLast < minDist) minDist = dLast;
+    return minDist;
+  }
+
+  /// Encuentra el trazo más cercano a [worldPoint] en [strokes].
+  ///
+  /// Devuelve el trazo cuyo borde está más cerca del punto, o null si
+  /// ningún trazo está dentro de [maxDistance].
+  static Stroke? findStrokeAt(
+    Offset worldPoint,
+    List<Stroke> strokes, {
+    double maxDistance = 20.0,
+  }) {
+    Stroke? closest;
+    var closestDist = double.infinity;
+    for (final stroke in strokes) {
+      final dist = distanceToStroke(worldPoint, stroke);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = stroke;
+      }
+    }
+    if (closestDist <= maxDistance) return closest;
+    return null;
+  }
+
+  /// Distancia desde un punto [p] al segmento [a]-[b].
+  static double _pointToSegmentDistance(Offset p, Offset a, Offset b) {
+    final ab = b - a;
+    final ap = p - a;
+    final abLenSq = ab.distanceSquared;
+    if (abLenSq < 1e-10) return (p - a).distance;
+    final t = (ap.dx * ab.dx + ap.dy * ab.dy) / abLenSq;
+    final tClamped = t.clamp(0.0, 1.0);
+    final closest = a + ab * tClamped;
+    return (p - closest).distance;
+  }
 }

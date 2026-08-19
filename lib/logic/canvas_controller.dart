@@ -772,6 +772,20 @@ class CanvasController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Restaura los trazos seleccionados a su estado original (sin mover).
+  ///
+  /// Se usa al cancelar un gesto de movimiento.
+  void restoreStrokeSelection(List<Stroke> originals) {
+    for (final original in originals) {
+      final idx = page.strokes.indexWhere((s) => s.id == original.id);
+      if (idx >= 0) {
+        page.strokes[idx] = original;
+      }
+    }
+    _selectedStrokes = List<Stroke>.from(originals);
+    _touch();
+  }
+
   /// Elimina los trazos seleccionados con el lazo (deshacer possible).
   void deleteSelectedStrokes() {
     if (_selectedStrokes.isEmpty) return;
@@ -869,6 +883,73 @@ class CanvasController extends ChangeNotifier {
 
   /// Confirma la transformación de selección (empuja acción de deshacer).
   void commitTransformSelection(List<Stroke> before) {
+    if (_selectedStrokes.isEmpty) return;
+    _undoStack.push(
+      CanvasAction(
+        strokesRemoved: before,
+        strokesAdded: List<Stroke>.from(_selectedStrokes),
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // Seleccionar trazos por hit-test (herramienta select)
+  // ------------------------------------------------------------------
+
+  /// Selecciona el trazo más cercano a [worldPoint].
+  ///
+  /// Se usa con la herramienta select: al tocar un trazo, se selecciona
+  /// (si no había otro seleccionado) o se añade/quita de la selección.
+  /// Devuelve true si se seleccionó algún trazo.
+  bool selectStrokeAt(Offset worldPoint) {
+    final hit = StrokeEngine.findStrokeAt(
+      worldPoint,
+      page.strokes,
+      maxDistance: 20.0 / _scale,
+    );
+    if (hit == null) return false;
+    _selectedImageId = null;
+    if (_selectedStrokes.contains(hit)) {
+      _selectedStrokes.remove(hit);
+    } else {
+      _selectedStrokes = [hit];
+    }
+    _touch();
+    return true;
+  }
+
+  /// Mueve todos los trazos seleccionados por un [delta] total desde [before].
+  ///
+  /// [before] es el estado original de los trazos antes de empezar a mover.
+  /// Se traslada cada trazo original por el delta completo (no incremental)
+  /// para evitar acumulación durante el arrastre.
+  void moveSelectedStrokes(Offset delta, {required List<Stroke> before}) {
+    if (before.isEmpty) return;
+    _selectedStrokes = [];
+    for (final original in before) {
+      final newPoints = original.points.map((p) {
+        return StrokePoint(p.x + delta.dx, p.y + delta.dy, p.pressure);
+      }).toList();
+      final newStroke = Stroke(
+        id: original.id,
+        points: newPoints,
+        tool: original.tool,
+        colorValue: original.colorValue,
+        size: original.size,
+        fillColorValue: original.fillColorValue,
+        layerIndex: original.layerIndex,
+        shapeType: original.shapeType,
+      );
+      // Reemplaza el trazo en la página.
+      final idx = page.strokes.indexOf(original);
+      if (idx >= 0) page.strokes[idx] = newStroke;
+      _selectedStrokes.add(newStroke);
+    }
+    _touch();
+  }
+
+  /// Confirma el movimiento de trazos seleccionados (empuja acción de deshacer).
+  void commitMoveStrokes(List<Stroke> before) {
     if (_selectedStrokes.isEmpty) return;
     _undoStack.push(
       CanvasAction(
