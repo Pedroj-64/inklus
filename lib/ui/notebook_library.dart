@@ -322,12 +322,18 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
                       color: c.$2 != null ? Color(c.$2!) : const Color(0xFFF5F5F5),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: isSelected ? Colors.black : Colors.black26,
+                        color: isSelected
+                            ? (Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white
+                                : Colors.black)
+                            : (Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white24
+                                : Colors.black26),
                         width: isSelected ? 3 : 1,
                       ),
                     ),
                     child: c.$2 == null
-                        ? const Icon(Icons.close, size: 20, color: Colors.black38)
+                        ? Icon(Icons.close, size: 20, color: Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black38)
                         : isSelected
                             ? const Icon(Icons.check, size: 20, color: Colors.white)
                             : null,
@@ -726,7 +732,12 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
                   ? 'Prueba con otro nombre de cuaderno.'
                   : 'Crea tu primer cuaderno y empieza a escribir\ncon tu stylus o dedo.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.black54, height: 1.4),
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white54
+                    : Colors.black54,
+                height: 1.4,
+              ),
             ),
             if (!hasSearch) ...[
               const SizedBox(height: 28),
@@ -967,9 +978,11 @@ class _NotebookCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     date_util.relativeTime(meta.updatedAt),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: Colors.black54,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white54
+                          : Colors.black54,
                     ),
                   ),
                   // Tags del cuaderno.
@@ -1037,16 +1050,16 @@ class _SyncIcon extends StatelessWidget {
           color: Color(0xFFE53935),
         );
       case SyncStatus.disabled:
-        return const Icon(
+        return Icon(
           Icons.cloud_off,
           size: 16,
-          color: Colors.black26,
+          color: Theme.of(context).brightness == Brightness.dark ? Colors.white24 : Colors.black26,
         );
       case SyncStatus.pending:
-        return const Icon(
+        return Icon(
           Icons.cloud_upload_outlined,
           size: 16,
-          color: Colors.black38,
+          color: Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black38,
         );
     }
   }
@@ -1071,7 +1084,7 @@ class _SortOption extends StatelessWidget {
     return ListTile(
       leading: Icon(
         icon,
-        color: selected ? kAccentColor : Colors.black54,
+        color: selected ? kAccentColor : (Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54),
       ),
       title: Text(
         label,

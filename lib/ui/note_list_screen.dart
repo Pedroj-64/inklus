@@ -311,10 +311,15 @@ class _NoteListScreenState extends State<NoteListScreen> {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Crea tu primera nota para empezar a escribir.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black54, height: 1.4),
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white54
+                    : Colors.black54,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 28),
             FilledButton.icon(
