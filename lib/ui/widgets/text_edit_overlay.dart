@@ -1,3 +1,4 @@
+import '../../constants.dart';
 import 'package:flutter/material.dart';
 
 import '../../logic/canvas_controller.dart';
@@ -50,11 +51,12 @@ class _TextEditOverlayState extends State<TextEditOverlay> {
         if (item == null) {
           return const SizedBox.shrink();
         }
+        final currentItem = item;
 
         // Si cambió el item, actualiza el controlador de texto.
-        if (_editingItem?.id != item.id) {
-          _editingItem = item;
-          _textController.text = item.text;
+        if (_editingItem?.id != currentItem.id) {
+          _editingItem = currentItem;
+          _textController.text = currentItem.text;
           _textController.selection = TextSelection.fromPosition(
             TextPosition(offset: item.text.length),
           );
@@ -69,53 +71,74 @@ class _TextEditOverlayState extends State<TextEditOverlay> {
         final scaledWidth = item.width * widget.controller.scale;
         final fontSize = item.fontSize * widget.controller.scale;
 
-        return Positioned(
-          left: viewportPos.dx,
-          top: viewportPos.dy,
-          width: scaledWidth,
-          child: Material(
-            color: Colors.white.withAlpha(230),
-            elevation: 4,
-            borderRadius: BorderRadius.circular(4),
-            child: IntrinsicHeight(
-              child: TextField(
-                controller: _textController,
-                style: TextStyle(
-                  color: item.color,
-                  fontSize: fontSize,
+        return Stack(
+          children: [
+            // Mini-toolbar con botón de enlace.
+            Positioned(
+              left: viewportPos.dx,
+              top: viewportPos.dy - 36,
+              child: Material(
+                color: kAccentColor,
+                borderRadius: BorderRadius.circular(20),
+                elevation: 3,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Vincular a página',
+                      icon: Icon(
+                        currentItem.linkToPageId != null ? Icons.link : Icons.link_off,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      onPressed: () => _showLinkPicker(currentItem),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
                 ),
-                maxLines: null,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: 'Escribe aquí...',
-                  hintStyle: TextStyle(
-                    color: Colors.black26,
-                    fontSize: fontSize,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.all(8),
-                ),
-                onChanged: (value) {
-                  final current = item;
-                  if (current != null) {
-                    widget.controller.updateTextItem(
-                      current.copyWith(text: value),
-                    );
-                  }
-                },
-                onEditingComplete: () {
-                  final current = item;
-                  if (current != null) _finishEditing(current);
-                },
-                onSubmitted: (_) {
-                  final current = item;
-                  if (current != null) _finishEditing(current);
-                },
               ),
             ),
-          ),
+            // Campo de texto.
+            Positioned(
+              left: viewportPos.dx,
+              top: viewportPos.dy,
+              width: scaledWidth,
+              child: Material(
+                color: Colors.white.withAlpha(230),
+                elevation: 4,
+                borderRadius: BorderRadius.circular(4),
+                child: IntrinsicHeight(
+                  child: TextField(
+                    controller: _textController,
+                    style: TextStyle(
+                      color: item.color,
+                      fontSize: fontSize,
+                    ),
+                    maxLines: null,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Escribe aquí...',
+                      hintStyle: TextStyle(
+                        color: Colors.black26,
+                        fontSize: fontSize,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.all(8),
+                    ),
+                    onChanged: (value) {
+                      widget.controller.updateTextItem(
+                        currentItem.copyWith(text: value),
+                      );
+                    },
+                    onEditingComplete: () => _finishEditing(currentItem),
+                    onSubmitted: (_) => _finishEditing(currentItem),
+                  ),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -131,5 +154,65 @@ class _TextEditOverlayState extends State<TextEditOverlay> {
       widget.controller.commitTextItem(item);
     }
     _editingItem = null;
+  }
+
+  /// Muestra el selector de página para vincular un enlace.
+  void _showLinkPicker(TextItem item) {
+    final doc = widget.controller.document;
+    showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Vincular a página',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+            if (item.linkToPageId != null)
+              ListTile(
+                leading: const Icon(Icons.link_off, color: Colors.red),
+                title: const Text('Quitar enlace'),
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.controller.updateTextItem(
+                    item.copyWith(linkToPageId: null),
+                  );
+                },
+              ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: doc.pages.length,
+                itemBuilder: (context, index) {
+                  final page = doc.pages[index];
+                  final isLinked = item.linkToPageId == page.id;
+                  return ListTile(
+                    leading: Icon(
+                      isLinked ? Icons.link : Icons.description_outlined,
+                      color: isLinked ? kAccentColor : null,
+                    ),
+                    title: Text(page.name),
+                    subtitle: Text('Página ${index + 1}'),
+                    trailing: isLinked
+                        ? const Icon(Icons.check, color: kAccentColor)
+                        : null,
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.controller.updateTextItem(
+                        item.copyWith(linkToPageId: page.id),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

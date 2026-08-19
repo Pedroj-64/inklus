@@ -1,3 +1,4 @@
+import '../constants.dart';
 import 'dart:typed_data';
 
 import 'dart:io';
@@ -5,13 +6,18 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../models/note.dart';
 import '../services/drive_sync_service.dart';
 import '../services/export_service.dart';
 import '../services/image_service.dart';
 import '../services/inklus_format.dart';
 import '../services/storage_service.dart';
-import 'home_screen.dart';
+import '../utils/date_utils.dart' as date_util;
+import 'note_list_screen.dart';
 import 'trash_screen.dart';
+import 'widgets/smart_folders_sheet.dart';
+import '../models/template.dart';
+import 'widgets/tag_editor_sheet.dart';
 
 /// Biblioteca de cuadernos (pantalla de inicio).
 ///
@@ -21,15 +27,16 @@ import 'trash_screen.dart';
 /// editor ([HomeScreen]); al volver, se refresca la lista.
 class NotebookLibraryScreen extends StatefulWidget {
   final VoidCallback? onToggleTheme;
+  final VoidCallback? onOpenSettings;
 
-  const NotebookLibraryScreen({super.key, this.onToggleTheme});
+  const NotebookLibraryScreen({super.key, this.onToggleTheme, this.onOpenSettings});
 
   @override
   State<NotebookLibraryScreen> createState() => _NotebookLibraryScreenState();
 }
 
 class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
-  final StorageService _storage = StorageService();
+  final StorageService _storage = StorageService.instance;
   final ImageService _imageService = ImageService();
 
   /// null mientras carga el índice por primera vez.
@@ -43,6 +50,9 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
 
   /// Criterio de ordenación.
   _SortBy _sortBy = _SortBy.updatedDesc;
+
+  /// Carpeta dinámica activa (null = ver todos).
+  SmartFolder? _activeFolder;
 
   @override
   void initState() {
@@ -61,10 +71,22 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
   /// Lista filtrada y ordenada de cuadernos.
   List<NotebookMeta> get _filteredMetas {
     var list = _metas ?? [];
+
+    // Aplicar carpeta dinámica.
+    if (_activeFolder != null) {
+      list = _activeFolder!.apply(list);
+    }
+
+    // Aplicar búsqueda (título + tags).
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
-      list = list.where((m) => m.title.toLowerCase().contains(q)).toList();
+      list = list.where((m) {
+        if (m.title.toLowerCase().contains(q)) return true;
+        if (m.tags.any((t) => t.toLowerCase().contains(q))) return true;
+        return false;
+      }).toList();
     }
+
     switch (_sortBy) {
       case _SortBy.updatedDesc:
         list = List.of(list)
@@ -86,11 +108,11 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
       _thumbs.putIfAbsent(meta.id, () => _renderThumb(meta));
 
   Future<Uint8List> _renderThumb(NotebookMeta meta) async {
-    final doc = await _storage.load(meta.id);
-    if (doc == null || doc.pages.isEmpty) {
+    final nb = await _storage.loadNotebook(meta.id);
+    if (nb == null || nb.notes.isEmpty || nb.notes.first.pages.isEmpty) {
       throw StateError('Cuaderno sin contenido');
     }
-    final page = doc.pages.first;
+    final page = nb.notes.first.pages.first;
     for (final item in page.images) {
       await _imageService.ensureCached(item.localPath);
     }
@@ -114,16 +136,106 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
 
   Future<void> _createNotebook() async {
     final count = (_metas?.length ?? 0) + 1;
-    final name = await _promptText(
-      titulo: 'Nuevo cuaderno',
-      hint: 'Nombre',
-      prefilled: 'Cuaderno $count',
+    final result = await _showCreateNotebookDialog(count);
+    if (result == null) return;
+    final nb = await _storage.createNotebook(
+      title: result.name,
+      template: result.template,
     );
-    if (name == null) return;
-    final doc = await _storage.create(title: name);
     if (!mounted) return;
     await _reload();
-    await _openNotebookById(doc.id);
+    await _openNotebookById(nb.id);
+  }
+
+  /// Diálogo para crear un cuaderno con nombre y plantilla inicial.
+  Future<_CreateNotebookResult?> _showCreateNotebookDialog(int count) async {
+    final nameController = TextEditingController(text: 'Cuaderno $count');
+    var selectedTemplate = const PageTemplate();
+
+    return showDialog<_CreateNotebookResult>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: kAccentColor.withAlpha(20),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.menu_book_outlined, size: 20, color: kAccentColor),
+              ),
+              const SizedBox(width: 12),
+              const Text('Nuevo cuaderno'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Nombre
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Nombre',
+                    hintText: 'Mi cuaderno',
+                  ),
+                  onSubmitted: (_) {
+                    if (nameController.text.trim().isNotEmpty) {
+                      Navigator.pop(
+                        context,
+                        _CreateNotebookResult(
+                          name: nameController.text.trim(),
+                          template: selectedTemplate,
+                        ),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 20),
+                // Plantilla inicial
+                const Text(
+                  'Plantilla inicial',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Grid de plantillas
+                _TemplateGrid(
+                  selected: selectedTemplate.type,
+                  onSelect: (t) => setDialogState(() {
+                    selectedTemplate = selectedTemplate.copyWith(type: t);
+                  }),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                if (name.isEmpty) return;
+                Navigator.pop(
+                  context,
+                  _CreateNotebookResult(name: name, template: selectedTemplate),
+                );
+              },
+              child: const Text('Crear'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _renameNotebook(NotebookMeta meta) async {
@@ -133,12 +245,12 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
       prefilled: meta.title,
     );
     if (name == null) return;
-    await _storage.rename(meta.id, name);
+    await _storage.renameNotebook(meta.id, name);
     await _reload();
   }
 
   Future<void> _duplicateNotebook(NotebookMeta meta) async {
-    await _storage.duplicate(meta.id);
+    await _storage.duplicateNotebook(meta.id);
     await _reload();
   }
 
@@ -164,7 +276,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
       ),
     );
     if (ok != true) return;
-    await _storage.delete(meta.id);
+    await _storage.deleteNotebook(meta.id);
     _thumbs.remove(meta.id);
     await _reload();
   }
@@ -173,7 +285,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
   Future<void> _setNotebookColor(NotebookMeta meta) async {
     final colors = <(String, int?)>[
       ('Sin color', null),
-      ('Azul', const Color(0xFF3B82F6).toARGB32()),
+      ('Azul', kAccentColor.toARGB32()),
       ('Verde', const Color(0xFF4CAF50).toARGB32()),
       ('Rojo', const Color(0xFFE53935).toARGB32()),
       ('Naranja', const Color(0xFFFF9800).toARGB32()),
@@ -229,7 +341,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
       ),
     );
     if (selected == null && meta.colorValue == null) return;
-    await _storage.setColor(meta.id, selected);
+    await _storage.setNotebookColor(meta.id, selected);
     await _reload();
   }
 
@@ -244,7 +356,19 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
       final filePath = files.first.path!;
       final bytes = await File(filePath).readAsBytes();
       final doc = await InklusFormat.importBytes(bytes);
-      await _storage.save(doc);
+      // Crear un Notebook con el Document importado como primer Note
+      final note = Note(
+        id: 'note_${doc.id}',
+        title: doc.title,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+        pages: doc.pages,
+      );
+      final nb = await _storage.createNotebook(
+        title: doc.title,
+      );
+      // Guardar el Note importado con el contenido real
+      await _storage.saveNote(nb.id, note);
       if (!mounted) return;
       _snack('Cuaderno "${doc.title}" importado');
       await _reload();
@@ -254,11 +378,11 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
   }
 
   Future<void> _openNotebookById(String id) async {
-    final doc = await _storage.load(id);
-    if (!mounted || doc == null) return;
+    final nb = await _storage.loadNotebook(id);
+    if (!mounted || nb == null) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => HomeScreen(document: doc),
+        builder: (_) => NoteListScreen(notebook: nb),
       ),
     );
     _thumbs.clear();
@@ -314,6 +438,81 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _showSmartFolders() async {
+    final metas = _metas;
+    if (metas == null || metas.isEmpty) return;
+    final folder = await showSmartFoldersSheet(
+      context: context,
+      metas: metas,
+      currentFolder: _activeFolder,
+    );
+    if (folder != null) {
+      setState(() => _activeFolder = folder);
+    }
+  }
+
+  /// Edita las etiquetas de un cuaderno.
+  Future<void> _editTags(NotebookMeta meta) async {
+    final allTags = await _storage.allTags();
+    if (!mounted) return;
+    final result = await showTagEditor(
+      context: context,
+      currentTags: meta.tags,
+      allAvailableTags: allTags,
+    );
+    if (result != null) {
+      await _storage.setNotebookTags(meta.id, result);
+      await _reload();
+    }
+  }
+
+  void _showSortSheet() {
+    showModalBottomSheet<_SortBy>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Ordenar cuadernos',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+            _SortOption(
+              icon: Icons.access_time,
+              label: 'Más recientes primero',
+              selected: _sortBy == _SortBy.updatedDesc,
+              onTap: () => Navigator.pop(context, _SortBy.updatedDesc),
+            ),
+            _SortOption(
+              icon: Icons.access_time_filled,
+              label: 'Más antiguos primero',
+              selected: _sortBy == _SortBy.updatedAsc,
+              onTap: () => Navigator.pop(context, _SortBy.updatedAsc),
+            ),
+            _SortOption(
+              icon: Icons.sort_by_alpha,
+              label: 'Título A → Z',
+              selected: _sortBy == _SortBy.titleAsc,
+              onTap: () => Navigator.pop(context, _SortBy.titleAsc),
+            ),
+            _SortOption(
+              icon: Icons.sort_by_alpha,
+              label: 'Título Z → A',
+              selected: _sortBy == _SortBy.titleDesc,
+              onTap: () => Navigator.pop(context, _SortBy.titleDesc),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    ).then((v) {
+      if (v != null) setState(() => _sortBy = v);
+    });
+  }
+
   // -------------------------------------------------------------------------
   // UI
   // -------------------------------------------------------------------------
@@ -327,7 +526,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
       appBar: AppBar(
         title: const Row(
           children: [
-            Icon(Icons.edit, color: Color(0xFF3B82F6)),
+            Icon(Icons.edit, color: kAccentColor),
             SizedBox(width: 8),
             Text(
               'Inklus',
@@ -336,65 +535,78 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
           ],
         ),
         actions: [
+          // Botón importar .inklus
+          Tooltip(
+            message: 'Importar cuaderno .inklus',
+            child: IconButton(
+              icon: const Icon(Icons.file_download_outlined),
+              onPressed: _importInklus,
+            ),
+          ),
           // Botón papelera
           IconButton(
             tooltip: 'Papelera',
             icon: const Icon(Icons.delete_outline),
             onPressed: _openTrash,
           ),
-          // Botón importar .inklus
+          // Botón configuración (visible)
           IconButton(
-            tooltip: 'Importar cuaderno (.inklus)',
-            icon: const Icon(Icons.file_download_outlined),
-            onPressed: _importInklus,
+            tooltip: 'Configuración',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: widget.onOpenSettings,
           ),
-          // Botón tema claro/oscuro
-          IconButton(
-            tooltip: isDark ? 'Modo claro' : 'Modo oscuro',
-            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-            onPressed: widget.onToggleTheme,
-          ),
-          // Contador de cuadernos
-          if (metas != null && metas.isNotEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(
-                  '${metas.length}',
-                  style: const TextStyle(color: Colors.black54),
+          // Menú de más opciones
+          PopupMenuButton<String>(
+            tooltip: 'Más opciones',
+            icon: const Icon(Icons.more_vert),
+            onSelected: (v) {
+              switch (v) {
+                case 'theme':
+                  widget.onToggleTheme?.call();
+                case 'sort':
+                  _showSortSheet();
+                case 'smartFolders':
+                  _showSmartFolders();
+                case 'settings':
+                  widget.onOpenSettings?.call();
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'smartFolders',
+                child: ListTile(
+                  leading: const Icon(Icons.folder_special),
+                  title: const Text('Carpetas inteligentes'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
                 ),
               ),
-            ),
-          // Menú de ordenación
-          if (metas != null && metas.length > 1)
-            PopupMenuButton<_SortBy>(
-              tooltip: 'Ordenar',
-              icon: const Icon(Icons.sort),
-              onSelected: (v) => setState(() => _sortBy = v),
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: _SortBy.updatedDesc,
-                  child: Text('Más recientes primero'),
+              PopupMenuItem(
+                value: 'sort',
+                child: ListTile(
+                  leading: const Icon(Icons.sort),
+                  title: const Text('Ordenar'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
                 ),
-                const PopupMenuItem(
-                  value: _SortBy.updatedAsc,
-                  child: Text('Más antiguos primero'),
+              ),
+              PopupMenuItem(
+                value: 'theme',
+                child: ListTile(
+                  leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+                  title: Text(isDark ? 'Modo claro' : 'Modo oscuro'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
                 ),
-                const PopupMenuItem(
-                  value: _SortBy.titleAsc,
-                  child: Text('Título A→Z'),
-                ),
-                const PopupMenuItem(
-                  value: _SortBy.titleDesc,
-                  child: Text('Título Z→A'),
-                ),
-              ],
-            ),
+              ),
+
+            ],
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Crear cuaderno',
-        backgroundColor: const Color(0xFF3B82F6),
+        backgroundColor: kAccentColor,
         foregroundColor: Colors.white,
         onPressed: _createNotebook,
         child: const Icon(Icons.add),
@@ -403,13 +615,48 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                // Barra de búsqueda
+                // Indicador de carpeta activa + barra de búsqueda
                 if (metas.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Buscar cuadernos...',
+                    child: Column(
+                      children: [
+                        // Chip de carpeta activa.
+                        if (_activeFolder != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _activeFolder!.type.icon,
+                                  size: 16,
+                                  color: kAccentColor,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _activeFolder!.displayName,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: kAccentColor,
+                                  ),
+                                ),
+                                const Spacer(),
+                                TextButton(
+                                  onPressed: () =>
+                                      setState(() => _activeFolder = null),
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  child: const Text('Ver todos'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        TextField(
+                          decoration: InputDecoration(
+                            hintText: 'Buscar por nombre o etiqueta...',
                         prefixIcon: const Icon(Icons.search, size: 20),
                         suffixIcon: _searchQuery.isNotEmpty
                             ? IconButton(
@@ -419,7 +666,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
                               )
                             : null,
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: isDark ? const Color(0xFF333333) : Colors.white,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
@@ -428,6 +675,8 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
                             horizontal: 16, vertical: 12),
                       ),
                       onChanged: (v) => setState(() => _searchQuery = v),
+                        ),
+                      ],
                     ),
                   ),
                 // Contenido
@@ -446,37 +695,59 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
   Widget _buildEmptyState() {
     final hasSearch = _searchQuery.isNotEmpty;
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            hasSearch ? Icons.search_off : Icons.menu_book_outlined,
-            size: 72,
-            color: Colors.black.withValues(alpha: 0.25),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            hasSearch
-                ? 'No se encontraron cuadernos'
-                : 'Todavía no tienes cuadernos',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            hasSearch
-                ? 'Prueba con otro nombre.'
-                : 'Crea tu primer cuaderno para empezar a escribir.',
-            style: const TextStyle(color: Colors.black54),
-          ),
-          if (!hasSearch) ...[
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: _createNotebook,
-              icon: const Icon(Icons.add),
-              label: const Text('Crear cuaderno'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: kAccentColor.withAlpha(20),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                hasSearch ? Icons.search_off : Icons.menu_book_outlined,
+                size: 48,
+                color: kAccentColor.withAlpha(150),
+              ),
             ),
+            const SizedBox(height: 20),
+            Text(
+              hasSearch
+                  ? 'No se encontraron cuadernos'
+                  : 'Tu biblioteca está vacía',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              hasSearch
+                  ? 'Prueba con otro nombre de cuaderno.'
+                  : 'Crea tu primer cuaderno y empieza a escribir\ncon tu stylus o dedo.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.black54, height: 1.4),
+            ),
+            if (!hasSearch) ...[
+              const SizedBox(height: 28),
+              FilledButton.icon(
+                onPressed: _createNotebook,
+                icon: const Icon(Icons.add),
+                label: const Text('Crear primer cuaderno'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                  textStyle: const TextStyle(fontSize: 15),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: _importInklus,
+                icon: const Icon(Icons.file_download_outlined, size: 18),
+                label: const Text('Importar cuaderno .inklus'),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -508,6 +779,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
               onDuplicate: () => _duplicateNotebook(meta),
               onDelete: () => _deleteNotebook(meta),
               onSetColor: () => _setNotebookColor(meta),
+              onEditTags: () => _editTags(meta),
             );
           },
         );
@@ -528,6 +800,7 @@ class _NotebookCard extends StatelessWidget {
   final VoidCallback onDuplicate;
   final VoidCallback onDelete;
   final VoidCallback onSetColor;
+  final VoidCallback onEditTags;
   final SyncStatus syncStatus;
 
   const _NotebookCard({
@@ -538,6 +811,7 @@ class _NotebookCard extends StatelessWidget {
     required this.onDuplicate,
     required this.onDelete,
     required this.onSetColor,
+    required this.onEditTags,
     this.syncStatus = SyncStatus.pending,
   });
 
@@ -545,6 +819,7 @@ class _NotebookCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasColor = meta.colorValue != null;
     final color = hasColor ? Color(meta.colorValue!) : null;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -555,51 +830,44 @@ class _NotebookCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Miniatura de la primera página con color de portada.
+            // Miniatura de la primera página con portada estética.
             Expanded(
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Fondo con color de portada o gris por defecto.
-                  Container(
-                    color: hasColor
-                        ? color!.withAlpha(30)
-                        : const Color(0xFFF1F0EC),
-                    alignment: Alignment.center,
-                    child: FutureBuilder<Uint8List>(
-                      future: thumb,
-                      builder: (context, snapshot) {
-                        if (snapshot.hasData) {
-                          return Image.memory(
-                            snapshot.data!,
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                          );
-                        }
-                        if (snapshot.hasError) {
-                          return const Icon(
-                            Icons.broken_image_outlined,
-                            color: Colors.black38,
-                            size: 40,
-                          );
-                        }
-                        return const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                  // Portada con gradiente o miniatura real.
+                  FutureBuilder<Uint8List>(
+                    future: thumb,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData) {
+                        // Tiene contenido: mostrar miniatura con overlay de color.
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.memory(
+                              snapshot.data!,
+                              fit: BoxFit.cover,
+                              gaplessPlayback: true,
+                            ),
+                            if (hasColor)
+                              Positioned(
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: 5,
+                                child: Container(color: color),
+                              ),
+                          ],
                         );
-                      },
-                    ),
+                      }
+                      // Sin contenido: portada estética con gradiente.
+                      return _NotebookCover(
+                        color: color,
+                        title: meta.title,
+                        isDark: isDark,
+                      );
+                    },
                   ),
-                  // Barra de color en la parte superior.
-                  if (hasColor)
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: 4,
-                      child: Container(color: color),
-                    ),
                   // Menú contextual.
                   Positioned(
                     top: 4,
@@ -614,6 +882,8 @@ class _NotebookCard extends StatelessWidget {
                             onDuplicate();
                           case 'color':
                             onSetColor();
+                          case 'tags':
+                            onEditTags();
                           case 'delete':
                             onDelete();
                         }
@@ -640,6 +910,15 @@ class _NotebookCard extends StatelessWidget {
                           child: ListTile(
                             leading: Icon(Icons.palette_outlined),
                             title: Text('Color de portada'),
+                            dense: true,
+                          ),
+                        ),
+                        PopupMenuDivider(),
+                        PopupMenuItem(
+                          value: 'tags',
+                          child: ListTile(
+                            leading: Icon(Icons.label_outline),
+                            title: Text('Etiquetas'),
                             dense: true,
                           ),
                         ),
@@ -687,12 +966,40 @@ class _NotebookCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    _relativeTime(meta.updatedAt),
+                    date_util.relativeTime(meta.updatedAt),
                     style: const TextStyle(
                       fontSize: 12,
                       color: Colors.black54,
                     ),
                   ),
+                  // Tags del cuaderno.
+                  if (meta.tags.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 2,
+                      children: meta.tags.take(3).map((tag) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: kAccentColor.withAlpha(20),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            tag,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: kAccentColor,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -701,18 +1008,6 @@ class _NotebookCard extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Fecha relativa corta sin dependencias externas.
-String _relativeTime(DateTime time) {
-  final diff = DateTime.now().difference(time);
-  if (diff.inMinutes < 1) return 'ahora mismo';
-  if (diff.inMinutes < 60) return 'hace ${diff.inMinutes} min';
-  if (diff.inHours < 24) return 'hace ${diff.inHours} h';
-  if (diff.inDays < 7) return 'hace ${diff.inDays} d';
-  final t = time.toLocal();
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${two(t.day)}/${two(t.month)}/${t.year}';
 }
 
 /// Icono que muestra el estado de sincronización de un cuaderno.
@@ -727,7 +1022,7 @@ class _SyncIcon extends StatelessWidget {
         return const Icon(
           Icons.cloud_done,
           size: 16,
-          color: Color(0xFF3B82F6),
+          color: kAccentColor,
         );
       case SyncStatus.syncing:
         return const SizedBox(
@@ -755,4 +1050,250 @@ class _SyncIcon extends StatelessWidget {
         );
     }
   }
+}
+
+/// Opción de ordenación en el bottom sheet.
+class _SortOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SortOption({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: selected ? kAccentColor : Colors.black54,
+      ),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+          color: selected ? kAccentColor : null,
+        ),
+      ),
+      trailing: selected
+          ? const Icon(Icons.check, color: kAccentColor, size: 20)
+          : null,
+      onTap: onTap,
+    );
+  }
+}
+
+/// Resultado del diálogo de creación de cuaderno.
+class _CreateNotebookResult {
+  final String name;
+  final PageTemplate template;
+
+  _CreateNotebookResult({required this.name, required this.template});
+}
+
+/// Grid de selección de plantillas para el diálogo de creación.
+class _TemplateGrid extends StatelessWidget {
+  final TemplateType selected;
+  final ValueChanged<TemplateType> onSelect;
+
+  const _TemplateGrid({required this.selected, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final templates = <(TemplateType, IconData, String, bool)>[
+      (TemplateType.blank, Icons.landscape, 'Infinito en blanco', false),
+      (TemplateType.ruled, Icons.format_list_bulleted, 'Rayas', false),
+      (TemplateType.grid, Icons.grid_on, 'Cuadrícula', false),
+      (TemplateType.dots, Icons.grain, 'Puntos', false),
+      (TemplateType.sheet, Icons.description, 'Hoja fija (A4)', true),
+      (TemplateType.music, Icons.music_note, 'Pentagrama', false),
+      (TemplateType.planner, Icons.calendar_today, 'Planificador', false),
+      (TemplateType.habit, Icons.checklist, 'Tracker de hábitos', false),
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        childAspectRatio: 0.85,
+      ),
+      itemCount: templates.length,
+      itemBuilder: (context, index) {
+        final (type, icon, label, isFinite) = templates[index];
+        final isSelected = selected == type;
+        return GestureDetector(
+          onTap: () => onSelect(type),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? kAccentColor.withAlpha(20)
+                  : (isDark ? Colors.white.withAlpha(8) : Colors.grey.withAlpha(25)),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSelected ? kAccentColor : Colors.black12,
+                width: isSelected ? 2 : 1,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 28,
+                  color: isSelected ? kAccentColor : (isDark ? Colors.white60 : Colors.black54),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color: isSelected ? kAccentColor : (isDark ? Colors.white70 : Colors.black87),
+                  ),
+                ),
+                if (isFinite)
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withAlpha(25),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: const Text(
+                      'Fija',
+                      style: TextStyle(fontSize: 8, color: Colors.orange),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Portada estética para cuadernos sin contenido.
+/// Muestra un gradiente con icono y título estilizado.
+class _NotebookCover extends StatelessWidget {
+  final Color? color;
+  final String title;
+  final bool isDark;
+
+  const _NotebookCover({
+    required this.color,
+    required this.title,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final baseColor = color ?? (isDark
+        ? const Color(0xFF4A6FA5)
+        : const Color(0xFF6B9BD2));
+    final gradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        baseColor,
+        baseColor.withAlpha(180),
+        baseColor.withAlpha(120),
+      ],
+    );
+
+    return Container(
+      decoration: BoxDecoration(gradient: gradient),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Patrón decorativo sutil
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _CoverPatternPainter(
+                color: Colors.white.withAlpha(20),
+              ),
+            ),
+          ),
+          // Icono central
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(30),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.menu_book_outlined,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      shadows: [
+                        Shadow(blurRadius: 4, color: Colors.black26),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Pintor de patrón decorativo para la portada del cuaderno.
+class _CoverPatternPainter extends CustomPainter {
+  final Color color;
+  _CoverPatternPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    // Líneas diagonales decorativas
+    final spacing = 20.0;
+    for (double i = -size.height; i < size.width + size.height; i += spacing) {
+      canvas.drawLine(
+        Offset(i, 0),
+        Offset(i + size.height, size.height),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CoverPatternPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

@@ -56,13 +56,28 @@ class PageTemplate {
   static const double sheetWidth = 1191;
   static const double sheetHeight = 1684;
 
+  /// Si el tipo de plantilla debe ser infinito cuando infiniteFill no está
+  /// establecido explícitamente (es decir, el campo no viene en el JSON guardado).
+  /// B6: ruled/grid/dots/planner son infinitos por defecto; el usuario puede
+  /// volverlos finitos desde el template picker (checkbox "Lienzo infinito").
+  static bool _shouldBeInfiniteByDefault(TemplateType type) =>
+      type == TemplateType.blank || type == TemplateType.music ||
+      type == TemplateType.habit || type == TemplateType.ruled ||
+      type == TemplateType.grid || type == TemplateType.dots ||
+      type == TemplateType.planner;
+
   /// Tamaño efectivo de la hoja de esta plantilla.
   Size get sheetSize => type == TemplateType.custom
       ? Size(customWidth ?? sheetWidth, customHeight ?? sheetHeight)
       : const Size(sheetWidth, sheetHeight);
 
+  /// Si la plantilla es finita (hoja de tamaño fijo).
+  /// B6: ruled/grid/dots/planner son infinitos por defecto. El usuario puede
+  /// volverlos finitos desde el template picker (checkbox "Lienzo infinito").
+  /// sheet siempre es finito. blank/music/habit siempre son infinitos.
   bool get isFinite => type == TemplateType.sheet ||
-      (type == TemplateType.custom && !infiniteFill);
+      (type != TemplateType.blank && type != TemplateType.music &&
+       type != TemplateType.habit && !infiniteFill);
 
   PageTemplate copyWith({
     TemplateType? type,
@@ -83,15 +98,24 @@ class PageTemplate {
         customHeight: customHeight ?? this.customHeight,
       );
 
-  factory PageTemplate.fromJson(Map<String, dynamic> json) => PageTemplate(
-        type: templateTypeFromName(json['type'] as String? ?? 'blank'),
-        lineColorValue: (json['lineColor'] as num?)?.toInt() ?? 0xFF9DB6D9,
-        spacing: (json['spacing'] as num?)?.toDouble() ?? 52,
-        imagePath: json['imagePath'] as String?,
-        infiniteFill: json['infiniteFill'] as bool? ?? false,
-        customWidth: (json['customW'] as num?)?.toDouble(),
-        customHeight: (json['customH'] as num?)?.toDouble(),
-      );
+  factory PageTemplate.fromJson(Map<String, dynamic> json) {
+        final type = templateTypeFromName(json['type'] as String? ?? 'blank');
+        // B6: si el campo infiniteFill no está en el JSON (templates antiguos),
+        // usamos el default apropiado para el tipo.
+        final hasInfiniteFill = json.containsKey('infiniteFill');
+        final infiniteFill = hasInfiniteFill
+            ? json['infiniteFill'] as bool
+            : _shouldBeInfiniteByDefault(type);
+        return PageTemplate(
+          type: type,
+          lineColorValue: (json['lineColor'] as num?)?.toInt() ?? 0xFF9DB6D9,
+          spacing: (json['spacing'] as num?)?.toDouble() ?? 52,
+          imagePath: json['imagePath'] as String?,
+          infiniteFill: infiniteFill,
+          customWidth: (json['customW'] as num?)?.toDouble(),
+          customHeight: (json['customH'] as num?)?.toDouble(),
+        );
+      }
 
   Map<String, dynamic> toJson() => {
         'type': type.name,

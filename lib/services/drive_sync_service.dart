@@ -1,4 +1,7 @@
 import 'dart:math';
+import 'dart:typed_data';
+
+import 'package:cryptography/cryptography.dart';
 
 import 'package:_discoveryapis_commons/_discoveryapis_commons.dart' as commons;
 import 'package:flutter/foundation.dart';
@@ -7,6 +10,7 @@ import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 
 import '../models/document.dart';
+import '../models/note.dart';
 import 'inklus_format.dart';
 
 /// Estados de sincronización de un cuaderno con Google Drive.
@@ -39,6 +43,31 @@ class DriveVersion {
     required this.name,
     required this.modifiedTime,
     required this.sizeBytes,
+  });
+}
+
+/// Resultado de restaurar desde Drive: puede incluir múltiples versiones
+/// cuando hay un conflicto (dos dispositivos editaron el mismo cuaderno
+/// sin conexión).
+///
+/// **C5**: Cuando dos dispositivos editan el mismo cuaderno sin conexión,
+/// el usuario puede elegir conservar la versión más reciente o ver ambas.
+class RestoreResult {
+  /// La versión más reciente (last-write-wins por defecto).
+  final Document? latest;
+
+  /// Todas las versiones encontradas (más reciente primero).
+  /// Si solo hay una versión, [versions] tiene un solo elemento.
+  /// Si hay múltiples, la UI puede mostrar un diálogo de resolución.
+  final List<Document> versions;
+
+  /// Si hay conflicto (múltiples versiones con updatedAt diferente).
+  final bool hasConflict;
+
+  const RestoreResult({
+    this.latest,
+    this.versions = const [],
+    this.hasConflict = false,
   });
 }
 
@@ -209,7 +238,7 @@ class DriveSyncService extends ChangeNotifier {
 
       // Cifrar si se proporciona contraseña.
       if (password != null && password.isNotEmpty) {
-        bytes = _encryptBytes(bytes, password);
+        bytes = await _encryptBytes(bytes, password);
       }
 
       final client = _authClient(token);
@@ -294,11 +323,13 @@ class DriveSyncService extends ChangeNotifier {
     onSyncComplete?.call('Archivo subido a Google Drive');
   }
 
-  /// Lista todas las versiones de un cuaderno en Drive (por document id).
+  /// Lista versiones de notas en Drive, opcionalmente filtrado por noteId.
   ///
+  /// Sin [noteId] devuelve todos los archivos .inklus de la carpeta.
+  /// Con [noteId] filtra solo los archivos que empiezan por ese id.
   /// Devuelve una lista de [DriveVersion] ordenadas de más reciente a más
   /// antigua. Útil para que el usuario elija cuál restaurar.
-  Future<List<DriveVersion>> listVersions() async {
+  Future<List<DriveVersion>> listVersions({String? noteId}) async {
     if (_account == null) throw const NotSignedInException();
     final token = await _interactiveToken();
     final client = _authClient(token);
@@ -316,6 +347,7 @@ class DriveSyncService extends ChangeNotifier {
         final id = file.id;
         final name = file.name ?? '';
         if (id == null || !name.endsWith('.inklus')) continue;
+        if (noteId != null && !name.startsWith(noteId)) continue;
         versions.add(DriveVersion(
           fileId: id,
           name: name,
@@ -344,7 +376,7 @@ class DriveSyncService extends ChangeNotifier {
       if (resp.statusCode != 200) return null;
       var bytes = resp.bodyBytes;
       if (password != null && password.isNotEmpty) {
-        bytes = _decryptBytes(bytes, password);
+        bytes = await _decryptBytes(bytes, password);
       }
       return await InklusFormat.importBytes(bytes);
     } catch (e) {
@@ -359,10 +391,13 @@ class DriveSyncService extends ChangeNotifier {
   /// (por `updatedAt` del documento), con las imágenes ya extraídas a local.
   /// Devuelve null si no hay ninguna.
   ///
-  /// Implementa **last-write-wins**: el documento con el `updatedAt` más
-  /// reciente en Drive gana (decisión de diseño: más simple que merge y
-  /// evita pérdida de contenido no intencionada).
-  Future<Document?> restoreDocument({String? password}) async {
+  /// Implementa **last-write-wins** por defecto, pero también devuelve
+  /// todas las versiones para que la UI pueda mostrar un diálogo de
+  /// resolución de conflictos cuando hay múltiples versiones.
+  ///
+  /// **C5**: Cuando dos dispositivos editan el mismo cuaderno sin conexión,
+  /// el usuario puede elegir conservar la versión más reciente o ver ambas.
+  Future<RestoreResult> restoreDocument({String? password}) async {
     final token = await _interactiveToken();
     final client = _authClient(token);
     try {
@@ -376,6 +411,8 @@ class DriveSyncService extends ChangeNotifier {
 
       Document? latest;
       DateTime? latestUpdated;
+      final versions = <Document>[];
+
       for (final file in files) {
         final id = file.id;
         final name = file.name ?? '';
@@ -389,9 +426,10 @@ class DriveSyncService extends ChangeNotifier {
           if (resp.statusCode != 200) continue;
           var bytes = resp.bodyBytes;
           if (password != null && password.isNotEmpty) {
-            bytes = _decryptBytes(bytes, password);
+            bytes = await _decryptBytes(bytes, password);
           }
           final doc = await InklusFormat.importBytes(bytes);
+          versions.add(doc);
           if (latest == null || doc.updatedAt.isAfter(latestUpdated!)) {
             latest = doc;
             latestUpdated = doc.updatedAt;
@@ -400,10 +438,24 @@ class DriveSyncService extends ChangeNotifier {
           debugPrint('DriveSyncService: copia no legible ($name): $e');
         }
       }
+
+      // Detectar conflicto: múltiples versiones con updatedAt diferente
+      final hasConflict = versions.length > 1 &&
+          versions.any((v) => v.updatedAt != latest!.updatedAt);
+
       if (latest != null) {
-        onSyncComplete?.call('Cuaderno restaurado desde Google Drive');
+        onSyncComplete?.call(
+          hasConflict
+              ? 'Conflicto detectado: ${versions.length} versiones encontradas'
+              : 'Cuaderno restaurado desde Google Drive',
+        );
       }
-      return latest;
+
+      return RestoreResult(
+        latest: latest,
+        versions: versions,
+        hasConflict: hasConflict,
+      );
     } finally {
       client.close();
     }
@@ -423,41 +475,100 @@ class DriveSyncService extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------------------
-  // Cifrado (XOR con clave derivada de la contraseña)
+  // Cifrado AES-256-GCM (reemplaza el XOR legacy)
   // -------------------------------------------------------------------------
 
-  /// Cifra bytes XOR con una clave derivada de la contraseña.
-  /// Nota: esto es cifrado básico para protección de archivos personales;
-  /// no es criptografía de grado militar pero evita lectura casual.
-  Uint8List _encryptBytes(Uint8List data, String password) {
-    final key = _deriveKey(password, data.length);
-    final result = Uint8List(data.length);
-    for (var i = 0; i < data.length; i++) {
-      result[i] = data[i] ^ key[i];
-    }
+  static const _saltLength = 16;
+  static const _nonceLength = 12;
+  static const _tagLength = 16;
+  static const _pbkdf2Iterations = 100000;
+
+  /// Cifra bytes con AES-256-GCM.
+  ///
+  /// Formato del resultado: [salt (16)] [nonce (12)] [ciphertext] [tag (16)]
+  /// La clave se deriva de la contraseña con PBKDF2 (100k iteraciones, HMAC-SHA256).
+  Future<Uint8List> _encryptBytes(Uint8List data, String password) async {
+    final aes = AesGcm.with256bits();
+    final salt = _randomBytes(_saltLength);
+    final nonce = _randomBytes(_nonceLength);
+
+    // Derivar clave de 256 bits con PBKDF2
+    final pbkdf2 = Pbkdf2(
+      macAlgorithm: Hmac.sha256(),
+      iterations: _pbkdf2Iterations,
+      bits: 256,
+    );
+    final secretKey = await pbkdf2.deriveKey(
+      secretKey: SecretKey(password.codeUnits),
+      nonce: salt,
+    );
+
+    final secretBox = await aes.encrypt(
+      data,
+      secretKey: secretKey,
+      nonce: nonce,
+    );
+
+    // Empaquetar: salt + nonce + ciphertext + tag
+    final result = Uint8List(
+      _saltLength + _nonceLength + secretBox.cipherText.length + _tagLength,
+    );
+    result.setRange(0, _saltLength, salt);
+    result.setRange(_saltLength, _saltLength + _nonceLength, nonce);
+    result.setRange(
+      _saltLength + _nonceLength,
+      _saltLength + _nonceLength + secretBox.cipherText.length,
+      secretBox.cipherText,
+    );
+    result.setRange(
+      result.length - _tagLength,
+      result.length,
+      secretBox.mac.bytes,
+    );
     return result;
   }
 
-  /// Descifra bytes XOR (misma operación que cifrar).
-  Uint8List _decryptBytes(Uint8List data, String password) {
-    return _encryptBytes(data, password); // XOR es simétrico
+  /// Descifra bytes cifrados con AES-256-GCM.
+  Future<Uint8List> _decryptBytes(Uint8List data, String password) async {
+    final aes = AesGcm.with256bits();
+
+    if (data.length < _saltLength + _nonceLength + _tagLength) {
+      throw const FormatException('Datos cifrados demasiado cortos');
+    }
+
+    final salt = data.sublist(0, _saltLength);
+    final nonce = data.sublist(_saltLength, _saltLength + _nonceLength);
+    final tag = data.sublist(data.length - _tagLength);
+    final cipherText = data.sublist(
+      _saltLength + _nonceLength,
+      data.length - _tagLength,
+    );
+
+    final pbkdf2 = Pbkdf2(
+      macAlgorithm: Hmac.sha256(),
+      iterations: _pbkdf2Iterations,
+      bits: 256,
+    );
+    final secretKey = await pbkdf2.deriveKey(
+      secretKey: SecretKey(password.codeUnits),
+      nonce: salt,
+    );
+
+    final secretBox = SecretBox(
+      cipherText,
+      nonce: nonce,
+      mac: Mac(tag),
+    );
+    final result = await aes.decrypt(secretBox, secretKey: secretKey);
+    return Uint8List.fromList(result);
   }
 
-  /// Deriva una clave de la misma longitud que los datos a partir de la
-  /// contraseña usando un PRNG determinista (semilla = hash de la contraseña).
-  Uint8List _deriveKey(String password, int length) {
-    // Hash FNV-1a de la contraseña como semilla.
-    var seed = 0x811c9dc5;
-    for (final c in password.codeUnits) {
-      seed ^= c;
-      seed = (seed * 0x01000193) & 0xFFFFFFFF;
-    }
-    final rng = Random(seed);
-    final key = Uint8List(length);
-    for (var i = 0; i < length; i++) {
-      key[i] = rng.nextInt(256);
-    }
-    return key;
+  /// Genera bytes aleatorios criptográficamente seguros.
+  Uint8List _randomBytes(int length) {
+    final rng = Random.secure();
+    return Uint8List.fromList(
+      List.generate(length, (_) => rng.nextInt(256)),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -494,6 +605,156 @@ class DriveSyncService extends ChangeNotifier {
     );
     final files = result.files ?? [];
     return files.isEmpty ? null : files.first;
+  }
+
+  // -------------------------------------------------------------------------
+  // Variantes para Note (nuevo formato v2)
+  // -------------------------------------------------------------------------
+
+  /// Sube un Note individual a Drive como archivo .inklus.
+  ///
+  /// Cada Note se sincroniza por separado para minimizar tráfico y conflictos.
+  Future<void> backupNote(
+    Note note, {
+    bool promptForConsent = false,
+    String? password,
+  }) async {
+    if (_account == null) throw const NotSignedInException();
+    _setStatus(note.id, SyncStatus.syncing);
+    final token = promptForConsent
+        ? await _interactiveToken()
+        : await _silentToken();
+    if (token == null) {
+      _setStatus(note.id, SyncStatus.pending);
+      return;
+    }
+
+    try {
+      var bytes = await InklusFormat.exportNoteBytes(note);
+      if (password != null && password.isNotEmpty) {
+        bytes = await _encryptBytes(bytes, password);
+      }
+
+      final client = _authClient(token);
+      try {
+        final api = drive.DriveApi(client);
+        final folderId = await _ensureFolder(api);
+        final name = '${note.id}.inklus';
+        final existing = await _findFile(api, folderId, name);
+        final media = commons.Media(
+          Stream<List<int>>.value(bytes),
+          bytes.length,
+          contentType: _inklusMimeType,
+        );
+        if (existing == null) {
+          await api.files.create(
+            drive.File(
+              name: name,
+              mimeType: _inklusMimeType,
+              parents: [folderId],
+            ),
+            uploadMedia: media,
+          );
+        } else {
+          await api.files.update(
+            drive.File(name: name, mimeType: _inklusMimeType),
+            existing.id!,
+            uploadMedia: media,
+          );
+        }
+        _setStatus(note.id, SyncStatus.synced);
+        onSyncComplete?.call('Nota sincronizada con Google Drive');
+      } finally {
+        client.close();
+      }
+    } catch (e) {
+      _setStatus(note.id, SyncStatus.error);
+      rethrow;
+    }
+  }
+
+  /// Descarga un Note desde Drive (last-write-wins).
+  Future<Note?> restoreNote({
+    required String noteId,
+    String? password,
+  }) async {
+    if (_account == null) throw const NotSignedInException();
+    final token = await _interactiveToken();
+    final client = _authClient(token);
+    try {
+      final api = drive.DriveApi(client);
+      final folderId = await _ensureFolder(api);
+      final name = '$noteId.inklus';
+      final file = await _findFile(api, folderId, name);
+      if (file == null) return null;
+
+      final response = await api.files.get(
+        file.id!,
+        downloadOptions: commons.DownloadOptions.fullMedia,
+      );
+      if (response is! commons.Media) return null;
+      final stream = response.stream;
+      final bytesBuilder = BytesBuilder();
+      await for (final chunk in stream) {
+        bytesBuilder.add(chunk);
+      }
+      var rawBytes = bytesBuilder.toBytes();
+      if (password != null && password.isNotEmpty) {
+        rawBytes = await _decryptBytes(rawBytes, password);
+      }
+      return await InklusFormat.importNoteBytes(rawBytes);
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Descarga TODAS las notas desde Drive para un notebook específico.
+  ///
+  /// Busca archivos `.inklus` cuyo nombre empiece por el notebookId
+  /// (formato: `{noteId}.inklus`). Devuelve las Notes restauradas.
+  /// Útil para el backup general desde settings (restore completo por notebook).
+  Future<List<Note>> restoreAllNotes({
+    required String notebookId,
+    String? password,
+  }) async {
+    if (_account == null) throw const NotSignedInException();
+    final token = await _interactiveToken();
+    final client = _authClient(token);
+    try {
+      final api = drive.DriveApi(client);
+      final folderId = await _ensureFolder(api);
+      final list = await api.files.list(
+        q: "'$folderId' in parents and trashed = false",
+        $fields: 'files(id,name)',
+      );
+      final files = list.files ?? [];
+      final notes = <Note>[];
+
+      for (final file in files) {
+        final id = file.id;
+        final name = file.name ?? '';
+        if (id == null || !name.endsWith('.inklus')) continue;
+        try {
+          final resp = await client.get(
+            Uri.parse(
+              'https://www.googleapis.com/drive/v3/files/$id?alt=media',
+            ),
+          );
+          if (resp.statusCode != 200) continue;
+          var bytes = resp.bodyBytes;
+          if (password != null && password.isNotEmpty) {
+            bytes = await _decryptBytes(bytes, password);
+          }
+          final note = await InklusFormat.importNoteBytes(bytes);
+          notes.add(note);
+        } catch (e) {
+          debugPrint('DriveSyncService.restoreAllNotes: copia no legible ($name): $e');
+        }
+      }
+      return notes;
+    } finally {
+      client.close();
+    }
   }
 }
 

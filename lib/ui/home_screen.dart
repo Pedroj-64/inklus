@@ -1,3 +1,4 @@
+import '../constants.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,62 +9,89 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../logic/canvas_controller.dart';
-import '../models/document.dart';
+import '../models/note.dart';
+import '../models/template.dart';
 import '../models/id.dart';
 import '../models/image_item.dart';
 import '../models/stroke.dart';
 import '../services/drive_sync_service.dart';
 import '../services/export_service.dart';
 import '../services/ocr_service.dart';
+import '../services/pdf_import_service.dart';
 import '../services/image_service.dart';
 import '../services/inklus_format.dart';
 import '../services/storage_service.dart';
 import '../services/template_library_service.dart';
+import '../services/writing_stats_service.dart';
+import '../services/reminder_service.dart';
+import '../services/search_service.dart';
 import 'canvas/drawing_canvas.dart';
 import 'widgets/bottom_bar.dart';
-import 'widgets/layers_sheet.dart';
+import 'widgets/layers_sidebar.dart';
 import 'widgets/minimap.dart';
 import 'widgets/page_thumbnails.dart';
 import 'widgets/stroke_options_sheet.dart';
 import 'widgets/template_picker_sheet.dart';
 import 'widgets/tool_rail.dart';
+import 'writing_stats_screen.dart';
 
 /// Editor de un cuaderno (pantalla principal de escritura).
 ///
-/// Recibe el [document] ya cargado desde la biblioteca ([NotebookLibraryScreen])
+/// Recibe un [note] ya cargado desde la lista de notas ([NoteListScreen])
 /// y crea su [CanvasController] al montarse.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.document});
+  const HomeScreen({
+    super.key,
+    required this.note,
+    required this.notebookId,
+  });
 
-  final Document document;
+  final Note note;
+  final String notebookId;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final StorageService _storage = StorageService();
+  final StorageService _storage = StorageService.instance;
   final ImageService _imageService = ImageService();
   final DriveSyncService _syncService = DriveSyncService.instance;
   final TemplateLibraryService _templateLibrary = TemplateLibraryService();
+  final WritingStatsService _stats = WritingStatsService();
+  final ReminderService _reminders = ReminderService();
+  final SearchService _search = SearchService();
   late final CanvasController _controller;
   bool _syncing = false;
+  bool _toolRailCollapsed = false;
+  bool _layersSidebarOpen = false;
+  bool _thumbnailsOpen = true;
+  DateTime? _sessionStart;
 
   @override
   void initState() {
     super.initState();
     _templateLibrary.init();
-    _controller = CanvasController(_storage, initial: widget.document);
+    _stats.load();
+    _reminders.load();
+    _search.load();
+    _sessionStart = DateTime.now();
+    _controller = CanvasController(
+      _storage,
+      initial: widget.note,
+      notebookId: widget.notebookId,
+    );
     // Replica automática a Drive en cada guardado local (solo si hay sesión
     // y el scope ya está autorizado; nunca muestra UI).
-    _controller.onRemoteSync = (document) async {
+    // A8: ahora se sincroniza cada Note individualmente (no el Document).
+    _controller.onRemoteSync = (note) async {
       if (!_syncService.isSignedIn) return;
-      // Sync selectiva: solo subir si el cuaderno lo tiene habilitado.
+      // Sync selectiva: solo subir si el notebook lo tiene habilitado.
       final metas = await _storage.loadIndex();
-      final meta = metas.where((m) => m.id == document.id).firstOrNull;
+      final meta = metas.where((m) => m.id == widget.notebookId).firstOrNull;
       if (meta != null && !meta.isSyncEnabled) return;
       try {
-        await _syncService.backupDocument(document);
+        await _syncService.backupNote(note);
       } catch (_) {
         // Silencioso: el guardado local ya protege los datos.
       }
@@ -572,16 +600,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadSyncEnabled() async {
     final metas = await _storage.loadIndex();
-    final meta = metas.where((m) => m.id == _c.document.id).firstOrNull;
+    // A8: syncEnabled está en el NotebookMeta, no en el Note.
+    final meta = metas.where((m) => m.id == widget.notebookId).firstOrNull;
     if (meta != null && mounted) {
       setState(() => _syncEnabledForCurrent = meta.isSyncEnabled);
     }
   }
 
   Future<void> _toggleSyncForCurrent() async {
-    final doc = _controller.document;
     final currentEnabled = _syncEnabledForCurrent;
-    await _storage.setSyncEnabled(doc.id, !currentEnabled);
+    // A8: syncEnabled es a nivel de Notebook, no de Note.
+    await _storage.setSyncEnabled(widget.notebookId, !currentEnabled);
     await _loadSyncEnabled();
     if (mounted) {
       _snack(currentEnabled
@@ -607,11 +636,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _backupNow() async {
     setState(() => _syncing = true);
     try {
-      await _syncService.backupDocument(
-        _c.document,
+      // A8: backup individual por Note (no el Document completo).
+      await _syncService.backupNote(
+        _c.note,
         promptForConsent: true,
       );
-      if (mounted) _snack('Cuaderno subido a Google Drive');
+      if (mounted) _snack('Nota sincronizada con Google Drive');
     } catch (e) {
       if (mounted) _snack('Error al subir: $e');
     } finally {
@@ -627,15 +657,19 @@ class _HomeScreenState extends State<HomeScreen> {
         titulo: 'Restaurar desde Drive',
         hint: 'Contraseña (dejar vacío si no está cifrado)',
       );
-      final doc = await _syncService.restoreDocument(
+      // A8: restore individual por Note (no el Document completo).
+      final restored = await _syncService.restoreNote(
+        noteId: _c.note.id,
         password: password?.isEmpty == true ? null : password,
       );
       if (!mounted) return;
-      if (doc == null) {
-        _snack('Todavía no hay ninguna copia en Google Drive');
+      if (restored == null) {
+        _snack('Todavía no hay ninguna copia de esta nota en Google Drive');
       } else {
-        _c.replaceDocument(doc);
-        _snack('Cuaderno restaurado desde Google Drive');
+        _c.replaceNote(restored, notebookId: widget.notebookId);
+        // Persistir la nota restaurada en disco local.
+        await _storage.saveNote(widget.notebookId, restored);
+        _snack('Nota restaurada desde Google Drive');
       }
     } catch (e) {
       if (mounted) _snack('Error al restaurar: $e');
@@ -644,53 +678,49 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// Muestra la lista de versiones disponibles en Drive y deja elegir.
-  Future<void> _showVersions() async {
-    setState(() => _syncing = true);
-    try {
-      final versions = await _syncService.listVersions();
-      if (!mounted) return;
-      if (versions.isEmpty) {
-        _snack('No hay versiones en Google Drive');
-        return;
-      }
-      final chosen = await showModalBottomSheet<String>(
-        context: context,
-        builder: (context) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Versiones en Drive',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+  /// Muestra un diálogo de resolución de versiones cuando hay múltiples
+  /// copias de una nota en Drive.
+  Future<void> _showConflictResolution(List<DriveVersion> versions) async {
+    if (!mounted) return;
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Versiones disponibles'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Se encontraron múltiples copias en Google Drive. '
+              'Selecciona la que quieres restaurar:',
+            ),
+            const SizedBox(height: 12),
+            ...versions.map((v) {
+              final t = v.modifiedTime.toLocal();
+              String two(int n) => n.toString().padLeft(2, '0');
+              final dateStr = '${two(t.day)}/${two(t.month)}/${t.year} '
+                  '${two(t.hour)}:${two(t.minute)}';
+              final sizeKb = (v.sizeBytes / 1024).round();
+              return Card(
+                child: ListTile(
+                  leading: const Icon(Icons.description_outlined),
+                  title: Text(v.name),
+                  subtitle: Text('$dateStr · $sizeKb KB'),
+                  onTap: () => Navigator.pop(context, v.fileId),
                 ),
-              ),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: versions.length,
-                  itemBuilder: (context, index) {
-                    final v = versions[index];
-                    final sizeKb = (v.sizeBytes / 1024).round();
-                    return ListTile(
-                      leading: const Icon(Icons.description_outlined),
-                      title: Text(v.name),
-                      subtitle: Text(
-                        '${_formatDate(v.modifiedTime)} · $sizeKb KB',
-                      ),
-                      onTap: () => Navigator.pop(context, v.fileId),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
+              );
+            }),
+          ],
         ),
-      );
-      if (chosen == null) return;
-
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+    if (chosen != null && mounted) {
       final password = await _promptPassword(
         titulo: 'Descifrar versión',
         hint: 'Contraseña (dejar vacío si no está cifrado)',
@@ -699,12 +729,62 @@ class _HomeScreenState extends State<HomeScreen> {
         chosen,
         password: password?.isEmpty == true ? null : password,
       );
-      if (!mounted) return;
-      if (doc == null) {
-        _snack('No se pudo leer esa versión');
-      } else {
-        _c.replaceDocument(doc);
+      if (doc != null && mounted) {
+        _c.replaceNote(
+          Note(
+            id: doc.id,
+            title: doc.title,
+            createdAt: doc.createdAt,
+            updatedAt: doc.updatedAt,
+            pages: doc.pages,
+          ),
+          notebookId: widget.notebookId,
+        );
         _snack('Versión restaurada');
+      }
+    }
+  }
+
+  /// Muestra la lista de versiones de la nota actual en Drive y deja elegir.
+  Future<void> _showVersions() async {
+    setState(() => _syncing = true);
+    try {
+      // A8: filtrar versiones por el id de la nota actual.
+      final versions = await _syncService.listVersions(noteId: _c.note.id);
+      if (!mounted) return;
+      if (versions.isEmpty) {
+        _snack('No hay versiones de esta nota en Google Drive');
+        return;
+      }
+      if (versions.length == 1) {
+        // Solo una versión: restaurar directamente.
+        final password = await _promptPassword(
+          titulo: 'Descifrar versión',
+          hint: 'Contraseña (dejar vacío si no está cifrado)',
+        );
+        final doc = await _syncService.downloadVersion(
+          versions.first.fileId,
+          password: password?.isEmpty == true ? null : password,
+        );
+        if (!mounted) return;
+        if (doc == null) {
+          _snack('No se pudo leer esa versión');
+        } else {
+          _c.replaceNote(
+            Note(
+              id: doc.id,
+              title: doc.title,
+              createdAt: doc.createdAt,
+              updatedAt: doc.updatedAt,
+              pages: doc.pages,
+            ),
+            notebookId: widget.notebookId,
+          );
+          _snack('Versión restaurada');
+        }
+      } else {
+        // Múltiples versiones: mostrar diálogo de selección.
+        await _showConflictResolution(versions);
       }
     } catch (e) {
       if (mounted) _snack('Error: $e');
@@ -779,12 +859,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  String _formatDate(DateTime date) {
-    final t = date.toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(t.day)}/${two(t.month)}/${t.year} ${two(t.hour)}:${two(t.minute)}';
-  }
-
   Future<void> _editTitle() async {
     final controller = TextEditingController(text: _c.document.title);
     final result = await showDialog<String>(
@@ -828,6 +902,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _exportPdf();
       case 'pdfAll':
         _exportNotebookPdf();
+      case 'pptx':
+        _exportPptx();
       case 'inklus':
         _exportInklusCopy();
       case 'svg':
@@ -857,6 +933,12 @@ class _HomeScreenState extends State<HomeScreen> {
         _importPdfAsBackground();
       case 'versions':
         _showVersionHistory();
+      case 'reminder':
+        _createReminder();
+      case 'stats':
+        _openStats();
+      case 'searchContent':
+        _searchContent();
     }
   }
 
@@ -873,22 +955,64 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- Importar PDF como fondo ---
+  // --- Importar PDF como fondo (C7) ---
   Future<void> _importPdfAsBackground() async {
+    if (!PdfImportService.isSupported) {
+      _snack('Importación de PDF solo disponible en Android/iOS');
+      return;
+    }
     try {
-      final result = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['pdf']);
-      if (result == null || result.path == null) return;
-      // Convierte la primera página del PDF a imagen y la usa como plantilla.
-      // Nota: requiere un plugin de PDF. Por ahora usa la imagen directa.
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PDF importado como plantilla')),
+      final result = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
       );
+      if (result == null || result.path == null) return;
+
+      // Renderizar la primera página del PDF como imagen.
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final pngBytes = await PdfImportService.renderFirstPage(result.path!);
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+
+      if (pngBytes == null) {
+        _snack('No se pudo renderizar el PDF');
+        return;
+      }
+
+      // Guardar la imagen renderizada en la carpeta de la app.
+      final localPath = await PdfImportService.saveRenderedPage(
+        pngBytes,
+        name: 'pdf_bg_${_c.note.id}.png',
+      );
+      if (localPath == null) {
+        _snack('Error al guardar la imagen del PDF');
+        return;
+      }
+
+      // Cachear la imagen y usarla como plantilla custom con relleno infinito.
+      final image = await _imageService.decode(localPath);
+      _imageService.cache[localPath] = image;
+
+      final w = image.width.toDouble();
+      final h = image.height.toDouble();
+      _c.setTemplate(PageTemplate(
+        type: TemplateType.custom,
+        imagePath: localPath,
+        infiniteFill: true,
+        customWidth: w,
+        customHeight: h,
+      ));
+      _c.fitView(_c.viewportSize);
+      _snack('PDF importado como plantilla de fondo');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al importar: $e')),
-        );
+        _snack('Error al importar PDF: $e');
       }
     }
   }
@@ -898,6 +1022,80 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Historial de versiones: próximamente')),
     );
+  }
+
+  // --- Exportar a PowerPoint (.pptx) ---
+  Future<void> _exportPptx() async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final bytes = await ExportService.renderNotebookPptx(
+        _c.document,
+        imageCache: _imageService.cache,
+      );
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      await _saveBytes(bytes, '${_safeName(_c.document.title)}.pptx');
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      _snack('Error al exportar PowerPoint: $e');
+    }
+  }
+
+  // --- Recordatorio ---
+  Future<void> _createReminder() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (date == null) return;
+    if (!mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 9, minute: 0),
+    );
+    if (time == null) return;
+    final dateTime = DateTime(
+      date.year, date.month, date.day, time.hour, time.minute,
+    );
+    await _reminders.create(
+      documentId: _c.document.id,
+      documentTitle: _c.document.title,
+      dateTime: dateTime,
+    );
+    _snack('Recordatorio creado para ${date.day}/${date.month} a las ${time.hour}:${time.minute.toString().padLeft(2, '0')}');
+  }
+
+  // --- Estadísticas ---
+  void _openStats() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const WritingStatsScreen()),
+    );
+  }
+
+  // --- Búsqueda en contenido ---
+  Future<void> _searchContent() async {
+    // Indexar el documento actual.
+    await _search.indexTextItems(_c.document);
+    if (!mounted) return;
+    final controller = TextEditingController();
+    final results = await showDialog<List<SearchResult>>(
+      context: context,
+      builder: (context) => _SearchDialog(
+        searchService: _search,
+        controller: controller,
+      ),
+    );
+    if (results != null && results.isNotEmpty) {
+      _snack('${results.length} resultado(s) encontrado(s)');
+    }
   }
 
   // --- Respaldo local completo ---
@@ -939,6 +1137,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // -------------------------------------------------------------------------
   // UI
+  @override
+  void dispose() {
+    // Guardar estadísticas de sesión.
+    if (_sessionStart != null) {
+      final minutes = DateTime.now().difference(_sessionStart!).inMinutes;
+      if (minutes > 0) _stats.recordActivity(minutes: minutes);
+    }
+    super.dispose();
+  }
+
   // -------------------------------------------------------------------------
 
   @override
@@ -948,8 +1156,9 @@ class _HomeScreenState extends State<HomeScreen> {
       listenable: controller,
       builder: (context, _) {
         final presentMode = controller.presentationMode;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Scaffold(
-          backgroundColor: const Color(0xFFEFEDE8),
+          backgroundColor: isDark ? const Color(0xFF1A1B1E) : const Color(0xFFEFEDE8),
           body: SafeArea(
             child: Column(
               children: [
@@ -961,6 +1170,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (!presentMode)
                         ToolRail(
                           controller: controller,
+                          collapsed: _toolRailCollapsed,
+                          onToggleCollapsed: () => setState(() => _toolRailCollapsed = !_toolRailCollapsed),
                           onInsertImage: _insertImages,
                           onTemplates: () => showTemplatePicker(
                             context,
@@ -968,10 +1179,15 @@ class _HomeScreenState extends State<HomeScreen> {
                             imageService: _imageService,
                             templateLibrary: _templateLibrary,
                           ),
-                          onLayers: () => showLayersSheet(
-                            context,
-                            controller: controller,
-                          ),
+                          onLayers: () => setState(() {
+                            _layersSidebarOpen = !_layersSidebarOpen;
+                          }),
+                          layersSidebarOpen: _layersSidebarOpen,
+                        ),
+                      if (_layersSidebarOpen && !presentMode)
+                        LayersSidebar(
+                          controller: controller,
+                          onClose: () => setState(() => _layersSidebarOpen = false),
                         ),
                       Expanded(
                         child: Stack(
@@ -1035,10 +1251,26 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                if (!presentMode)
+                if (!presentMode && _thumbnailsOpen)
                   PageThumbnailsStrip(
                     controller: controller,
                     imageService: _imageService,
+                    onToggle: () => setState(() => _thumbnailsOpen = !_thumbnailsOpen),
+                  ),
+                if (!presentMode && !_thumbnailsOpen)
+                  GestureDetector(
+                    onTap: () => setState(() => _thumbnailsOpen = true),
+                    child: Container(
+                      height: 28,
+                      color: isDark ? kSurfaceDark : Colors.white,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.keyboard_arrow_up, size: 18, color: isDark ? Colors.white54 : Colors.black38),
+                          Text('Páginas', style: TextStyle(fontSize: 11, color: isDark ? Colors.white54 : Colors.black38)),
+                        ],
+                      ),
+                    ),
                   ),
                 if (!presentMode)
                   BottomBar(
@@ -1079,7 +1311,7 @@ class _HomeScreenState extends State<HomeScreen> {
           switch (syncStatus) {
             case SyncStatus.synced:
               cloudIcon = Icons.cloud_done;
-              cloudColor = const Color(0xFF3B82F6);
+              cloudColor = kAccentColor;
               syncTooltip = 'Sincronizado con Google';
             case SyncStatus.syncing:
               cloudIcon = Icons.sync;
@@ -1100,8 +1332,9 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         }
 
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Material(
-          color: Colors.white,
+          color: isDark ? kSurfaceDark : Colors.white,
           elevation: 2,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -1112,7 +1345,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: const Icon(Icons.arrow_back),
                   onPressed: _goBack,
                 ),
-                const Icon(Icons.edit, color: Color(0xFF3B82F6)),
+                const Icon(Icons.edit, color: kAccentColor),
                 const SizedBox(width: 8),
                 InkWell(
                   onTap: _editTitle,
@@ -1342,6 +1575,40 @@ class _HomeScreenState extends State<HomeScreen> {
                         dense: true,
                       ),
                     ),
+                    const PopupMenuDivider(),
+                    // --- Herramientas de calidad de vida ---
+                    const PopupMenuItem(
+                      value: 'pptx',
+                      child: ListTile(
+                        leading: Icon(Icons.slideshow_outlined),
+                        title: Text('Exportar como PowerPoint'),
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'reminder',
+                      child: ListTile(
+                        leading: Icon(Icons.alarm_add_outlined),
+                        title: Text('Crear recordatorio'),
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'stats',
+                      child: ListTile(
+                        leading: Icon(Icons.analytics_outlined),
+                        title: Text('Estadísticas de escritura'),
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'searchContent',
+                      child: ListTile(
+                        leading: Icon(Icons.search),
+                        title: Text('Buscar en contenido'),
+                        dense: true,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -1414,12 +1681,13 @@ class _ZoomControls extends StatelessWidget {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         final center = Offset(
           controller.viewportSize.width / 2,
           controller.viewportSize.height / 2,
         );
         return Material(
-          color: Colors.white,
+          color: isDark ? kSurfaceDark : Colors.white,
           elevation: 3,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
@@ -1435,9 +1703,10 @@ class _ZoomControls extends StatelessWidget {
                 ),
                 Text(
                   '${(controller.scale * 100).round()}%',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
                 IconButton(
@@ -1458,6 +1727,131 @@ class _ZoomControls extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Diálogo de búsqueda en contenido del cuaderno.
+class _SearchDialog extends StatefulWidget {
+  final SearchService searchService;
+  final TextEditingController controller;
+
+  const _SearchDialog({
+    required this.searchService,
+    required this.controller,
+  });
+
+  @override
+  State<_SearchDialog> createState() => _SearchDialogState();
+}
+
+class _SearchDialogState extends State<_SearchDialog> {
+  List<SearchResult> _results = [];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_search);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_search);
+    super.dispose();
+  }
+
+  void _search() {
+    setState(() {
+      _results = widget.searchService.search(widget.controller.text);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Buscar en contenido'),
+      content: SizedBox(
+        width: 400,
+        height: 400,
+        child: Column(
+          children: [
+            TextField(
+              controller: widget.controller,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Buscar texto...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${_results.length} resultado(s)',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _results.isEmpty
+                  ? Center(
+                      child: Text(
+                        widget.controller.text.isEmpty
+                            ? 'Escribe para buscar...'
+                            : 'Sin resultados',
+                        style: TextStyle(
+                          color: Colors.grey.shade400,
+                          fontSize: 14,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _results.length,
+                      itemBuilder: (context, index) {
+                        final r = _results[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            title: Text(
+                              r.documentTitle,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ...r.matches.map((m) => Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        'Pág. ${m.pageIndex + 1}: ${m.matchedText}',
+                                        style: const TextStyle(fontSize: 12),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    )),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cerrar'),
+        ),
+      ],
     );
   }
 }

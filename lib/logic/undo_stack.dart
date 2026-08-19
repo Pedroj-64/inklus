@@ -36,7 +36,9 @@ class CanvasAction {
 class UndoStack {
   final List<CanvasAction> _undo = [];
   final List<CanvasAction> _redo = [];
-  static const int _maxDepth = 60;
+  final int maxDepth;
+
+  UndoStack({this.maxDepth = 60});
 
   bool get canUndo => _undo.isNotEmpty;
   bool get canRedo => _redo.isNotEmpty;
@@ -44,7 +46,7 @@ class UndoStack {
   void push(CanvasAction action) {
     if (action.isEmpty) return;
     _undo.add(action);
-    if (_undo.length > _maxDepth) _undo.removeAt(0);
+    if (_undo.length > maxDepth) _undo.removeAt(0);
     _redo.clear();
   }
 

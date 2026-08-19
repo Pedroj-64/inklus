@@ -5,13 +5,16 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../constants.dart';
 import '../models/document.dart';
+import '../models/note.dart';
 import '../models/image_item.dart';
 import '../models/page.dart';
 import '../models/stroke.dart';
 import '../models/template.dart';
 import '../models/text_item.dart';
 import '../services/storage_service.dart';
+import '../utils/geometry_utils.dart';
 import 'eraser.dart';
 import 'shape_detector.dart';
 import 'stroke_engine.dart';
@@ -28,47 +31,24 @@ class CanvasController extends ChangeNotifier {
   final StorageService _storage;
 
   // ignore: prefer_final_fields (se reemplaza al restaurar desde la nube)
-  Document _document;
+  Note _note;
+  String _notebookId;
   int _pageIndex = 0;
 
   // ---- Herramientas ----
   ToolType _tool = ToolType.pen;
-  Color _color = const Color(0xFF1A1A1A);
-  static const Map<ToolType, (double, double)> _sizeRange = {
-    ToolType.pen: (2, 14),
-    ToolType.pencil: (2, 18),
-    ToolType.highlighter: (12, 60),
-    ToolType.eraser: (12, 120),
-    ToolType.lasso: (0, 0),
-  };
-  final Map<ToolType, double> _toolSizes = {
-    ToolType.pen: 3.5,
-    ToolType.pencil: 4.5,
-    ToolType.highlighter: 26,
-    ToolType.eraser: 36,
-  };
+  Color _color = kDefaultStrokeColor;
+  final Map<ToolType, double> _toolSizes = Map.of(kDefaultToolSizes);
   bool _fingerDrawingEnabled = true;
   bool _shapeDetectionEnabled = true;
 
   // ---- Ajustes de presión / streamline por herramienta ----
-  final Map<ToolType, double> _thinning = {
-    ToolType.pen: 0,
-    ToolType.pencil: 0.55,
-    ToolType.highlighter: 0,
-  };
-  final Map<ToolType, double> _smoothing = {
-    ToolType.pen: 0.5,
-    ToolType.pencil: 0.5,
-    ToolType.highlighter: 0.6,
-  };
-  final Map<ToolType, double> _streamline = {
-    ToolType.pen: 0.45,
-    ToolType.pencil: 0.5,
-    ToolType.highlighter: 0.75,
-  };
+  final Map<ToolType, double> _thinning = Map.of(kDefaultThinning);
+  final Map<ToolType, double> _smoothing = Map.of(kDefaultSmoothing);
+  final Map<ToolType, double> _streamline = Map.of(kDefaultStreamline);
 
   // ---- Transformación de vista ----
-  double _scale = 1.0;
+  double _scale = kDefaultZoom;
   Offset _translate = Offset.zero;
   bool _viewInitialized = false;
 
@@ -103,6 +83,20 @@ class CanvasController extends ChangeNotifier {
   // ---- Capas ----
   int _activeLayerIndex = 0;
 
+  // ---- Regla virtual ----
+  bool _rulerEnabled = false;
+  Offset _rulerCenter = Offset.zero;
+  double _rulerAngle = 0; // radianes
+  bool _rulerDragging = false;
+  bool _rulerRotating = false;
+  Offset _rulerDragStart = Offset.zero;
+  double _rulerAngleStart = 0;
+
+  // ---- Lupa ----
+  bool _magnifierEnabled = false;
+  Offset _magnifierPosition = Offset.zero;
+  double _magnifierZoom = kMagnifierDefaultZoom;
+
   // ---- Selección con lazo ----
   List<Offset> _lassoPath = [];
   List<Stroke> _selectedStrokes = [];
@@ -110,7 +104,7 @@ class CanvasController extends ChangeNotifier {
   // ---- Portapapeles de trazos (copy/paste) ----
   List<Stroke> _clipboardStrokes = [];
 
-  final UndoStack _undoStack = UndoStack();
+  final UndoStack _undoStack = UndoStack(maxDepth: kMaxUndoDepth);
 
   /// Versión del contenido (trazos/imágenes/plantilla). La capa confirmada
   /// del lienzo la usa para saber cuándo debe repintar de verdad.
@@ -126,13 +120,14 @@ class CanvasController extends ChangeNotifier {
   bool get hapticEnabled => _hapticEnabled;
 
   /// Callback opcional invocado en cada guardado automático. La UI lo usa
-  /// para replicar el documento en Google Drive cuando hay sesión.
-  Future<void> Function(Document document)? onRemoteSync;
+  /// para replicar el Note en Google Drive cuando hay sesión.
+  Future<void> Function(Note note)? onRemoteSync;
 
   Timer? _saveTimer;
 
-  CanvasController(this._storage, {Document? initial})
-      : _document = initial ?? Document.newBlank() {
+  CanvasController(this._storage, {Note? initial, String? notebookId})
+      : _note = initial ?? Note.newBlank(),
+        _notebookId = notebookId ?? '' {
     _scheduleSave();
   }
 
@@ -140,19 +135,31 @@ class CanvasController extends ChangeNotifier {
   // Accesores
   // ------------------------------------------------------------------
 
-  Document get document => _document;
-  List<Page> get pages => _document.pages;
-  Page get page => _document.pages[_pageIndex];
+  Note get note => _note;
+  String get notebookId => _notebookId;
+
+  /// Compatibilidad: devuelve un Document construido desde el Note.
+  /// Se usa en exportación y sync (que todavía esperan Document).
+  Document get document => Document(
+        id: _note.id,
+        title: _note.title,
+        createdAt: _note.createdAt,
+        updatedAt: _note.updatedAt,
+        pages: _note.pages,
+      );
+
+  List<Page> get pages => _note.pages;
+  Page get page => _note.pages[_pageIndex];
   int get pageIndex => _pageIndex;
-  int get pageCount => _document.pages.length;
+  int get pageCount => _note.pages.length;
 
   ToolType get tool => _tool;
   Color get color => _color;
-  double get toolSize => _toolSizes[_tool] ?? 3.5;
+  double get toolSize => _toolSizes[_tool] ?? kDefaultToolSizes[ToolType.pen]!;
   bool get fingerDrawingEnabled => _fingerDrawingEnabled;
 
   /// Rango de tamaño permitido para la herramienta actual.
-  (double, double) get sizeRange => _sizeRange[_tool] ?? (2, 14);
+  (double, double) get sizeRange => kToolSizeRanges[_tool] ?? (2, 14);
 
   double get scale => _scale;
   Offset get translate => _translate;
@@ -166,6 +173,20 @@ class CanvasController extends ChangeNotifier {
   bool get canUndo => _undoStack.canUndo;
   bool get canRedo => _undoStack.canRedo;
   bool get viewNeedsInit => !_viewInitialized;
+
+  // ---- Regla ----
+  bool get rulerEnabled => _rulerEnabled;
+  Offset get rulerCenter => _rulerCenter;
+  double get rulerAngle => _rulerAngle;
+  double get rulerLength => kRulerLength;
+  bool get rulerDragging => _rulerDragging;
+  bool get rulerRotating => _rulerRotating;
+
+  // ---- Lupa ----
+  bool get magnifierEnabled => _magnifierEnabled;
+  Offset get magnifierPosition => _magnifierPosition;
+  double get magnifierZoom => _magnifierZoom;
+  double get magnifierRadius => kMagnifierRadius;
 
   /// Radio (mundo) del círculo de borrado actual.
   double get eraserRadius => _toolSizes[ToolType.eraser]! / 2;
@@ -190,7 +211,7 @@ class CanvasController extends ChangeNotifier {
   }
 
   void setToolSize(double size) {
-    final range = _sizeRange[_tool];
+    final range = kToolSizeRanges[_tool];
     if (range != null) {
       _toolSizes[_tool] = size.clamp(range.$1, range.$2);
     }
@@ -206,6 +227,119 @@ class CanvasController extends ChangeNotifier {
 
   void setShapeDetection(bool enabled) {
     _shapeDetectionEnabled = enabled;
+    notifyListeners();
+  }
+
+  // ---- Regla virtual ----
+
+  void toggleRuler() {
+    _rulerEnabled = !_rulerEnabled;
+    if (_rulerEnabled && _rulerCenter == Offset.zero) {
+      // Posición inicial: centro del viewport.
+      _rulerCenter = viewportToWorld(
+        Offset(viewportSize.width / 2, viewportSize.height / 2),
+        viewportSize,
+      );
+    }
+    notifyListeners();
+  }
+
+  /// Mueve la regla a una nueva posición (world).
+  void moveRuler(Offset worldDelta) {
+    _rulerCenter += worldDelta;
+    notifyListeners();
+  }
+
+  /// Rota la regla por un delta de ángulo (radianes).
+  void rotateRuler(double deltaAngle) {
+    _rulerAngle += deltaAngle;
+    notifyListeners();
+  }
+
+  /// Inicia el arrastre de la regla.
+  void beginRulerDrag(Offset worldPoint) {
+    _rulerDragging = true;
+    _rulerDragStart = worldPoint;
+  }
+
+  /// Actualiza el arrastre de la regla.
+  void updateRulerDrag(Offset worldPoint) {
+    if (!_rulerDragging) return;
+    final delta = worldPoint - _rulerDragStart;
+    _rulerCenter += delta;
+    _rulerDragStart = worldPoint;
+    notifyListeners();
+  }
+
+  /// Termina el arrastre de la regla.
+  void endRulerDrag() {
+    _rulerDragging = false;
+  }
+
+  /// Inicia la rotación de la regla.
+  void beginRulerRotate(Offset worldPoint) {
+    _rulerRotating = true;
+    _rulerAngleStart = (worldPoint - _rulerCenter).direction - _rulerAngle;
+  }
+
+  /// Actualiza la rotación de la regla.
+  void updateRulerRotate(Offset worldPoint) {
+    if (!_rulerRotating) return;
+    _rulerAngle = (worldPoint - _rulerCenter).direction - _rulerAngleStart;
+    notifyListeners();
+  }
+
+  /// Termina la rotación de la regla.
+  void endRulerRotate() {
+    _rulerRotating = false;
+  }
+
+  /// Proyecta un punto sobre la línea de la regla (para约束 de trazo recto).
+  Offset projectOntoRuler(Offset worldPoint) {
+    // Vector dirección de la regla.
+    final dir = Offset(cos(_rulerAngle), sin(_rulerAngle));
+    final d = worldPoint - _rulerCenter;
+    // Proyección escalar.
+    final t = d.dx * dir.dx + d.dy * dir.dy;
+    return _rulerCenter + dir * t;
+  }
+
+  /// Verifica si un punto está cerca de la regla (para hit-test de arrastre).
+  bool isNearRuler(Offset worldPoint, {double threshold = kRulerHitThreshold}) {
+    final proj = projectOntoRuler(worldPoint);
+    return (worldPoint - proj).distance <= threshold;
+  }
+
+  /// Verifica si un punto está cerca del centro de la regla (para arrastre).
+  bool isNearRulerCenter(Offset worldPoint, {double threshold = kRulerCenterThreshold}) {
+    return (worldPoint - _rulerCenter).distance <= threshold;
+  }
+
+  /// Verifica si un punto está cerca de un extremo de la regla (para rotar).
+  bool isNearRulerEnd(Offset worldPoint, {double threshold = kRulerCenterThreshold}) {
+    final dir = Offset(cos(_rulerAngle), sin(_rulerAngle));
+    final halfLen = kRulerLength / 2;
+    final end1 = _rulerCenter + dir * halfLen;
+    final end2 = _rulerCenter - dir * halfLen;
+    return (worldPoint - end1).distance <= threshold ||
+        (worldPoint - end2).distance <= threshold;
+  }
+
+  // ---- Lupa ----
+
+  void toggleMagnifier() {
+    _magnifierEnabled = !_magnifierEnabled;
+    notifyListeners();
+  }
+
+  /// Actualiza la posición de la lupa (llamado en cada frame del stylus).
+  void updateMagnifierPosition(Offset worldPoint) {
+    _magnifierPosition = worldPoint;
+    notifyListeners();
+  }
+
+  void setMagnifierZoom(double zoom) {
+    _magnifierZoom = zoom.clamp(kMagnifierMinZoom, kMagnifierMaxZoom);
     notifyListeners();
   }
 
@@ -275,13 +409,17 @@ class CanvasController extends ChangeNotifier {
       HapticFeedback.selectionClick();
     }
     _selectedImageId = null;
+
+    // Si la regla está activa, proyecta el punto sobre la línea de la regla.
+    final constrainedPoint = _rulerEnabled ? projectOntoRuler(worldPoint) : worldPoint;
+
     if (tool == ToolType.eraser) {
       _activeEraserPath = [worldPoint];
       _activeStroke = null;
     } else {
       _activeStroke = Stroke(
         id: 'st_${DateTime.now().microsecondsSinceEpoch}',
-        points: [StrokePoint.fromOffset(worldPoint, _pressure(pressure))],
+        points: [StrokePoint.fromOffset(constrainedPoint, _pressure(pressure))],
         tool: tool,
         colorValue: _color.toARGB32(),
         size: _toolSizes[tool] ?? 3.5,
@@ -298,15 +436,31 @@ class CanvasController extends ChangeNotifier {
       return;
     }
     if (!_isDrawing) return;
+    // Si la regla está activa, proyecta el punto sobre la línea.
+    final constrainedPoint = _rulerEnabled ? projectOntoRuler(worldPoint) : worldPoint;
     if (_activeStroke != null) {
-      _activeStroke = _activeStroke!.copyWith(
-        points: [
-          ..._activeStroke!.points,
-          StrokePoint.fromOffset(worldPoint, _pressure(pressure)),
-        ],
-      );
+      // Para la regla: solo mantenemos el primer y último punto (línea recta).
+      if (_rulerEnabled && _activeStroke!.points.isNotEmpty) {
+        _activeStroke = _activeStroke!.copyWith(
+          points: [
+            _activeStroke!.points.first,
+            StrokePoint.fromOffset(constrainedPoint, _pressure(pressure)),
+          ],
+        );
+      } else {
+        _activeStroke = _activeStroke!.copyWith(
+          points: [
+            ..._activeStroke!.points,
+            StrokePoint.fromOffset(constrainedPoint, _pressure(pressure)),
+          ],
+        );
+      }
     } else {
-      _activeEraserPath.add(worldPoint);
+      _activeEraserPath.add(constrainedPoint);
+    }
+    // Actualiza posición de la lupa si está activa.
+    if (_magnifierEnabled) {
+      _magnifierPosition = worldPoint;
     }
     notifyListeners();
   }
@@ -338,6 +492,7 @@ class CanvasController extends ChangeNotifier {
             tool: active.tool,
             colorValue: active.colorValue,
             size: active.size,
+            shapeType: shape.type.name,
           );
         }
       }
@@ -426,8 +581,8 @@ class CanvasController extends ChangeNotifier {
   }
 
   void setTitle(String title) {
-    if (title.trim().isEmpty || title == _document.title) return;
-    _document.title = title.trim();
+    if (title.trim().isEmpty || title == _note.title) return;
+    _note.title = title.trim();
     _touch();
   }
 
@@ -440,7 +595,7 @@ class CanvasController extends ChangeNotifier {
       name: 'Página ${pageCount + 1}',
       template: page.template, // hereda la plantilla actual
     );
-    _document.pages.add(newPage);
+    _note.pages.add(newPage);
     _pageIndex = pageCount - 1;
     _undoStack.clear();
     _viewInitialized = false; // re-ajusta la vista en el siguiente layout
@@ -458,7 +613,7 @@ class CanvasController extends ChangeNotifier {
 
   void deleteCurrentPage() {
     if (pageCount <= 1) return;
-    _document.pages.removeAt(_pageIndex);
+    _note.pages.removeAt(_pageIndex);
     _pageIndex = min(_pageIndex, pageCount - 1);
     _undoStack.clear();
     _viewInitialized = false;
@@ -488,7 +643,7 @@ class CanvasController extends ChangeNotifier {
           .toList(),
       template: src.template,
     );
-    _document.pages.insert(_pageIndex + 1, dup);
+    _note.pages.insert(_pageIndex + 1, dup);
     _pageIndex++;
     _undoStack.clear();
     _viewInitialized = false;
@@ -500,8 +655,8 @@ class CanvasController extends ChangeNotifier {
     if (oldIndex == newIndex) return;
     if (oldIndex < 0 || oldIndex >= pageCount) return;
     if (newIndex < 0 || newIndex >= pageCount) return;
-    final page = _document.pages.removeAt(oldIndex);
-    _document.pages.insert(newIndex, page);
+    final page = _note.pages.removeAt(oldIndex);
+    _note.pages.insert(newIndex, page);
     // Actualiza el índice de la página activa para que siga apuntando a la misma.
     if (_pageIndex == oldIndex) {
       _pageIndex = newIndex;
@@ -603,7 +758,7 @@ class CanvasController extends ChangeNotifier {
     final lassoPolygon = _lassoPath;
     _selectedStrokes = page.strokes.where((stroke) {
       for (final p in stroke.points) {
-        if (_pointInPolygon(p.offset, lassoPolygon)) return true;
+        if (pointInPolygon(p.offset, lassoPolygon)) return true;
       }
       return false;
     }).toList();
@@ -639,7 +794,7 @@ class CanvasController extends ChangeNotifier {
   /// desplazándolos 30 unidades en X e Y para que no se superpongan.
   void pasteStrokes() {
     if (_clipboardStrokes.isEmpty) return;
-    const offset = Offset(30, 30);
+    const offset = Offset(kPasteOffset, kPasteOffset);
     final newStrokes = <Stroke>[];
     for (final s in _clipboardStrokes) {
       final newPoints = s.points.map((p) {
@@ -736,7 +891,7 @@ class CanvasController extends ChangeNotifier {
       id: 'txt_${DateTime.now().microsecondsSinceEpoch}',
       x: worldPoint.dx,
       y: worldPoint.dy,
-      width: 250,
+      width: kDefaultTextWidth,
       text: '',
       colorValue: _color.toARGB32(),
       layerIndex: _activeLayerIndex,
@@ -787,13 +942,6 @@ class CanvasController extends ChangeNotifier {
 
   void removeLayer(int index) {
     if (page.layers.length <= 1 || index == 0) return; // No eliminar la capa 0
-    // Mueve los trazos e imágenes de la capa eliminada a la capa 0.
-    for (final s in page.strokes) {
-      if (s.layerIndex == index) {
-        // No podemos mutar directamente, así que lo ignoramos por ahora
-        // (los trazos de la capa eliminada quedan huérfanos, no se renderizan).
-      }
-    }
     page.layers.removeAt(index);
     if (_activeLayerIndex >= page.layers.length) {
       _activeLayerIndex = page.layers.length - 1;
@@ -819,6 +967,12 @@ class CanvasController extends ChangeNotifier {
     _touch();
   }
 
+  void setLayerOpacity(int index, double opacity) {
+    if (index < 0 || index >= page.layers.length) return;
+    page.layers[index].opacity = opacity.clamp(0.0, 1.0);
+    _touch();
+  }
+
   // ------------------------------------------------------------------
   // Bucket fill (relleno de áreas)
   // ------------------------------------------------------------------
@@ -832,9 +986,9 @@ class CanvasController extends ChangeNotifier {
     for (final stroke in page.strokes) {
       final outline = StrokeEngine.outlineFor(stroke);
       if (outline.length < 3) continue;
-      if (_pointInPolygon(worldPoint, outline)) {
+      if (pointInPolygon(worldPoint, outline)) {
         // El punto está dentro del contorno del trazo.
-        final center = _polygonCenter(outline);
+        final center = polygonCenter(outline);
         final dist = (worldPoint - center).distance;
         if (dist < bestDistance) {
           bestDistance = dist;
@@ -859,36 +1013,16 @@ class CanvasController extends ChangeNotifier {
     }
   }
 
-  /// Centro de un polígono (promedio de los puntos).
-  Offset _polygonCenter(List<Offset> polygon) {
-    var x = 0.0, y = 0.0;
-    for (final p in polygon) {
-      x += p.dx;
-      y += p.dy;
-    }
-    return Offset(x / polygon.length, y / polygon.length);
-  }
 
-  /// Algoritmo ray-casting para punto dentro de polígono.
-  bool _pointInPolygon(Offset point, List<Offset> polygon) {
-    var inside = false;
-    for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      final xi = polygon[i].dx, yi = polygon[i].dy;
-      final xj = polygon[j].dx, yj = polygon[j].dy;
-      if (((yi > point.dy) != (yj > point.dy)) &&
-          (point.dx < (xj - xi) * (point.dy - yi) / (yj - yi) + xi)) {
-        inside = !inside;
-      }
-    }
-    return inside;
-  }
+
+
 
   // ------------------------------------------------------------------
   // Transformación de vista (zoom / pan)
   // ------------------------------------------------------------------
 
   void _setView(double scale, Offset translate) {
-    _scale = scale.clamp(0.1, 6.0);
+    _scale = scale.clamp(kMinZoom, kMaxZoom);
     _translate = translate;
     notifyListeners();
   }
@@ -899,7 +1033,7 @@ class CanvasController extends ChangeNotifier {
   /// Aplica zoom alrededor de un punto de la pantalla (en coordenadas del
   /// viewport). Usado por el gesto de pellizco y por los botones de zoom.
   void zoomAt(double factor, Offset focal, Size viewportSize) {
-    final newScale = (_scale * factor).clamp(0.1, 6.0);
+    final newScale = (_scale * factor).clamp(kMinZoom, kMaxZoom);
     final scaleChange = newScale / _scale;
     // Mantiene fijo el punto del mundo que está bajo [focal].
     final newTranslate = focal - (focal - _translate) * scaleChange;
@@ -956,7 +1090,7 @@ class CanvasController extends ChangeNotifier {
   /// Marca el documento como modificado y agenda guardado automático
   /// (debounced) para no perder trazos ante cierres inesperados.
   void _touch() {
-    _document.updatedAt = DateTime.now();
+    _note.updatedAt = DateTime.now();
     _contentVersion++;
     notifyListeners();
     _scheduleSave();
@@ -964,16 +1098,20 @@ class CanvasController extends ChangeNotifier {
 
   void _scheduleSave() {
     _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 600), () {
-      _storage.save(_document);
+    _saveTimer = Timer(kSaveDebounce, () async {
+      // Guardar el Note en su archivo individual
+      if (_notebookId.isNotEmpty) {
+        await _storage.saveNote(_notebookId, _note);
+      }
       // Replica a la nube si la UI registró un callback (sesión iniciada).
-      onRemoteSync?.call(_document);
+      onRemoteSync?.call(_note);
     });
   }
 
-  /// Reemplaza el documento completo (tras restaurar desde la nube).
-  void replaceDocument(Document doc) {
-    _document = doc;
+  /// Reemplaza el note completo (tras restaurar desde la nube).
+  void replaceNote(Note note, {String? notebookId}) {
+    _note = note;
+    if (notebookId != null) _notebookId = notebookId;
     _pageIndex = 0;
     _undoStack.clear();
     _selectedImageId = null;
@@ -981,16 +1119,33 @@ class CanvasController extends ChangeNotifier {
     _touch();
   }
 
+  /// Compatibilidad: acepta un Document y lo convierte a Note interno.
+  void replaceDocument(Document doc) {
+    replaceNote(
+      Note(
+        id: doc.id,
+        title: doc.title,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+        pages: doc.pages,
+      ),
+    );
+  }
+
   Future<void> saveNow() async {
     _saveTimer?.cancel();
-    await _storage.save(_document);
+    if (_notebookId.isNotEmpty) {
+      await _storage.saveNote(_notebookId, _note);
+    }
   }
 
   @override
   void dispose() {
     _saveTimer?.cancel();
     // Último intento de persistir antes de morir.
-    _storage.save(_document);
+    if (_notebookId.isNotEmpty) {
+      _storage.saveNote(_notebookId, _note);
+    }
     super.dispose();
   }
 }

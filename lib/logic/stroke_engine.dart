@@ -65,6 +65,26 @@ class StrokeEngine {
           simulatePressure: false,
           isComplete: true,
         );
+      case ToolType.calligraphy:
+        return StrokeOptions(
+          size: size,
+          thinning: thinning ?? 0.3,
+          smoothing: smoothing ?? 0.4,
+          streamline: streamline ?? 0.35,
+          simulatePressure: true,
+          start: StrokeEndOptions.start(taperEnabled: true, customTaper: 0.2),
+          end: StrokeEndOptions.end(taperEnabled: true, customTaper: 0.15),
+        );
+      case ToolType.brush:
+        return StrokeOptions(
+          size: size,
+          thinning: thinning ?? 0.4,
+          smoothing: smoothing ?? 0.55,
+          streamline: streamline ?? 0.6,
+          simulatePressure: true,
+          start: StrokeEndOptions.start(taperEnabled: true, customTaper: 0.3),
+          end: StrokeEndOptions.end(taperEnabled: true, customTaper: 0.25),
+        );
       case ToolType.eraser:
       case ToolType.select:
       case ToolType.lasso:

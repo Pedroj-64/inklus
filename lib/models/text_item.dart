@@ -26,6 +26,9 @@ class TextItem {
   /// Índice de la capa a la que pertenece.
   final int layerIndex;
 
+  /// Id de la página destino si este texto es un enlace interno (backlink).
+  final String? linkToPageId;
+
   TextItem({
     required this.id,
     required this.x,
@@ -33,8 +36,9 @@ class TextItem {
     required this.width,
     required this.text,
     this.fontSize = 18,
-    this.colorValue = 0xFF1A1A1A,
+    this.colorValue = 0xFF1A1A1A, // kDefaultStrokeColor.toARGB32()
     this.layerIndex = 0,
+    this.linkToPageId,
   });
 
   Color get color => Color(colorValue);
@@ -67,6 +71,7 @@ class TextItem {
     double? fontSize,
     int? colorValue,
     int? layerIndex,
+    String? linkToPageId,
   }) =>
       TextItem(
         id: id ?? this.id,
@@ -77,6 +82,7 @@ class TextItem {
         fontSize: fontSize ?? this.fontSize,
         colorValue: colorValue ?? this.colorValue,
         layerIndex: layerIndex ?? this.layerIndex,
+        linkToPageId: linkToPageId ?? this.linkToPageId,
       );
 
   factory TextItem.fromJson(Map<String, dynamic> json) => TextItem(
@@ -86,8 +92,9 @@ class TextItem {
         width: (json['w'] as num).toDouble(),
         text: json['text'] as String? ?? '',
         fontSize: (json['fontSize'] as num?)?.toDouble() ?? 18,
-        colorValue: (json['color'] as num?)?.toInt() ?? 0xFF1A1A1A,
+        colorValue: (json['color'] as num?)?.toInt() ?? 0xFF1A1A1A, // kDefaultStrokeColor.toARGB32()
         layerIndex: (json['layer'] as num?)?.toInt() ?? 0,
+        linkToPageId: json['linkToPage'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -99,5 +106,6 @@ class TextItem {
         'fontSize': fontSize,
         'color': colorValue,
         if (layerIndex != 0) 'layer': layerIndex,
+        if (linkToPageId != null) 'linkToPage': linkToPageId,
       };
 }

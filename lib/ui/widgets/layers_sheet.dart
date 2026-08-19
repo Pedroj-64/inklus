@@ -1,3 +1,4 @@
+import '../../constants.dart';
 import 'package:flutter/material.dart';
 
 import '../../logic/canvas_controller.dart';
@@ -167,7 +168,7 @@ class _LayerTile extends StatelessWidget {
           color: isActive ? const Color(0xFFE3EDFF) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isActive ? const Color(0xFF3B82F6) : Colors.black12,
+            color: isActive ? kAccentColor : Colors.black12,
           ),
         ),
         child: Row(
@@ -178,7 +179,7 @@ class _LayerTile extends StatelessWidget {
               height: 24,
               decoration: BoxDecoration(
                 color: isActive
-                    ? const Color(0xFF3B82F6)
+                    ? kAccentColor
                     : Colors.black.withAlpha(30),
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -210,7 +211,7 @@ class _LayerTile extends StatelessWidget {
               icon: Icon(
                 layer.visible ? Icons.visibility : Icons.visibility_off,
                 size: 20,
-                color: layer.visible ? const Color(0xFF3B82F6) : Colors.black38,
+                color: layer.visible ? kAccentColor : Colors.black38,
               ),
               tooltip: layer.visible ? 'Ocultar capa' : 'Mostrar capa',
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),

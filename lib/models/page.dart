@@ -9,28 +9,41 @@ class Layer {
   bool visible;
   bool locked;
 
+  /// Opacidad de la capa (0.0 = transparente, 1.0 = opaca).
+  double opacity;
+
   Layer({
     required this.name,
     this.visible = true,
     this.locked = false,
+    this.opacity = 1.0,
   });
 
-  Layer copyWith({String? name, bool? visible, bool? locked}) => Layer(
+  Layer copyWith({
+    String? name,
+    bool? visible,
+    bool? locked,
+    double? opacity,
+  }) =>
+      Layer(
         name: name ?? this.name,
         visible: visible ?? this.visible,
         locked: locked ?? this.locked,
+        opacity: opacity ?? this.opacity,
       );
 
   factory Layer.fromJson(Map<String, dynamic> json) => Layer(
         name: json['name'] as String? ?? 'Capa',
         visible: json['visible'] as bool? ?? true,
         locked: json['locked'] as bool? ?? false,
+        opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
       );
 
   Map<String, dynamic> toJson() => {
         'name': name,
         'visible': visible,
         'locked': locked,
+        if (opacity < 1.0) 'opacity': opacity,
       };
 }
 

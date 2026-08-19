@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../constants.dart';
 import '../../logic/canvas_controller.dart';
 
 /// Minimapa que muestra la posición actual del viewport dentro del mundo.
@@ -130,13 +131,13 @@ class _MinimapPainter extends CustomPainter {
     canvas.drawRect(
       Rect.fromCenter(center: vpCenter, width: vpWidth, height: vpHeight),
       Paint()
-        ..color = const Color(0xFF3B82F6).withAlpha(60)
+        ..color = kAccentColor.withAlpha(60)
         ..style = PaintingStyle.fill,
     );
     canvas.drawRect(
       Rect.fromCenter(center: vpCenter, width: vpWidth, height: vpHeight),
       Paint()
-        ..color = const Color(0xFF3B82F6)
+        ..color = kAccentColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );

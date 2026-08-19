@@ -1,3 +1,4 @@
+import '../../constants.dart';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -55,6 +56,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
   late Color _lineColor;
   late double _sheetWidth;
   late double _sheetHeight;
+  late bool _infiniteFill;
 
   @override
   void initState() {
@@ -64,6 +66,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
     _lineColor = t.lineColor;
     _sheetWidth = t.customWidth ?? PageTemplate.sheetWidth;
     _sheetHeight = t.customHeight ?? PageTemplate.sheetHeight;
+    _infiniteFill = t.infiniteFill;
   }
 
   @override
@@ -71,8 +74,13 @@ class _TemplateSheetState extends State<_TemplateSheet> {
     final current = widget.controller.page.template;
     final hasLines =
         current.type == TemplateType.ruled || current.type == TemplateType.grid;
-    final isFiniteSheet = current.type == TemplateType.sheet ||
-        (current.type == TemplateType.custom && !current.infiniteFill);
+    final isFiniteSheet = current.isFinite;
+    // B6: tipos que soportan toggle entre infinito y finito.
+    final supportsInfiniteToggle = current.type == TemplateType.ruled ||
+        current.type == TemplateType.grid ||
+        current.type == TemplateType.dots ||
+        current.type == TemplateType.planner ||
+        current.type == TemplateType.custom;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -85,36 +93,56 @@ class _TemplateSheetState extends State<_TemplateSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Plantillas',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            // Encabezado mejorado
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: kAccentColor.withAlpha(20),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.dashboard_customize_outlined,
+                    size: 20,
+                    color: kAccentColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Plantillas',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'Infinitas se alargan al escribir',
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Elige el fondo de la página. Las plantillas infinitas se alargan conforme escribes.',
-              style: TextStyle(fontSize: 12, color: Colors.black54),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
-            // --- Tiles de tipo de plantilla ---
+            // ---- Sección: Plantillas infinitas ----
+            _SectionLabel(label: 'Lienzo infinito'),
+            const SizedBox(height: 8),
+
+            // --- Tiles de plantillas infinitas ---
             Wrap(
               spacing: 10,
               runSpacing: 10,
               children: [
                 _TemplateTile(
                   icon: Icons.crop_free,
-                  label: 'Lienzo infinito',
+                  label: 'Blanco',
                   selected: current.type == TemplateType.blank,
                   onTap: () => _apply(const PageTemplate(type: TemplateType.blank)),
-                ),
-                _TemplateTile(
-                  icon: Icons.description_outlined,
-                  label: 'Hoja normal',
-                  selected: current.type == TemplateType.sheet,
-                  onTap: () => _apply(PageTemplate(
-                    type: TemplateType.sheet,
-                    lineColorValue: _lineColor.toARGB32(),
-                  )),
                 ),
                 _TemplateTile(
                   icon: Icons.subject,
@@ -124,6 +152,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                     type: TemplateType.ruled,
                     spacing: _spacing,
                     lineColorValue: _lineColor.toARGB32(),
+                    infiniteFill: true,
                   )),
                 ),
                 _TemplateTile(
@@ -134,6 +163,18 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                     type: TemplateType.grid,
                     spacing: _spacing,
                     lineColorValue: _lineColor.toARGB32(),
+                    infiniteFill: true,
+                  )),
+                ),
+                _TemplateTile(
+                  icon: Icons.brush_outlined,
+                  label: 'Puntos',
+                  selected: current.type == TemplateType.dots,
+                  onTap: () => _apply(PageTemplate(
+                    type: TemplateType.dots,
+                    spacing: _spacing,
+                    lineColorValue: _lineColor.toARGB32(),
+                    infiniteFill: true,
                   )),
                 ),
                 _TemplateTile(
@@ -154,6 +195,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                     type: TemplateType.planner,
                     spacing: _spacing,
                     lineColorValue: _lineColor.toARGB32(),
+                    infiniteFill: true,
                   )),
                 ),
                 _TemplateTile(
@@ -166,13 +208,23 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                     lineColorValue: _lineColor.toARGB32(),
                   )),
                 ),
+              ],
+            ),
+
+            // --- Sección: Hoja fija ---
+            const SizedBox(height: 16),
+            _SectionLabel(label: 'Hoja fija'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
                 _TemplateTile(
-                  icon: Icons.brush_outlined,
-                  label: 'Puntos',
-                  selected: current.type == TemplateType.dots,
+                  icon: Icons.description_outlined,
+                  label: 'Hoja normal',
+                  selected: current.type == TemplateType.sheet,
                   onTap: () => _apply(PageTemplate(
-                    type: TemplateType.dots,
-                    spacing: _spacing,
+                    type: TemplateType.sheet,
                     lineColorValue: _lineColor.toARGB32(),
                   )),
                 ),
@@ -301,6 +353,30 @@ class _TemplateSheetState extends State<_TemplateSheet> {
               ),
             ],
 
+            // B6: Toggle Lienzo infinito (para plantillas que lo soportan)
+            if (supportsInfiniteToggle) ...[
+              const SizedBox(height: 8),
+              SwitchListTile(
+                title: const Text(
+                  'Lienzo infinito',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  _infiniteFill
+                      ? 'El lienzo se alarga al escribir'
+                      : 'Hoja de tamaño fijo',
+                  style: const TextStyle(fontSize: 11),
+                ),
+                value: _infiniteFill,
+                onChanged: (v) {
+                  setState(() => _infiniteFill = v);
+                  _applyCurrent();
+                },
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ],
+
             // Tamaño de hoja (para hoja normal)
             if (isFiniteSheet && current.type != TemplateType.custom) ...[
               const SizedBox(height: 8),
@@ -376,6 +452,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
     widget.controller.setTemplate(t.copyWith(
       spacing: _spacing,
       lineColorValue: _lineColor.toARGB32(),
+      infiniteFill: _infiniteFill,
     ));
   }
 
@@ -455,9 +532,9 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                   onTap: () => _setLineColor(const Color(0xFF424242)),
                 ),
                 _ColorDot(
-                  color: const Color(0xFF1A1A1A),
-                  selected: _lineColor.toARGB32() == 0xFF1A1A1A,
-                  onTap: () => _setLineColor(const Color(0xFF1A1A1A)),
+                  color: kDefaultStrokeColor,
+                  selected: _lineColor.toARGB32() == kDefaultStrokeColor.toARGB32(),
+                  onTap: () => _setLineColor(kDefaultStrokeColor),
                 ),
                 _ColorDot(
                   color: const Color(0xFFFFFFFF),
@@ -616,7 +693,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
   }
 }
 
-/// Tile de tipo de plantilla.
+/// Tile de tipo de plantilla (estilo profesional con preview visual).
 class _TemplateTile extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -634,29 +711,55 @@ class _TemplateTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 104,
-        padding: const EdgeInsets.symmetric(vertical: 12),
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 108,
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE3EDFF) : const Color(0xFFF5F5F5),
-          borderRadius: BorderRadius.circular(12),
+          color: selected ? const Color(0xFFEBF0FF) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? const Color(0xFF3B82F6) : Colors.transparent,
-            width: 2,
+            color: selected ? kAccentColor : Colors.grey.shade200,
+            width: selected ? 2 : 1,
           ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: kAccentColor.withAlpha(30),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 30,
-                color: selected ? const Color(0xFF3B82F6) : Colors.black54),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: selected
+                    ? kAccentColor.withAlpha(20)
+                    : Colors.grey.withAlpha(15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                size: 26,
+                color: selected ? kAccentColor : Colors.black45,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
               label,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                color: selected ? kAccentColor : Colors.black54,
+              ),
             ),
           ],
         ),
@@ -738,7 +841,7 @@ class _SizePreset extends StatelessWidget {
           color: isActive ? const Color(0xFFE3EDFF) : const Color(0xFFF5F5F5),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isActive ? const Color(0xFF3B82F6) : Colors.transparent,
+            color: isActive ? kAccentColor : Colors.transparent,
             width: 1.5,
           ),
         ),
@@ -747,7 +850,7 @@ class _SizePreset extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-            color: isActive ? const Color(0xFF3B82F6) : Colors.black54,
+            color: isActive ? kAccentColor : Colors.black54,
           ),
         ),
       ),
@@ -780,7 +883,7 @@ class _SavedTemplateTile extends StatelessWidget {
           color: selected ? const Color(0xFFE3EDFF) : const Color(0xFFF5F5F5),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? const Color(0xFF3B82F6) : Colors.transparent,
+            color: selected ? kAccentColor : Colors.transparent,
             width: 2,
           ),
         ),
@@ -807,7 +910,7 @@ class _SavedTemplateTile extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-                  color: selected ? const Color(0xFF3B82F6) : Colors.black54,
+                  color: selected ? kAccentColor : Colors.black54,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -816,6 +919,24 @@ class _SavedTemplateTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Etiqueta de sección en el picker de plantillas.
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: Colors.grey.shade600,
       ),
     );
   }

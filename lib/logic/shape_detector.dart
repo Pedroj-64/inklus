@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:ui';
 
 import '../models/stroke.dart';
+import '../utils/geometry_utils.dart';
 
 /// Resultado de la detección de una forma en un trazo.
 class DetectedShape {
@@ -32,7 +33,7 @@ class ShapeDetector {
 
     final first = points.first.offset;
     final last = points.last.offset;
-    final totalLength = _pathLength(points);
+    final totalLength = pathLength(points);
 
     // ¿Es una línea recta o flecha?
     final lineResult = _detectLine(points, first, last, totalLength);
@@ -47,15 +48,6 @@ class ShapeDetector {
     if (circleResult != null) return circleResult;
 
     return null;
-  }
-
-  /// Calcula la longitud total del camino del trazo.
-  static double _pathLength(List<StrokePoint> points) {
-    var length = 0.0;
-    for (var i = 1; i < points.length; i++) {
-      length += (points[i].offset - points[i - 1].offset).distance;
-    }
-    return length;
   }
 
   /// Detecta si el trazo es una línea recta o una flecha.
@@ -129,7 +121,7 @@ class ShapeDetector {
     if (corners.length < 3 || corners.length > 5) return null;
 
     // Verifica que los lados sean rectos y los ángulos cercanos a 90°.
-    final rect = _boundingRect(points);
+    final rect = boundingBoxFromPoints(points);
     if (rect.width < 30 || rect.height < 30) return null;
 
     // ¿Los corners están cerca de las esquinas del rectángulo delimitador?
@@ -164,7 +156,7 @@ class ShapeDetector {
   static DetectedShape? _detectCircle(List<StrokePoint> points) {
     if (points.length < 20) return null;
 
-    final rect = _boundingRect(points);
+    final rect = boundingBoxFromPoints(points);
     if (rect.shortestSide < 30) return null;
 
     final center = rect.center;
@@ -220,16 +212,5 @@ class ShapeDetector {
     return corners;
   }
 
-  /// Rectángulo delimitador de los puntos.
-  static Rect _boundingRect(List<StrokePoint> points) {
-    var left = double.infinity, top = double.infinity;
-    var right = double.negativeInfinity, bottom = double.negativeInfinity;
-    for (final p in points) {
-      if (p.x < left) left = p.x;
-      if (p.y < top) top = p.y;
-      if (p.x > right) right = p.x;
-      if (p.y > bottom) bottom = p.y;
-    }
-    return Rect.fromLTRB(left, top, right, bottom);
-  }
+
 }

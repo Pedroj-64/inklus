@@ -1,3 +1,4 @@
+import '../../constants.dart';
 import 'package:flutter/material.dart';
 
 import '../../logic/canvas_controller.dart';
@@ -37,8 +38,13 @@ class _StrokeOptionsSheet extends StatelessWidget {
           ToolType.pen: 'Lapicero',
           ToolType.pencil: 'Lápiz',
           ToolType.highlighter: 'Resaltador',
+          ToolType.calligraphy: 'Caligrafía',
+          ToolType.brush: 'Pincel',
           ToolType.eraser: 'Borrador',
           ToolType.select: 'Selección',
+          ToolType.lasso: 'Lazo',
+          ToolType.bucket: 'Relleno',
+          ToolType.text: 'Texto',
         };
 
         return Padding(
@@ -75,6 +81,18 @@ class _StrokeOptionsSheet extends StatelessWidget {
                   ),
                 )
               else ...[
+                // Tamaño rápido (presets estilo Krita)
+                const Text(
+                  'Tamaño rápido',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                _QuickSizeRow(
+                  currentSize: controller.toolSize,
+                  onSelected: controller.setToolSize,
+                  tool: tool,
+                ),
+                const SizedBox(height: 16),
                 _OptionSlider(
                   label: 'Delgadez (thinning)',
                   value: controller.thinning,
@@ -140,7 +158,7 @@ class _OptionSlider extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, size: 18, color: const Color(0xFF3B82F6)),
+            Icon(icon, size: 18, color: kAccentColor),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -184,6 +202,88 @@ class _OptionSlider extends StatelessWidget {
           onChanged: onChanged,
         ),
       ],
+    );
+  }
+}
+
+/// Fila de tamaños rápidos (presets estilo Krita).
+class _QuickSizeRow extends StatelessWidget {
+  final double currentSize;
+  final ValueChanged<double> onSelected;
+  final ToolType tool;
+
+  const _QuickSizeRow({
+    required this.currentSize,
+    required this.onSelected,
+    required this.tool,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Presets adaptados por herramienta
+    List<(double, String)> presets;
+    if (tool == ToolType.highlighter) {
+      presets = [(8.0, 'Fino'), (16.0, 'Medio'), (24.0, 'Grueso'), (40.0, 'Extra')];
+    } else if (tool == ToolType.pen) {
+      presets = [(1.0, '0.5'), (2.0, '1.0'), (3.5, '2.0'), (5.0, '3.0'), (8.0, '5.0')];
+    } else if (tool == ToolType.pencil) {
+      presets = [(1.0, 'HB'), (2.0, '2B'), (4.0, '4B'), (7.0, '6B')];
+    } else if (tool == ToolType.eraser) {
+      presets = [(4.0, 'Pequeño'), (12.0, 'Medio'), (24.0, 'Grande'), (48.0, 'Extra')];
+    } else {
+      presets = [(2.0, 'Fino'), (5.0, 'Medio'), (10.0, 'Grueso'), (20.0, 'Extra')];
+    }
+
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: presets.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final (size, label) = presets[index];
+          final isSelected = (currentSize - size).abs() < 0.5;
+          return GestureDetector(
+            onTap: () => onSelected(size),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? kAccentColor.withAlpha(20)
+                    : Colors.grey.withAlpha(20),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isSelected ? kAccentColor : Colors.black12,
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Círculo proporcional al tamaño
+                  Container(
+                    width: size.clamp(4.0, 20.0),
+                    height: size.clamp(4.0, 20.0),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isSelected ? kAccentColor : Colors.black45,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      color: isSelected ? kAccentColor : Colors.black54,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

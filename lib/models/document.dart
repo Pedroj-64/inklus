@@ -14,6 +14,9 @@ class Document {
   /// Color de portada del cuaderno (ARGB). null = sin color asignado.
   int? colorValue;
 
+  /// Etiquetas del cuaderno (para organización y filtrado).
+  List<String> tags;
+
   Document({
     required this.id,
     required this.title,
@@ -21,7 +24,8 @@ class Document {
     required this.updatedAt,
     required this.pages,
     this.colorValue,
-  });
+    List<String>? tags,
+  })  : tags = tags ?? [];
 
   factory Document.newBlank({String? id, String? title}) => Document(
         id: id ?? 'doc_${DateTime.now().microsecondsSinceEpoch}',
@@ -30,6 +34,7 @@ class Document {
         updatedAt: DateTime.now(),
         pages: [Page.blank()],
         colorValue: null,
+        tags: [],
       );
 
   factory Document.fromJson(Map<String, dynamic> json) => Document(
@@ -45,6 +50,9 @@ class Document {
             .map((p) => Page.fromJson(p as Map<String, dynamic>))
             .toList(),
         colorValue: (json['color'] as num?)?.toInt(),
+        tags: (json['tags'] as List? ?? [])
+            .map((t) => t as String)
+            .toList(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -54,5 +62,6 @@ class Document {
         'updatedAt': updatedAt.toIso8601String(),
         'pages': pages.map((p) => p.toJson()).toList(),
         if (colorValue != null) 'color': colorValue,
+        if (tags.isNotEmpty) 'tags': tags,
       };
 }

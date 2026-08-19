@@ -1,7 +1,9 @@
+import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart' hide Page;
 
+import '../../constants.dart';
 import '../../logic/stroke_engine.dart';
 import '../../models/image_item.dart';
 import '../../models/page.dart';
@@ -9,13 +11,11 @@ import '../../models/stroke.dart';
 import '../../models/template.dart';
 import '../../models/text_item.dart';
 
-/// Colores de papel por defecto (tema claro).
-const paperColor = Color(0xFFFEFDF9);
-const deskColor = Color(0xFFEFEDE8);
-
-/// Colores de papel (tema oscuro).
-const paperColorDark = Color(0xFF2C2C2C);
-const deskColorDark = Color(0xFF1A1B1E);
+// Re-exportar constantes para compatibilidad con archivos que importan world_painter.
+const paperColor = kPaperColorLight;
+const deskColor = kDeskColorLight;
+const paperColorDark = kPaperColorDark;
+const deskColorDark = kDeskColorDark;
 
 /// Pinta el "mundo" (plantilla + imágenes + trazos) dentro de
 /// [visibleWorldRect].
@@ -44,8 +44,8 @@ void paintWorld(
   // ---- Fondo general (omitido si omitTemplate) ----
   if (!omitTemplate) {
     final bg = isDark
-        ? (template.isFinite ? deskColorDark : paperColorDark)
-        : (template.isFinite ? deskColor : paperColor);
+        ? (template.isFinite ? kDeskColorDark : kPaperColorDark)
+        : (template.isFinite ? kDeskColorLight : kPaperColorLight);
     canvas.drawRect(visibleWorldRect, Paint()..color = bg);
   }
 
@@ -158,7 +158,7 @@ void _drawSheet(Canvas canvas, Size sheetSize, Page page, {ui.Image? image, bool
   );
   final path = Path()..addRRect(RRect.fromRectAndRadius(sheetRect, const Radius.circular(4)));
   canvas.drawShadow(path, Colors.black26, 10, false);
-  canvas.drawPath(path, Paint()..color = isDark ? paperColorDark : paperColor);
+  canvas.drawPath(path, Paint()..color = isDark ? kPaperColorDark : kPaperColorLight);
   if (image != null) {
     canvas.drawImageRect(
       image,
@@ -261,7 +261,57 @@ void _paintStroke(Canvas canvas, Stroke stroke) {
       ..color = StrokeEngine.paintColor(stroke)
       ..style = PaintingStyle.fill,
   );
+
+  // Si es una flecha, dibuja la cabeza triangular al final.
+  if (stroke.shapeType == 'arrow' && stroke.points.length >= 2) {
+    _drawArrowHead(canvas, stroke);
+  }
 }
+
+/// Dibuja la cabeza de una flecha al final del trazo.
+void _drawArrowHead(Canvas canvas, Stroke stroke) {
+  final first = stroke.points.first.offset;
+  final last = stroke.points.last.offset;
+  final dir = last - first;
+  if (dir.distance < 10) return;
+
+  final headLength = stroke.size * 3.5; // longitud de la punta
+  final headWidth = stroke.size * 2.5;
+  final angle = dir.direction;
+
+  // Base de la punta (punto detrás de la punta).
+  final base = last - Offset(cos(angle), sin(angle)) * headLength;
+  final perp = Offset(-sin(angle), cos(angle));
+  final left = base + perp * (headWidth / 2);
+  final right = base - perp * (headWidth / 2);
+
+  final arrowPath = Path()
+    ..moveTo(last.dx, last.dy)
+    ..lineTo(left.dx, left.dy)
+    ..lineTo(right.dx, right.dy)
+    ..close();
+
+  canvas.drawPath(
+    arrowPath,
+    Paint()
+      ..color = stroke.color
+      ..style = PaintingStyle.fill,
+  );
+}
+
+/// Paints reutilizados para selección de imágenes (evita alloc por frame).
+final Paint _selectionBorderPaint = Paint()
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = 2.5
+  ..color = kAccentColor;
+final Paint _selectionHandleFillPaint = Paint()..color = kAccentColor;
+final Paint _selectionHandleStrokePaint = Paint()
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = 2
+  ..color = Colors.white;
+final Paint _selectionLinePaint = Paint()
+  ..color = kAccentColor
+  ..strokeWidth = 2;
 
 void _drawSelection(Canvas canvas, ImageItem item, double handleSize) {
   final rect = item.rect;
@@ -273,37 +323,27 @@ void _drawSelection(Canvas canvas, ImageItem item, double handleSize) {
     canvas.rotate(item.rotation);
     canvas.drawRect(
       Rect.fromCenter(center: Offset.zero, width: rect.width, height: rect.height),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5
-        ..color = const Color(0xFF3B82F6),
+      _selectionBorderPaint,
     );
     // Asa de redimensionado (esquina inferior derecha en espacio local).
     final handleCenter = Offset(rect.width / 2, rect.height / 2);
-    canvas.drawCircle(handleCenter, r, Paint()..color = const Color(0xFF3B82F6));
-    canvas.drawCircle(handleCenter, r, Paint()
-      ..style = PaintingStyle.stroke..strokeWidth = 2..color = Colors.white);
+    canvas.drawCircle(handleCenter, r, _selectionHandleFillPaint);
+    canvas.drawCircle(handleCenter, r, _selectionHandleStrokePaint);
     // Asa de rotación (centro superior).
     final rotHandle = Offset(0, -handleSize * 1.5);
-    canvas.drawLine(Offset(0, -rect.height / 2), rotHandle,
-      Paint()..color = const Color(0xFF3B82F6)..strokeWidth = 2);
-    canvas.drawCircle(rotHandle, r, Paint()..color = const Color(0xFF3B82F6));
-    canvas.drawCircle(rotHandle, r, Paint()
-      ..style = PaintingStyle.stroke..strokeWidth = 2..color = Colors.white);
+    canvas.drawLine(Offset(0, -rect.height / 2), rotHandle, _selectionLinePaint);
+    canvas.drawCircle(rotHandle, r, _selectionHandleFillPaint);
+    canvas.drawCircle(rotHandle, r, _selectionHandleStrokePaint);
     canvas.restore();
   } else {
-    canvas.drawRect(rect, Paint()
-      ..style = PaintingStyle.stroke..strokeWidth = 2.5..color = const Color(0xFF3B82F6));
+    canvas.drawRect(rect, _selectionBorderPaint);
     final handleCenter = rect.bottomRight;
-    canvas.drawCircle(handleCenter, r, Paint()..color = const Color(0xFF3B82F6));
-    canvas.drawCircle(handleCenter, r, Paint()
-      ..style = PaintingStyle.stroke..strokeWidth = 2..color = Colors.white);
+    canvas.drawCircle(handleCenter, r, _selectionHandleFillPaint);
+    canvas.drawCircle(handleCenter, r, _selectionHandleStrokePaint);
     final rotHandle = Offset(rect.center.dx, rect.top - handleSize * 1.5);
-    canvas.drawLine(rect.topCenter, rotHandle,
-      Paint()..color = const Color(0xFF3B82F6)..strokeWidth = 2);
-    canvas.drawCircle(rotHandle, r, Paint()..color = const Color(0xFF3B82F6));
-    canvas.drawCircle(rotHandle, r, Paint()
-      ..style = PaintingStyle.stroke..strokeWidth = 2..color = Colors.white);
+    canvas.drawLine(rect.topCenter, rotHandle, _selectionLinePaint);
+    canvas.drawCircle(rotHandle, r, _selectionHandleFillPaint);
+    canvas.drawCircle(rotHandle, r, _selectionHandleStrokePaint);
   }
 }
 
@@ -403,7 +443,7 @@ void _drawDotGrid(Canvas canvas, Rect visible, PageTemplate template) {
 }
 
 /// Rectángulo de contenido de una página (para exportar lienzos infinitos).
-Rect contentBounds(Page page, {double padding = 100}) {
+Rect contentBounds(Page page, {double padding = kExportContentPadding}) {
   var bounds = Rect.zero;
   var hasContent = false;
   for (final s in page.strokes) {

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'constants.dart';
 import 'ui/notebook_library.dart';
+import 'ui/onboarding_screen.dart';
+import 'ui/settings_screen.dart';
 
 /// Widget raíz de Inklus.
 ///
@@ -15,6 +18,18 @@ class InklusApp extends StatefulWidget {
 
 class _InklusAppState extends State<InklusApp> {
   ThemeMode _themeMode = ThemeMode.system;
+  bool _showOnboarding = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOnboarding();
+  }
+
+  Future<void> _checkOnboarding() async {
+    final shouldShow = await OnboardingScreen.shouldShow();
+    if (mounted) setState(() => _showOnboarding = shouldShow);
+  }
 
   void _toggleTheme() {
     setState(() {
@@ -27,11 +42,11 @@ class _InklusAppState extends State<InklusApp> {
   @override
   Widget build(BuildContext context) {
     final lightScheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF3B82F6),
+      seedColor: kAccentColor,
       brightness: Brightness.light,
     );
     final darkScheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF3B82F6),
+      seedColor: kAccentColor,
       brightness: Brightness.dark,
     );
     return MaterialApp(
@@ -40,17 +55,32 @@ class _InklusAppState extends State<InklusApp> {
       theme: ThemeData(
         colorScheme: lightScheme,
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFEFEDE8),
+        scaffoldBackgroundColor: kScaffoldLight,
         visualDensity: VisualDensity.comfortable,
       ),
       darkTheme: ThemeData(
         colorScheme: darkScheme,
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFF1A1B1E),
+        scaffoldBackgroundColor: kScaffoldDark,
         visualDensity: VisualDensity.comfortable,
       ),
       themeMode: _themeMode,
-      home: NotebookLibraryScreen(onToggleTheme: _toggleTheme),
+      home: _showOnboarding
+          ? OnboardingScreen(
+              onDone: () => setState(() => _showOnboarding = false),
+            )
+          : NotebookLibraryScreen(
+              onToggleTheme: _toggleTheme,
+              onOpenSettings: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SettingsScreen(
+                      onToggleTheme: _toggleTheme,
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }

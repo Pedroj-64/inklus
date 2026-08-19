@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/document.dart';
 import '../models/image_item.dart';
+import '../models/note.dart';
 import '../models/page.dart';
 
 /// Formato propietario **.inklus**: contenedor autocontenido de un cuaderno.
@@ -174,4 +175,37 @@ class InklusFormat {
   static String _basename(String path) => path.split('/').last;
 
   static String _embedKey(String name) => '$scheme$_imagesPrefix$name';
+
+  // -------------------------------------------------------------------------
+  // Variantes para Note (nuevo formato)
+  // -------------------------------------------------------------------------
+
+  /// Serializa un Note al formato .inklus (misma lógica que exportBytes).
+  static Future<Uint8List> exportNoteBytes(Note note) async {
+    // Un Note tiene la misma estructura que un Document, así que reusamos
+    // la lógica existente construyendo un Document temporal.
+    final doc = Document(
+      id: note.id,
+      title: note.title,
+      createdAt: note.createdAt,
+      updatedAt: note.updatedAt,
+      pages: note.pages,
+    );
+    return exportBytes(doc);
+  }
+
+  /// Importa un .inklus y devuelve un Note restaurado.
+  static Future<Note> importNoteBytes(
+    Uint8List bytes, {
+    Directory? extractTo,
+  }) async {
+    final doc = await importBytes(bytes, extractTo: extractTo);
+    return Note(
+      id: doc.id,
+      title: doc.title,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+      pages: doc.pages,
+    );
+  }
 }

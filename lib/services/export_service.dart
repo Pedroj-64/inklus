@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart' hide Page;
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -10,6 +11,7 @@ import '../models/document.dart';
 import '../models/page.dart';
 import '../models/stroke.dart';
 import '../ui/canvas/world_painter.dart';
+import 'pptx_builder.dart';
 
 /// Opciones de exportación configurables por el usuario.
 class ExportOptions {
@@ -48,7 +50,8 @@ class ExportOptions {
       ExportOptions(
         maxDimension: maxDimension ?? this.maxDimension,
         region: region ?? this.region,
-        transparentBackground: transparentBackground ?? this.transparentBackground,
+        transparentBackground:
+            transparentBackground ?? this.transparentBackground,
         strokesOnly: strokesOnly ?? this.strokesOnly,
       );
 }
@@ -258,5 +261,35 @@ class ExportService {
         '${r.toRadixString(16).padLeft(2, '0')}'
         '${g.toRadixString(16).padLeft(2, '0')}'
         '${b.toRadixString(16).padLeft(2, '0')}';
+  }
+
+  // -------------------------------------------------------------------------
+  // PowerPoint (.pptx)
+  // -------------------------------------------------------------------------
+
+  /// Exporta el cuaderno completo como un archivo .pptx.
+  ///
+  /// Cada página se renderiza como imagen PNG y se inserta como una
+  /// diapositiva. El resultado es un archivo PPTX válido que se puede
+  /// abrir en PowerPoint, Google Slides o Keynote.
+  static Future<Uint8List> renderNotebookPptx(
+    Document document, {
+    required Map<String, ui.Image> imageCache,
+    ExportOptions options = ExportOptions.defaults,
+  }) async {
+    // Renderizar cada página como PNG.
+    final slideImages = <Uint8List>[];
+    for (final page in document.pages) {
+      final png = await renderPagePng(
+        page,
+        sheetSize: page.template.sheetSize,
+        imageCache: imageCache,
+        options: options,
+      );
+      slideImages.add(png);
+    }
+
+    // Delega al builder externo (pptx_builder.dart).
+    return buildPptx(slideImages, document.title);
   }
 }

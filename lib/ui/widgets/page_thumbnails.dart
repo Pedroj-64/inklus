@@ -1,3 +1,4 @@
+import '../../constants.dart';
 import 'package:flutter/material.dart' hide Page;
 import 'package:flutter/services.dart';
 
@@ -13,11 +14,13 @@ import '../../services/image_service.dart';
 class PageThumbnailsStrip extends StatefulWidget {
   final CanvasController controller;
   final ImageService imageService;
+  final VoidCallback? onToggle;
 
   const PageThumbnailsStrip({
     super.key,
     required this.controller,
     required this.imageService,
+    this.onToggle,
   });
 
   @override
@@ -72,11 +75,26 @@ class _PageThumbnailsStripState extends State<PageThumbnailsStrip> {
       builder: (context, _) {
         final pages = _c.pages;
         final current = _c.pageIndex;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Container(
           height: 110,
-          color: Colors.white,
+          color: isDark ? kSurfaceDark : Colors.white,
           child: Row(
             children: [
+              // Botón colapsar
+              GestureDetector(
+                onTap: widget.onToggle,
+                child: Container(
+                  width: 28,
+                  margin: const EdgeInsets.symmetric(vertical: 32),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF3A3A3A) : const Color(0xFFF5F5F5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.keyboard_arrow_down, size: 18,
+                      color: isDark ? Colors.white54 : Colors.black54),
+                ),
+              ),
               // Botón duplicar página
               _ActionChip(
                 icon: Icons.copy_outlined,
@@ -234,15 +252,17 @@ class _PageThumb extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
                     color: isCurrent
-                        ? const Color(0xFF3B82F6)
+                        ? kAccentColor
                         : Colors.black12,
                     width: isCurrent ? 2.5 : 1,
                   ),
-                  color: const Color(0xFFF1F0EC),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF333333)
+                      : const Color(0xFFF1F0EC),
                   boxShadow: [
                     if (isCurrent)
                       BoxShadow(
-                        color: const Color(0xFF3B82F6).withAlpha(40),
+                        color: kAccentColor.withAlpha(40),
                         blurRadius: 6,
                         spreadRadius: 1,
                       ),
@@ -261,9 +281,9 @@ class _PageThumb extends StatelessWidget {
                         );
                       }
                       if (snapshot.hasError) {
-                        return const Icon(
+                        return Icon(
                           Icons.broken_image_outlined,
-                          color: Colors.black26,
+                          color: Theme.of(context).brightness == Brightness.dark ? Colors.white24 : Colors.black26,
                           size: 24,
                         );
                       }
@@ -289,7 +309,7 @@ class _PageThumb extends StatelessWidget {
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                     decoration: BoxDecoration(
                       color: isCurrent
-                          ? const Color(0xFF3B82F6)
+                          ? kAccentColor
                           : Colors.black54,
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -356,10 +376,13 @@ class _ActionChip extends StatelessWidget {
           width: 40,
           margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 32),
           decoration: BoxDecoration(
-            color: const Color(0xFFF5F5F5),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF3A3A3A)
+                : const Color(0xFFF5F5F5),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, size: 20, color: Colors.black54),
+          child: Icon(icon, size: 20,
+              color: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54),
         ),
       ),
     );

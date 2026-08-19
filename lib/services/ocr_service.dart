@@ -6,6 +6,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:path_provider/path_provider.dart';
 
 import '../models/page.dart';
+import '../models/stroke.dart';
 import 'export_service.dart';
 import 'image_service.dart';
 
@@ -118,5 +119,32 @@ class OcrService {
         await file.delete();
       } catch (_) {}
     }
+  }
+
+  /// Reconoce el texto de una lista específica de trazos (on-demand).
+  ///
+  /// C8: Renderiza solo los trazos dados a un PNG temporal y ejecuta OCR.
+  /// Útil para reconocer la última acción de escritura sin procesar toda
+  /// la página. Devuelve el texto reconocido o string vacío.
+  static Future<OcrResult> recognizeStrokes(
+    List<Stroke> strokes, {
+    required ui.Size sheetSize,
+  }) async {
+    if (!isSupported) {
+      throw UnsupportedError(
+        'OCR solo está disponible en Android e iOS.',
+      );
+    }
+    if (strokes.isEmpty) return const OcrResult(text: '', blocks: []);
+
+    // Crear una página temporal solo con estos trazos.
+    final tempPage = Page.blank(name: 'ocr_temp');
+    tempPage.strokes.addAll(strokes);
+
+    return recognizeText(
+      tempPage,
+      sheetSize: sheetSize,
+      imageCache: {},
+    );
   }
 }

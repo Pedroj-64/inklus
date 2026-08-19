@@ -8,6 +8,8 @@ enum ToolType {
   pen, // lapicero: trazo uniforme, filo definido
   pencil, // lápiz: grosor variable según presión
   highlighter, // resaltador: trazo ancho y translúcido
+  calligraphy, // caligrafía: grosor variable según ángulo
+  brush, // pincel: trazo suave y orgánico
   eraser, // borrador
   select, // mover/redimensionar imágenes (no genera trazos)
   lasso, // selección de trazos con lazo
@@ -62,6 +64,9 @@ class Stroke {
   /// Índice de la capa a la que pertenece este trazo (0 = capa por defecto).
   final int layerIndex;
 
+  /// Tipo de forma detectada (line, arrow, rectangle, circle) o null.
+  final String? shapeType;
+
   Stroke({
     required this.id,
     required this.points,
@@ -70,6 +75,7 @@ class Stroke {
     required this.size,
     this.fillColorValue,
     this.layerIndex = 0,
+    this.shapeType,
   });
 
   Color get color => Color(colorValue);
@@ -83,6 +89,8 @@ class Stroke {
     int? fillColorValue,
     bool clearFillColor = false,
     int? layerIndex,
+    String? shapeType,
+    bool clearShapeType = false,
   }) =>
       Stroke(
         id: id ?? this.id,
@@ -92,6 +100,7 @@ class Stroke {
         size: size ?? this.size,
         fillColorValue: clearFillColor ? null : (fillColorValue ?? this.fillColorValue),
         layerIndex: layerIndex ?? this.layerIndex,
+        shapeType: clearShapeType ? null : (shapeType ?? this.shapeType),
       );
 
   factory Stroke.fromJson(Map<String, dynamic> json) => Stroke(
@@ -104,6 +113,7 @@ class Stroke {
         size: (json['size'] as num).toDouble(),
         fillColorValue: (json['fillColor'] as num?)?.toInt(),
         layerIndex: (json['layer'] as num?)?.toInt() ?? 0,
+        shapeType: json['shape'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -114,5 +124,6 @@ class Stroke {
         'size': size,
         if (fillColorValue != null) 'fillColor': fillColorValue,
         if (layerIndex != 0) 'layer': layerIndex,
+        if (shapeType != null) 'shape': shapeType,
       };
 }

@@ -122,11 +122,13 @@ void main() {
 
       expect(metas.length, 1);
       expect(metas.first.title, 'Legacy');
-      // El legacy desaparece y el documento vive en documents/<id>.json.
+      // El legacy desaparece tras la migración.
       expect(legacy.existsSync(), isFalse);
-      final loaded = await storage.load(doc.id);
-      expect(loaded, isNotNull);
-      expect(loaded!.pages.length, 1);
+      // El contenido vive en notebooks/<id>.json + notes/note_<id>.json
+      final nbFile = File('${tempDir.path}/notebooks/${doc.id}.json');
+      expect(nbFile.existsSync(), isTrue);
+      final noteFile = File('${tempDir.path}/notes/note_${doc.id}.json');
+      expect(noteFile.existsSync(), isTrue);
     });
 
     test('sin datos previos el índice está vacío y no migra nada', () async {

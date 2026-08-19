@@ -7,6 +7,7 @@ import 'package:inklus/models/image_item.dart';
 import 'package:inklus/models/page.dart';
 import 'package:inklus/models/stroke.dart';
 import 'package:inklus/models/template.dart';
+import 'package:inklus/models/note.dart';
 import 'package:inklus/services/inklus_format.dart';
 
 void main() {
@@ -104,6 +105,74 @@ void main() {
         ),
         throwsA(isA<FormatException>()),
       );
+    });
+
+    // --- A12: Tests de Note ---
+
+    test('exportNoteBytes/importNoteBytes roundtrip preserva contenido', () async {
+      final page = Page.blank(name: 'Nota P1');
+      page.strokes.add(Stroke(
+        id: 'st_note',
+        points: const [StrokePoint(0, 0, 0.5), StrokePoint(20, 30, 0.7)],
+        tool: ToolType.calligraphy,
+        colorValue: 0xFF8B5CF6,
+        size: 5,
+      ));
+      page.images.add(ImageItem(
+        id: 'img_note',
+        localPath: imageFile.path,
+        x: 50,
+        y: 50,
+        width: 100,
+        height: 80,
+      ));
+
+      final note = Note(
+        id: 'note_fmt',
+        title: 'Nota de prueba',
+        createdAt: DateTime(2026, 8, 19),
+        updatedAt: DateTime(2026, 8, 19, 15),
+        pages: [page],
+      );
+
+      final bytes = await InklusFormat.exportNoteBytes(note);
+      expect(bytes, isNotEmpty);
+
+      final restored = await InklusFormat.importNoteBytes(
+        bytes,
+        extractTo: extractDir,
+      );
+
+      expect(restored.id, 'note_fmt');
+      expect(restored.title, 'Nota de prueba');
+      expect(restored.pages.length, 1);
+      expect(restored.pages.first.name, 'Nota P1');
+      expect(restored.pages.first.strokes.length, 1);
+      expect(restored.pages.first.strokes.first.tool, ToolType.calligraphy);
+
+      // Imagen se restaura a archivo local
+      final img = restored.pages.first.images.first;
+      expect(img.localPath, isNot(contains('inklus://')));
+      expect(File(img.localPath).existsSync(), isTrue);
+    });
+
+    test('exportNoteBytes genera un .inklus válido para importBytes (compat)', () async {
+      // Un Note exportado debe poder importarse también con importBytes (Document)
+      final note = Note(
+        id: 'note_compat',
+        title: 'Compat',
+        createdAt: DateTime(2026, 1, 1),
+        updatedAt: DateTime(2026, 1, 1),
+        pages: [Page.blank()],
+      );
+
+      final bytes = await InklusFormat.exportNoteBytes(note);
+      final doc = await InklusFormat.importBytes(bytes, extractTo: extractDir);
+
+      // El Document importado tiene el mismo id y contenido
+      expect(doc.id, 'note_compat');
+      expect(doc.title, 'Compat');
+      expect(doc.pages.length, 1);
     });
   });
 }

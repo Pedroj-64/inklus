@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/storage_service.dart';
+import '../utils/date_utils.dart' as date_util;
 
 /// Pantalla de papelera: muestra los cuadernos eliminados y permite
 /// recuperarlos o eliminarlos definitivamente.
@@ -103,10 +104,7 @@ class _TrashScreenState extends State<TrashScreen> {
   Widget build(BuildContext context) {
     final metas = _trashMetas;
     return Scaffold(
-      backgroundColor: const Color(0xFFEFEDE8),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 2,
         title: const Row(
           children: [
             Icon(Icons.delete_outline, color: Color(0xFFD32F2F)),
@@ -135,6 +133,7 @@ class _TrashScreenState extends State<TrashScreen> {
   }
 
   Widget _buildEmptyState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -142,7 +141,7 @@ class _TrashScreenState extends State<TrashScreen> {
           Icon(
             Icons.delete_sweep_outlined,
             size: 72,
-            color: Colors.black.withValues(alpha: 0.25),
+            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.25),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -150,9 +149,9 @@ class _TrashScreenState extends State<TrashScreen> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Los cuadernos que elimines aparecerán aquí.',
-            style: TextStyle(color: Colors.black54),
+            style: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
           ),
         ],
       ),
@@ -175,8 +174,8 @@ class _TrashScreenState extends State<TrashScreen> {
               overflow: TextOverflow.ellipsis,
             ),
             subtitle: Text(
-              _deletedAgo(meta.updatedAt),
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              date_util.deletedAgo(meta.updatedAt),
+              style: TextStyle(fontSize: 12, color: Theme.of(context).textTheme.bodySmall?.color),
             ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -199,16 +198,6 @@ class _TrashScreenState extends State<TrashScreen> {
     );
   }
 
-  String _deletedAgo(DateTime time) {
-    final diff = DateTime.now().difference(time);
-    if (diff.inMinutes < 1) return 'eliminado ahora';
-    if (diff.inMinutes < 60) return 'eliminado hace ${diff.inMinutes} min';
-    if (diff.inHours < 24) return 'eliminado hace ${diff.inHours} h';
-    if (diff.inDays < 7) return 'eliminado hace ${diff.inDays} días';
-    final t = time.toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return 'eliminado ${two(t.day)}/${two(t.month)}/${t.year}';
-  }
 }
 
 /// Miniatura simple en la papelera (sin renderizar la página).
@@ -232,7 +221,7 @@ class _TrashThumb extends StatelessWidget {
       ),
       child: Icon(
         Icons.description_outlined,
-        color: hasColor ? color : Colors.black38,
+        color: hasColor ? color : (Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black38),
         size: 24,
       ),
     );

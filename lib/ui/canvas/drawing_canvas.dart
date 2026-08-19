@@ -3,7 +3,9 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide Page;
+import 'package:flutter/services.dart';
 
+import '../../constants.dart';
 import '../../logic/canvas_controller.dart';
 import '../../logic/snap_guides.dart';
 import '../../logic/stroke_engine.dart';
@@ -12,7 +14,29 @@ import '../../models/page.dart';
 import '../../models/stroke.dart';
 import '../../services/image_service.dart';
 import '../widgets/text_edit_overlay.dart';
+import 'canvas_overlays.dart';
 import 'world_painter.dart';
+
+// Paints reutilizados para la capa activa (evitan allocations por frame).
+final Paint _eraserCursorFillPaint = Paint()
+  ..color = const Color(0x40FFFFFF)
+  ..style = PaintingStyle.fill;
+final Paint _eraserCursorStrokePaint = Paint()
+  ..color = const Color(0x99000000)
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = 1.5;
+final Paint _cursorPaint = Paint()
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = 1;
+final Paint _lassoPaint = Paint()
+  ..color = kAccentColor
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = 2.5
+  ..strokeCap = StrokeCap.round
+  ..strokeJoin = StrokeJoin.round;
+final Paint _selectionFillPaint = Paint()
+  ..color = kAccentColor.withValues(alpha: 0.25)
+  ..style = PaintingStyle.fill;
 
 /// ---------------------------------------------------------------------------
 /// CAPA CONFIRMADA (base)
@@ -100,14 +124,12 @@ class ActiveLayerPainter extends CustomPainter {
     // Trazo en progreso.
     if (active != null && active.points.length >= 2) {
       final path = strokeToPath(active.points, active.tool, active.size);
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = active.tool == ToolType.highlighter
-              ? active.color.withValues(alpha: 0.38)
-              : active.color
-          ..style = PaintingStyle.fill,
-      );
+      final activePaint = Paint()
+        ..color = active.tool == ToolType.highlighter
+            ? active.color.withValues(alpha: 0.38)
+            : active.color
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(path, activePaint);
     }
 
     // Lazo en progreso (trazo punteado del lazo).
@@ -117,15 +139,8 @@ class ActiveLayerPainter extends CustomPainter {
       for (var i = 1; i < lassoPath.length; i++) {
         path.lineTo(lassoPath[i].dx, lassoPath[i].dy);
       }
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = const Color(0xFF3B82F6)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.5 / scale
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round,
-      );
+      _lassoPaint.strokeWidth = 2.5 / scale;
+      canvas.drawPath(path, _lassoPaint);
     }
 
     // Trazos seleccionados con el lazo (resaltados).
@@ -135,12 +150,7 @@ class ActiveLayerPainter extends CustomPainter {
         final outline = StrokeEngine.outlineFor(stroke);
         if (outline.length < 3) continue;
         final path = Path()..addPolygon(outline, true);
-        canvas.drawPath(
-          path,
-          Paint()
-            ..color = const Color(0xFF3B82F6).withValues(alpha: 0.25)
-            ..style = PaintingStyle.fill,
-        );
+        canvas.drawPath(path, _selectionFillPaint);
       }
       // Dashed border around selected strokes (marching ants simplificado).
       if (selectedStrokes.isNotEmpty) {
@@ -157,18 +167,18 @@ class ActiveLayerPainter extends CustomPainter {
         final bounds = Rect.fromLTRB(left, top, right, bottom);
         if (!bounds.isEmpty) {
           final inflated = bounds.inflate(8 / scale);
-          _drawMarchingAnts(canvas, inflated, scale);
+          drawMarchingAnts(canvas, inflated, scale);
           // Handle de escala (esquina inferior derecha).
           final r = 11 / scale;
           canvas.drawCircle(inflated.bottomRight, r,
-            Paint()..color = const Color(0xFF3B82F6));
+            Paint()..color = kAccentColor);
           canvas.drawCircle(inflated.bottomRight, r, Paint()
             ..style = PaintingStyle.stroke..strokeWidth = 2 / scale..color = Colors.white);
           // Handle de rotación (centro superior).
           final rotH = Offset(inflated.center.dx, inflated.top - r * 3);
           canvas.drawLine(inflated.topCenter, rotH,
-            Paint()..color = const Color(0xFF3B82F6)..strokeWidth = 2 / scale);
-          canvas.drawCircle(rotH, r, Paint()..color = const Color(0xFF3B82F6));
+            Paint()..color = kAccentColor..strokeWidth = 2 / scale);
+          canvas.drawCircle(rotH, r, Paint()..color = kAccentColor);
           canvas.drawCircle(rotH, r, Paint()
             ..style = PaintingStyle.stroke..strokeWidth = 2 / scale..color = Colors.white);
         }
@@ -186,7 +196,7 @@ class ActiveLayerPainter extends CustomPainter {
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = 2.5 / scale
-            ..color = const Color(0xFF3B82F6),
+            ..color = kAccentColor,
         );
         // Asa de redimensionado (esquina inferior derecha).
         final handle = rect.bottomRight;
@@ -194,7 +204,7 @@ class ActiveLayerPainter extends CustomPainter {
         canvas.drawCircle(
           handle,
           r,
-          Paint()..color = const Color(0xFF3B82F6),
+          Paint()..color = kAccentColor,
         );
         canvas.drawCircle(
           handle,
@@ -213,13 +223,13 @@ class ActiveLayerPainter extends CustomPainter {
           rect.topCenter,
           rotHandle,
           Paint()
-            ..color = const Color(0xFF3B82F6)
+            ..color = kAccentColor
             ..strokeWidth = 2 / scale,
         );
         canvas.drawCircle(
           rotHandle,
           r,
-          Paint()..color = const Color(0xFF3B82F6),
+          Paint()..color = kAccentColor,
         );
         canvas.drawCircle(
           rotHandle,
@@ -233,11 +243,19 @@ class ActiveLayerPainter extends CustomPainter {
       }
     }
 
-    canvas.restore();
+    canvas.restore();      // ---- Regla virtual ----
+    if (controller.rulerEnabled) {
+      drawRuler(canvas, controller, size);
+    }
+
+    // ---- Lupa ----
+    if (controller.magnifierEnabled && controller.isDrawing) {
+      drawMagnifier(canvas, controller, size, imageCache);
+    }
 
     // ---- Guías magnéticas (snap) ----
     final guidePaint = Paint()
-      ..color = const Color(0xFF3B82F6).withValues(alpha: 0.6)
+      ..color = kAccentColor.withValues(alpha: 0.6)
       ..strokeWidth = 1.5 / scale
       ..style = PaintingStyle.stroke;
     for (final x in controller.snapVerticalGuides) {
@@ -252,73 +270,20 @@ class ActiveLayerPainter extends CustomPainter {
       final last = eraserPath.last;
       final screen = last * scale + translate;
       final radius = controller.eraserRadius * scale;
-      canvas.drawCircle(
-        screen,
-        radius,
-        Paint()
-          ..color = const Color(0x40FFFFFF)
-          ..style = PaintingStyle.fill,
-      );
-      canvas.drawCircle(
-        screen,
-        radius,
-        Paint()
-          ..color = const Color(0x99000000)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5,
-      );
+      canvas.drawCircle(screen, radius, _eraserCursorFillPaint);
+      canvas.drawCircle(screen, radius, _eraserCursorStrokePaint);
     } else if (active != null && active.points.isNotEmpty) {
       // Pequeño cursor que muestra el grosor actual de la punta.
       final last = active.points.last.offset;
       final screen = last * scale + translate;
       final r = (active.size * scale) / 2;
-      canvas.drawCircle(
-        screen,
-        r,
-        Paint()
-          ..color = active.color.withValues(alpha: 0.25)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
-      );
+      _cursorPaint.color = active.color.withValues(alpha: 0.25);
+      canvas.drawCircle(screen, r, _cursorPaint);
     }
   }
 
   @override
   bool shouldRepaint(ActiveLayerPainter oldDelegate) => true;
-
-  /// Dibuja un borde de "marching ants" (línea punteada animada).
-  void _drawMarchingAnts(Canvas canvas, Rect rect, double scale) {
-    final paint = Paint()
-      ..color = const Color(0xFF3B82F6)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2 / scale
-      ..strokeCap = StrokeCap.round;
-    final dashLength = 8.0 / scale;
-    final gapLength = 4.0 / scale;
-    final path = Path();
-    // Top
-    _addDashedLine(path, rect.topLeft, rect.topRight, dashLength, gapLength);
-    // Right
-    _addDashedLine(path, rect.topRight, rect.bottomRight, dashLength, gapLength);
-    // Bottom
-    _addDashedLine(path, rect.bottomRight, rect.bottomLeft, dashLength, gapLength);
-    // Left
-    _addDashedLine(path, rect.bottomLeft, rect.topLeft, dashLength, gapLength);
-    canvas.drawPath(path, paint);
-  }
-
-  void _addDashedLine(Path path, Offset start, Offset end, double dash, double gap) {
-    final length = (end - start).distance;
-    final dir = (end - start) / length;
-    var pos = 0.0;
-    while (pos < length) {
-      final p1 = start + dir * pos;
-      final p2 = start + dir * min(pos + dash, length);
-      path.moveTo(p1.dx, p1.dy);
-      path.lineTo(p2.dx, p2.dy);
-      pos += dash + gap;
-    }
-  }
 }
 
 /// ---------------------------------------------------------------------------
@@ -399,7 +364,44 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         }
         _ensureImagesDecoded();
 
-        return Listener(
+        return Focus(
+          autofocus: true,
+          onKeyEvent: (node, event) {
+            if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+              return KeyEventResult.ignored;
+            }
+            final ctrl = HardwareKeyboard.instance.isControlPressed ||
+                HardwareKeyboard.instance.isMetaPressed;
+            if (!ctrl) return KeyEventResult.ignored;
+
+            final key = event.logicalKey;
+
+            // C9: Ctrl+Z → deshacer
+            if (key == LogicalKeyboardKey.keyZ &&
+                !HardwareKeyboard.instance.isShiftPressed) {
+              if (widget.controller.canUndo) widget.controller.undo();
+              return KeyEventResult.handled;
+            }
+            // C9: Ctrl+Shift+Z / Ctrl+Y → rehacer
+            if ((key == LogicalKeyboardKey.keyZ &&
+                    HardwareKeyboard.instance.isShiftPressed) ||
+                key == LogicalKeyboardKey.keyY) {
+              if (widget.controller.canRedo) widget.controller.redo();
+              return KeyEventResult.handled;
+            }
+            // C9: Ctrl+C → copiar selección
+            if (key == LogicalKeyboardKey.keyC) {
+              widget.controller.copySelectedStrokes();
+              return KeyEventResult.handled;
+            }
+            // C9: Ctrl+V → pegar
+            if (key == LogicalKeyboardKey.keyV) {
+              widget.controller.pasteStrokes();
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
+          child: Listener(
           behavior: HitTestBehavior.opaque,
           onPointerDown: _onPointerDown,
           onPointerMove: _onPointerMove,
@@ -448,10 +450,11 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                   // Overlay de edición de texto.
                   TextEditOverlay(controller: widget.controller),
                 ],
-              ),
-            ),
-          ),
-        );
+              ),  // Stack
+            ),    // ClipRect
+          ),      // GestureDetector
+          ),      // Listener
+        );        // Focus + return
       },
     );
   }
