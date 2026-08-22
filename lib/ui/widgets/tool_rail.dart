@@ -47,10 +47,14 @@ class ToolRail extends StatelessWidget {
         return Icons.brush;
       case ToolType.brush:
         return Icons.format_paint;
+      case ToolType.marker:
+        return Icons.air;
+      case ToolType.spray:
+        return Icons.grain;
       case ToolType.eraser:
         return Icons.cleaning_services;
       case ToolType.lasso:
-        return Icons.score;
+        return Icons.timeline;
       case ToolType.bucket:
         return Icons.format_color_fill;
       case ToolType.text:
@@ -60,9 +64,9 @@ class ToolRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: controller,
-      builder: (context, _) {
+    return ValueListenableBuilder<int>(
+      valueListenable: controller.toolContextNotifier,
+      builder: (context, _, child) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
 
         if (collapsed) {
@@ -182,7 +186,8 @@ class _ExpandedRail extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 4),
@@ -230,6 +235,18 @@ class _ExpandedRail extends StatelessWidget {
               selected: controller.tool == ToolType.brush,
               onTap: () => controller.setTool(ToolType.brush),
             ),
+            _ToolButton(
+              icon: Icons.air,
+              tooltip: 'Marcador',
+              selected: controller.tool == ToolType.marker,
+              onTap: () => controller.setTool(ToolType.marker),
+            ),
+            _ToolButton(
+              icon: Icons.grain,
+              tooltip: 'Aerosol',
+              selected: controller.tool == ToolType.spray,
+              onTap: () => controller.setTool(ToolType.spray),
+            ),
             // Grupo: borrador y selección
             _ToolButton(
               icon: Icons.cleaning_services,
@@ -238,7 +255,7 @@ class _ExpandedRail extends StatelessWidget {
               onTap: () => controller.setTool(ToolType.eraser),
             ),
             _ToolButton(
-              icon: Icons.score,
+              icon: Icons.timeline,
               tooltip: 'Lazo',
               selected: controller.tool == ToolType.lasso,
               onTap: () => controller.setTool(ToolType.lasso),
@@ -308,6 +325,7 @@ class _ExpandedRail extends StatelessWidget {
             const SizedBox(height: 8),
           ],
         ),
+        ),
       ),
     );
   }
@@ -331,26 +349,31 @@ class _ToolButton extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final color =
         selected ? kAccentColor : (isDark ? Colors.white60 : ThemeColors.of(context).textSecondary);
-    return Tooltip(
-      message: tooltip,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: selected
-                ? (isDark ? kAccentDark : kAccentLight)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
+    return Semantics(
+      label: '$tooltip${selected ? ' (activa)' : ''}',
+      button: true,
+      selected: selected,
+      child: Tooltip(
+        message: tooltip,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: selected
+                  ? (isDark ? kAccentDark : kAccentLight)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
-              onTap: onTap,
-              child: Icon(icon, color: color, size: 22),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: onTap,
+                child: Icon(icon, color: color, size: 22),
+              ),
             ),
           ),
         ),

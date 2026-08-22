@@ -42,68 +42,110 @@ void paintWorld(
   final template = page.template;
 
   // ---- Fondo general (omitido si omitTemplate) ----
+  // El papel SIEMPRE se mantiene con su color propio (blanco / kPaperColorLight).
+  // Solo el "escritorio" alrededor de la hoja se oscurece en modo oscuro.
   if (!omitTemplate) {
     final bg = isDark
-        ? (template.isFinite ? kDeskColorDark : kPaperColorDark)
+        ? (template.isFinite ? kDeskColorDark : kPaperColorLight)
         : (template.isFinite ? kDeskColorLight : kPaperColorLight);
     canvas.drawRect(visibleWorldRect, Paint()..color = bg);
   }
 
-  // ---- Plantilla (omitida si omitTemplate) ----
+  // ---- Plantilla + contenido: recortado a la hoja si es finita ----
+  // Para plantillas finitas, TODO (patrón de la plantilla + imágenes +
+  // trazos) se recorta al rect de la hoja. Así el usuario ve claramente
+  // dónde puede escribir y dónde no.
+  //
+  // Excepción: _drawSheet (la hoja blanca con sombra) se dibuja ANTES
+  // del clip para que la sombra sea visible sobre el escritorio.
+  if (!omitTemplate && template.type == TemplateType.sheet) {
+    _drawSheet(canvas, sheetSize, page, isDark: isDark);
+  }
+  // Para custom finito sin imagen, también dibujar la hoja antes del clip.
+  if (!omitTemplate && template.type == TemplateType.custom && !template.infiniteFill) {
+    final img = template.imagePath == null ? null : imageCache[template.imagePath];
+    _drawSheet(canvas, sheetSize, page, image: img, isDark: isDark);
+  }
+
+  canvas.save();
+  final sheetRect = Rect.fromCenter(
+    center: Offset.zero,
+    width: sheetSize.width,
+    height: sheetSize.height,
+  );
+  if (template.isFinite && !omitTemplate) {
+    canvas.clipRect(sheetRect);
+  }
+
   if (!omitTemplate) {
     switch (template.type) {
       case TemplateType.blank:
-        break;
-      case TemplateType.sheet:
-        _drawSheet(canvas, sheetSize, page, isDark: isDark);
-        break;
-      case TemplateType.ruled:
-        _drawRuled(canvas, visibleWorldRect, template);
-        break;
-      case TemplateType.grid:
-        _drawGrid(canvas, visibleWorldRect, template);
-        break;
-      case TemplateType.custom:
-        final img = template.imagePath == null ? null : imageCache[template.imagePath];
-        if (img == null) {
-          if (template.infiniteFill) {
-            _drawGrid(canvas, visibleWorldRect, template);
-          } else {
-            _drawSheet(canvas, sheetSize, page, isDark: isDark);
-          }
-        } else if (template.infiniteFill) {
-          _drawTiledImage(canvas, visibleWorldRect, img);
-        } else {
-          _drawSheet(canvas, sheetSize, page, image: img, isDark: isDark);
+        // Para blank finito, dibujar el papel blanco dentro del clip.
+        if (template.isFinite) {
+          canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
         }
         break;
+      case TemplateType.sheet:
+        // Ya dibujado antes del clip (sombra visible).
+        // Aquí solo rellenar el rect blanco dentro del clip.
+        canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
+        break;
+      case TemplateType.ruled:
+        // Para ruled finito, primero dibujar fondo blanco.
+        if (template.isFinite) {
+          canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
+        }
+        _drawRuled(canvas, visibleWorldRect, template, isDark: isDark);
+        break;
+      case TemplateType.grid:
+        if (template.isFinite) {
+          canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
+        }
+        _drawGrid(canvas, visibleWorldRect, template, isDark: isDark);
+        break;
+      case TemplateType.custom:
+        // Ya dibujado antes del clip si es finito.
+        if (template.infiniteFill) {
+          final img = template.imagePath == null ? null : imageCache[template.imagePath];
+          if (img == null) {
+            _drawGrid(canvas, visibleWorldRect, template);
+          } else {
+            _drawTiledImage(canvas, visibleWorldRect, img);
+          }
+        }
+        // Para custom finito con imagen, el _drawSheet ya rellenó arriba.
+        break;
       case TemplateType.music:
-        _drawMusicStaff(canvas, visibleWorldRect, template);
+        if (template.isFinite) {
+          canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
+        }
+        _drawMusicStaff(canvas, visibleWorldRect, template, isDark: isDark);
         break;
       case TemplateType.planner:
-        _drawPlanner(canvas, visibleWorldRect, template);
+        if (template.isFinite) {
+          canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
+        }
+        _drawPlanner(canvas, visibleWorldRect, template, isDark: isDark);
         break;
       case TemplateType.habit:
-        _drawHabitTracker(canvas, visibleWorldRect, template);
+        if (template.isFinite) {
+          canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
+        }
+        _drawHabitTracker(canvas, visibleWorldRect, template, isDark: isDark);
         break;
       case TemplateType.dots:
-        _drawDotGrid(canvas, visibleWorldRect, template);
+        if (template.isFinite) {
+          canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
+        }
+        _drawDotGrid(canvas, visibleWorldRect, template, isDark: isDark);
         break;
     }
   }
 
-  // ---- Contenido: imágenes y trazos (recortado a la hoja si es finita) ----
-  canvas.save();
-  if (template.isFinite && !omitTemplate) {
-    final sheetRect = Rect.fromCenter(
-      center: Offset.zero,
-      width: sheetSize.width,
-      height: sheetSize.height,
-    );
-    canvas.clipRect(sheetRect);
-  }
+  // ---- Contenido: imágenes y trazos ----
+  // Para plantillas finitas, ya estamos dentro del clipRect de la hoja.
 
-  // Imágenes (omitidas si omitImages, respeta visibilidad de capa)
+  // Imágenes (omitidas si omitImages, respeta visibilidad y opacidad de capa)
   if (!omitImages) {
     for (final item in page.images) {
       // Respeta visibilidad de la capa.
@@ -111,6 +153,14 @@ void paintWorld(
       final img = imageCache[item.localPath];
       if (img == null) continue;
       canvas.save();
+      // Aplica opacidad de la capa via saveLayer.
+      if (item.layerIndex < page.layers.length &&
+          page.layers[item.layerIndex].opacity < 1.0) {
+        canvas.saveLayer(
+          Rect.zero,
+          Paint()..color = Colors.white.withValues(alpha: page.layers[item.layerIndex].opacity),
+        );
+      }
       canvas.translate(item.x, item.y);
       canvas.rotate(item.rotation);
       final dst = Rect.fromCenter(
@@ -131,16 +181,41 @@ void paintWorld(
     }
   }
 
-  // Trazos (respeta visibilidad de la capa)
+  // Trazos (respeta visibilidad y opacidad de la capa)
   for (final stroke in page.strokes) {
-    if (stroke.layerIndex < page.layers.length && !page.layers[stroke.layerIndex].visible) continue;
+    if (stroke.layerIndex < page.layers.length && !page.layers[stroke.layerIndex].visible) continue;      canvas.save();
+    if (stroke.layerIndex < page.layers.length &&
+        page.layers[stroke.layerIndex].opacity < 1.0) {
+      canvas.saveLayer(
+        Rect.zero,
+        Paint()..color = Colors.white.withValues(alpha: page.layers[stroke.layerIndex].opacity),
+      );
+    }
     _paintStroke(canvas, stroke);
+    if (stroke.layerIndex < page.layers.length &&
+        page.layers[stroke.layerIndex].opacity < 1.0) {
+      canvas.restore();
+    }
+    canvas.restore();
   }
 
-  // Cajas de texto (respeta visibilidad de la capa)
+  // Cajas de texto (respeta visibilidad y opacidad de la capa)
   for (final item in page.textItems) {
     if (item.layerIndex < page.layers.length && !page.layers[item.layerIndex].visible) continue;
+    canvas.save();
+    if (item.layerIndex < page.layers.length &&
+        page.layers[item.layerIndex].opacity < 1.0) {
+      canvas.saveLayer(
+        Rect.zero,
+        Paint()..color = Colors.white.withValues(alpha: page.layers[item.layerIndex].opacity),
+      );
+    }
     _paintTextItem(canvas, item);
+    if (item.layerIndex < page.layers.length &&
+        page.layers[item.layerIndex].opacity < 1.0) {
+      canvas.restore();
+    }
+    canvas.restore();
   }
 
   canvas.restore();
@@ -156,9 +231,17 @@ void _drawSheet(Canvas canvas, Size sheetSize, Page page, {ui.Image? image, bool
     width: sheetSize.width,
     height: sheetSize.height,
   );
-  final path = Path()..addRRect(RRect.fromRectAndRadius(sheetRect, const Radius.circular(4)));
-  canvas.drawShadow(path, Colors.black26, 10, false);
-  canvas.drawPath(path, Paint()..color = isDark ? kPaperColorDark : kPaperColorLight);
+  final rrect = RRect.fromRectAndRadius(sheetRect, const Radius.circular(6));
+  final path = Path()..addRRect(rrect);
+
+  // Sombra más pronunciada para que el papel se distinga claramente del
+  // escritorio, tanto en tema claro como oscuro.
+  canvas.drawShadow(path, Colors.black.withValues(alpha: isDark ? 0.5 : 0.25), 18, false);
+  // Segunda sombra (más suave) para dar profundidad.
+  canvas.drawShadow(path, Colors.black.withValues(alpha: isDark ? 0.3 : 0.12), 8, false);
+
+  // El papel siempre es blanco independientemente del tema.
+  canvas.drawPath(path, Paint()..color = kPaperColorLight);
   if (image != null) {
     canvas.drawImageRect(
       image,
@@ -167,18 +250,38 @@ void _drawSheet(Canvas canvas, Size sheetSize, Page page, {ui.Image? image, bool
       Paint()..filterQuality = FilterQuality.high,
     );
   }
+
+  // Borde del papel: más visible para delimitar claramente la zona de
+  // escritura. En modo oscuro se usa un borde blanco semitransparente.
   canvas.drawRRect(
-    RRect.fromRectAndRadius(sheetRect, const Radius.circular(4)),
+    rrect,
     Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..color = Colors.black.withValues(alpha: 0.15),
+      ..strokeWidth = isDark ? 1.5 : 1.2
+      ..color = isDark
+          ? Colors.white.withValues(alpha: 0.2)
+          : Colors.black.withValues(alpha: 0.2),
   );
 }
 
-void _drawRuled(Canvas canvas, Rect visible, PageTemplate template) {
+/// Ajusta el color de línea para que sea visible sobre el papel.
+///
+/// Dado que el papel siempre es blanco (incluso en modo oscuro), las líneas
+/// solo necesitan ajustarse si son demasiado claras (difíciles de ver sobre
+/// fondo blanco).
+Color _adaptiveLineColor(PageTemplate template, {bool isDark = false}) {
+  // El papel siempre es blanco → las líneas siempre deben ser oscuras
+  // y visibles. Si el color original es muy claro, oscurecerlo un poco.
+  final hsl = HSLColor.fromColor(template.lineColor);
+  if (hsl.lightness > 0.75) {
+    return hsl.withLightness(0.60).toColor();
+  }
+  return template.lineColor;
+}
+
+void _drawRuled(Canvas canvas, Rect visible, PageTemplate template, {bool isDark = false}) {
   final paint = Paint()
-    ..color = template.lineColor
+    ..color = _adaptiveLineColor(template, isDark: isDark)
     ..strokeWidth = 1.0;
   final spacing = template.spacing;
   // Líneas de texto.
@@ -197,9 +300,9 @@ void _drawRuled(Canvas canvas, Rect visible, PageTemplate template) {
   );
 }
 
-void _drawGrid(Canvas canvas, Rect visible, PageTemplate template) {
+void _drawGrid(Canvas canvas, Rect visible, PageTemplate template, {bool isDark = false}) {
   final paint = Paint()
-    ..color = template.lineColor
+    ..color = _adaptiveLineColor(template, isDark: isDark)
     ..strokeWidth = 1.0;
   final spacing = template.spacing;
   final startX = (visible.left / spacing).floor() * spacing;
@@ -237,7 +340,33 @@ void _drawTiledImage(Canvas canvas, Rect visible, ui.Image img) {
 // Contenido
 // ---------------------------------------------------------------------------
 
+void _paintSprayStroke(Canvas canvas, Stroke stroke) {
+  if (stroke.points.length < 2) return;
+  final color = StrokeEngine.paintColor(stroke);
+  final random = Random(stroke.id.hashCode);
+  final paint = Paint()..style = PaintingStyle.fill;
+  final radius = stroke.size;
+  for (final point in stroke.points) {
+    final center = point.offset;
+    final count = 12 + random.nextInt(8);
+    for (var i = 0; i < count; i++) {
+      final angle = random.nextDouble() * 2 * pi;
+      final dist = random.nextDouble() * radius;
+      final px = center.dx + cos(angle) * dist;
+      final py = center.dy + sin(angle) * dist;
+      final dotRadius = 0.8 + random.nextDouble() * 2.5;
+      paint.color = color.withValues(alpha: 0.15 + random.nextDouble() * 0.35);
+      canvas.drawCircle(Offset(px, py), dotRadius, paint);
+    }
+  }
+}
+
 void _paintStroke(Canvas canvas, Stroke stroke) {
+  // Aerosol: dibuja partículas dispersas en lugar de un trazo sólido.
+  if (stroke.tool == ToolType.spray) {
+    _paintSprayStroke(canvas, stroke);
+    return;
+  }
   // Si tiene fillColorValue, dibuja el relleno primero.
   if (stroke.fillColorValue != null) {
     final fillOutline = StrokeEngine.outlineFor(stroke);
@@ -373,9 +502,9 @@ Path strokeToPath(List<StrokePoint> points, ToolType tool, double size) {
 }
 
 /// Pentagrama musical (5 líneas por grupo, infinito).
-void _drawMusicStaff(Canvas canvas, Rect visible, PageTemplate template) {
+void _drawMusicStaff(Canvas canvas, Rect visible, PageTemplate template, {bool isDark = false}) {
   final paint = Paint()
-    ..color = template.lineColor
+    ..color = _adaptiveLineColor(template, isDark: isDark)
     ..strokeWidth = 1.0;
   final groupSpacing = template.spacing * 3; // distancia entre grupos
   final lineSpacing = template.spacing * 0.4; // distancia entre líneas
@@ -389,9 +518,9 @@ void _drawMusicStaff(Canvas canvas, Rect visible, PageTemplate template) {
 }
 
 /// Agenda semanal (columnas por día, infinita).
-void _drawPlanner(Canvas canvas, Rect visible, PageTemplate template) {
+void _drawPlanner(Canvas canvas, Rect visible, PageTemplate template, {bool isDark = false}) {
   final paint = Paint()
-    ..color = template.lineColor
+    ..color = _adaptiveLineColor(template, isDark: isDark)
     ..strokeWidth = 1.0;
   final spacing = template.spacing;
   // Líneas horizontales.
@@ -408,9 +537,9 @@ void _drawPlanner(Canvas canvas, Rect visible, PageTemplate template) {
 }
 
 /// Tracker de hábitos (cuadrícula con checkboxes, infinita).
-void _drawHabitTracker(Canvas canvas, Rect visible, PageTemplate template) {
+void _drawHabitTracker(Canvas canvas, Rect visible, PageTemplate template, {bool isDark = false}) {
   final paint = Paint()
-    ..color = template.lineColor.withValues(alpha: 0.5)
+    ..color = _adaptiveLineColor(template, isDark: isDark).withValues(alpha: 0.5)
     ..strokeWidth = 1.0;
   final spacing = template.spacing;
   final startX = (visible.left / spacing).floor() * spacing;
@@ -427,9 +556,9 @@ void _drawHabitTracker(Canvas canvas, Rect visible, PageTemplate template) {
 }
 
 /// Cuadrícula de puntos (dot grid, infinita).
-void _drawDotGrid(Canvas canvas, Rect visible, PageTemplate template) {
+void _drawDotGrid(Canvas canvas, Rect visible, PageTemplate template, {bool isDark = false}) {
   final paint = Paint()
-    ..color = template.lineColor
+    ..color = _adaptiveLineColor(template, isDark: isDark)
     ..style = PaintingStyle.fill;
   final spacing = template.spacing;
   final startX = (visible.left / spacing).floor() * spacing;

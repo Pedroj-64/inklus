@@ -10,6 +10,8 @@ enum ToolType {
   highlighter, // resaltador: trazo ancho y translúcido
   calligraphy, // caligrafía: grosor variable según ángulo
   brush, // pincel: trazo suave y orgánico
+  marker, // marcador: trazo ancho semitransparente, tipo sharpie
+  spray, // aerosol: trazo con partículas dispersas
   eraser, // borrador
   select, // mover/redimensionar imágenes (no genera trazos)
   lasso, // selección de trazos con lazo

@@ -5,7 +5,7 @@ import '../utils/theme_colors.dart';
 
 /// Pantalla de onboarding que se muestra la primera vez que se abre la app.
 ///
-/// Muestra 4 páginas explicativas con ilustraciones y permite saltar al final.
+/// Muestra 3 páginas de acción (cómo usar la app) con ilustraciones.
 /// Se guarda en SharedPreferences que ya se vio, para no mostrar de nuevo.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key, this.onDone});
@@ -33,36 +33,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   static const _pages = <_OnboardingPage>[
     _OnboardingPage(
-      icon: Icons.edit_note,
+      icon: Icons.edit,
       color: kAccentColor,
-      title: 'Escribe con naturalidad',
+      title: 'Toca con el stylus',
       description:
-          'Inklus detecta tu stylus y rechaza la palma de la mano. '
-          'Escribe, dibuja o subraya como en un cuaderno real.',
+          'Escribe directamente en la pantalla como en un cuaderno real. '
+          'Inklus detecta tu stylus y rechaza la palma automáticamente.',
     ),
     _OnboardingPage(
-      icon: Icons.dashboard_customize_outlined,
+      icon: Icons.zoom_out_map,
       color: Color(0xFF8B5CF6),
-      title: 'Plantillas ilimitadas',
+      title: 'Dos dedos para hacer zoom',
       description:
-          'Rayas, cuadrícula, pentagrama, agenda o crea tu propia plantilla. '
-          'Los lienzos infinitos se alargan conforme escribes.',
+          'Pellizca con dos dedos para acercar o alejar. '
+          'Arrastra con dos dedos para moverte por el lienzo.',
     ),
     _OnboardingPage(
-      icon: Icons.cloud_upload_outlined,
+      icon: Icons.menu,
       color: Color(0xFF10B981),
-      title: 'Respaldo en la nube',
+      title: 'Barra de herramientas',
       description:
-          'Inicia sesión con Google Drive para respaldar tus cuadernos '
-          'automáticamente. Tus datos nunca se pierden.',
-    ),
-    _OnboardingPage(
-      icon: Icons.auto_awesome,
-      color: Color(0xFFF59E0B),
-      title: 'Herramientas mágicas',
-      description:
-          'Lazo, figuras, buckets, capas, OCR y exporta a PNG, PDF o SVG. '
-          'Todo lo que necesitas, gratis y sin límites.',
+          'Usa la barra lateral para cambiar entre lapicero, '
+          'borrador, lazo y más herramientas.',
     ),
   ];
 

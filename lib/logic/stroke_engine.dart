@@ -75,6 +75,23 @@ class StrokeEngine {
           start: StrokeEndOptions.start(taperEnabled: true, customTaper: 0.2),
           end: StrokeEndOptions.end(taperEnabled: true, customTaper: 0.15),
         );
+      case ToolType.marker:
+        return StrokeOptions(
+          size: size,
+          thinning: thinning ?? 0,
+          smoothing: smoothing ?? 0.65,
+          streamline: streamline ?? 0.7,
+          simulatePressure: false,
+        );
+      case ToolType.spray:
+        return StrokeOptions(
+          size: size * 1.8,
+          thinning: thinning ?? 0,
+          smoothing: smoothing ?? 0.4,
+          streamline: streamline ?? 0.3,
+          simulatePressure: false,
+          isComplete: true,
+        );
       case ToolType.brush:
         return StrokeOptions(
           size: size,
@@ -128,6 +145,12 @@ class StrokeEngine {
   static Color paintColor(Stroke stroke) {
     if (stroke.tool == ToolType.highlighter) {
       return stroke.color.withValues(alpha: 0.38);
+    }
+    if (stroke.tool == ToolType.marker) {
+      return stroke.color.withValues(alpha: 0.55);
+    }
+    if (stroke.tool == ToolType.spray) {
+      return stroke.color.withValues(alpha: 0.25);
     }
     return stroke.color;
   }

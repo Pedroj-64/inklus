@@ -146,13 +146,17 @@ class _TrashScreenState extends State<TrashScreen> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'La papelera está vacía',
+            'Papelera vacía',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Text(
-            'Los cuadernos que elimines aparecerán aquí.',
-            style: TextStyle(color: isDark ? Colors.white54 : ThemeColors.of(context).textSecondary),
+            'Los cuadernos que elimines se guardarán aquí\ndurante 30 días antes de borrarse definitivamente.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isDark ? Colors.white54 : ThemeColors.of(context).textSecondary,
+              height: 1.4,
+            ),
           ),
         ],
       ),

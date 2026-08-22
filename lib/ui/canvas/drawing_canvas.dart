@@ -35,8 +35,11 @@ final Paint _lassoPaint = Paint()
   ..strokeCap = StrokeCap.round
   ..strokeJoin = StrokeJoin.round;
 final Paint _selectionFillPaint = Paint()
-  ..color = kAccentColor.withValues(alpha: 0.25)
+  ..color = const Color(0xFF009688).withValues(alpha: 0.25)
   ..style = PaintingStyle.fill;
+
+/// Color de selección de trazos (teal) — distinto del de imágenes (azul).
+const Color _strokeSelectionColor = Color(0xFF009688);
 
 /// ---------------------------------------------------------------------------
 /// CAPA CONFIRMADA (base)
@@ -121,6 +124,18 @@ class ActiveLayerPainter extends CustomPainter {
     canvas.translate(translate.dx, translate.dy);
     canvas.scale(scale);
 
+    // Si la plantilla es finita, recortar el trazo activo y selección
+    // al área de la hoja para que el usuario vea dónde puede escribir.
+    final template = controller.page.template;
+    if (template.isFinite) {
+      final sheetRect = Rect.fromCenter(
+        center: Offset.zero,
+        width: controller.sheetSize.width,
+        height: controller.sheetSize.height,
+      );
+      canvas.clipRect(sheetRect);
+    }
+
     // Trazo en progreso.
     if (active != null && active.points.length >= 2) {
       final path = strokeToPath(active.points, active.tool, active.size);
@@ -171,14 +186,14 @@ class ActiveLayerPainter extends CustomPainter {
           // Handle de escala (esquina inferior derecha).
           final r = 11 / scale;
           canvas.drawCircle(inflated.bottomRight, r,
-            Paint()..color = kAccentColor);
+            Paint()..color = _strokeSelectionColor);
           canvas.drawCircle(inflated.bottomRight, r, Paint()
             ..style = PaintingStyle.stroke..strokeWidth = 2 / scale..color = Colors.white);
           // Handle de rotación (centro superior).
           final rotH = Offset(inflated.center.dx, inflated.top - r * 3);
           canvas.drawLine(inflated.topCenter, rotH,
-            Paint()..color = kAccentColor..strokeWidth = 2 / scale);
-          canvas.drawCircle(rotH, r, Paint()..color = kAccentColor);
+            Paint()..color = _strokeSelectionColor..strokeWidth = 2 / scale);
+          canvas.drawCircle(rotH, r, Paint()..color = _strokeSelectionColor);
           canvas.drawCircle(rotH, r, Paint()
             ..style = PaintingStyle.stroke..strokeWidth = 2 / scale..color = Colors.white);
         }
@@ -243,26 +258,35 @@ class ActiveLayerPainter extends CustomPainter {
       }
     }
 
-    canvas.restore();      // ---- Regla virtual ----
+    // ---- Guías magnéticas (snap) — en espacio de mundo ----
+    if (controller.snapVerticalGuides.isNotEmpty ||
+        controller.snapHorizontalGuides.isNotEmpty) {
+      final guidePaint = Paint()
+        ..color = kAccentColor.withValues(alpha: 0.6)
+        ..strokeWidth = 1.5 / scale
+        ..style = PaintingStyle.stroke;
+      for (final x in controller.snapVerticalGuides) {
+        canvas.drawLine(Offset(x, -10000), Offset(x, 10000), guidePaint);
+      }
+      for (final y in controller.snapHorizontalGuides) {
+        canvas.drawLine(Offset(-10000, y), Offset(10000, y), guidePaint);
+      }
+    }
+
+    canvas.restore();
+
+    // ---- Regla virtual (dibujada en espacio de pantalla, con su propio save/restore) ----
     if (controller.rulerEnabled) {
+      canvas.save();
       drawRuler(canvas, controller, size);
+      canvas.restore();
     }
 
-    // ---- Lupa ----
+    // ---- Lupa (dibujada en espacio de pantalla, con su propio save/restore) ----
     if (controller.magnifierEnabled && controller.isDrawing) {
+      canvas.save();
       drawMagnifier(canvas, controller, size, imageCache);
-    }
-
-    // ---- Guías magnéticas (snap) ----
-    final guidePaint = Paint()
-      ..color = kAccentColor.withValues(alpha: 0.6)
-      ..strokeWidth = 1.5 / scale
-      ..style = PaintingStyle.stroke;
-    for (final x in controller.snapVerticalGuides) {
-      canvas.drawLine(Offset(x, -10000), Offset(x, 10000), guidePaint);
-    }
-    for (final y in controller.snapHorizontalGuides) {
-      canvas.drawLine(Offset(-10000, y), Offset(10000, y), guidePaint);
+      canvas.restore();
     }
 
     // ---- Cursor del borrador (espacio de pantalla, tamaño constante) ----
@@ -340,10 +364,10 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   DateTime? _twoFingerStartTime;
 
   // ---- Transformar selección ----
-  bool _transformingSelection = false;
   bool _scalingSelection = false;
   bool _rotatingSelection = false;
-  Offset _transformStartWorld = Offset.zero;
+  double _transformStartDist = 1;
+  double _transformStartAngle = 0;
   Rect _transformSelectionBounds = Rect.zero;
   List<Stroke> _transformStrokesBefore = [];
 
@@ -573,7 +597,6 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       widget.controller.commitTransformSelection(_transformStrokesBefore);
       _scalingSelection = false;
       _rotatingSelection = false;
-      _transformingSelection = false;
       _drawingPointer = null;
       return;
     }
@@ -661,7 +684,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     final selectedStrokes = controller.selectedStrokes;
     final handleWorld = 30 / controller.scale;
 
-    // 0) ¿Hay trazos seleccionados con lazo? Detectar handles de transformación.
+    // 0) ¿Hay trazos seleccionados con lazo? Detectar handles o mover.
     if (selectedStrokes.isNotEmpty && selectedId == null) {
       final bounds = _computeSelectionBounds(selectedStrokes);
       _transformSelectionBounds = bounds;
@@ -671,7 +694,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       final rotHandle = Offset(bounds.center.dx, bounds.top - handleSize * 2);
       if ((world - rotHandle).distance <= handleSize) {
         _rotatingSelection = true;
-        _transformStartWorld = world;
+        _transformStartAngle = (world - bounds.center).direction;
         _transformStrokesBefore = List<Stroke>.from(selectedStrokes);
         return;
       }
@@ -679,10 +702,20 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       final scaleHandle = bounds.bottomRight;
       if ((world - scaleHandle).distance <= handleSize) {
         _scalingSelection = true;
-        _transformStartWorld = world;
+        _transformStartDist = (world - bounds.center).distance;
         _transformStrokesBefore = List<Stroke>.from(selectedStrokes);
         return;
       }
+      // Toca dentro de los límites de la selección → mover todos.
+      final inflated = bounds.inflate(handleSize);
+      if (inflated.contains(world)) {
+        _movingStrokes = true;
+        _strokeMoveStartWorld = world;
+        _strokesBeforeMove = List<Stroke>.from(selectedStrokes);
+        return;
+      }
+      // Toca fuera → deseleccionar y continuar.
+      controller.clearLassoSelection();
     }
 
     // 1) ¿Toca el asa de rotación de la imagen seleccionada?
@@ -753,31 +786,37 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   void _handleSelectMove(Offset local) {
     final world = widget.controller.viewportToWorld(local, _viewport);
 
-    // Transformar selección de trazos.
-    if (_transformingSelection || _scalingSelection || _rotatingSelection) {
+    // Transformar selección de trazos (escalar/rotar incremental).
+    if (_scalingSelection || _rotatingSelection) {
       final pivot = _transformSelectionBounds.center;
       if (_scalingSelection) {
-        final startDist = (_transformStartWorld - pivot).distance;
         final currentDist = (world - pivot).distance;
-        if (startDist > 1) {
-          final factor = currentDist / startDist;
+        if (_transformStartDist > 1 && currentDist > 0) {
+          // Factor incremental: solo la diferencia desde el último frame.
+          final incrementalFactor = currentDist / _transformStartDist;
           widget.controller.transformSelectedStrokes(
-            scaleFactor: factor,
+            scaleFactor: incrementalFactor,
             rotationAngle: 0,
             pivotPoint: pivot,
           );
-          _transformStartWorld = world;
+          _transformStartDist = currentDist;
+          // Actualizar bounds para que el handle se mantenga sincronizado.
+          _transformSelectionBounds = _computeSelectionBounds(
+            widget.controller.selectedStrokes,
+          );
         }
       } else if (_rotatingSelection) {
-        final startAngle = (_transformStartWorld - pivot).direction;
         final currentAngle = (world - pivot).direction;
-        final delta = currentAngle - startAngle;
+        final delta = currentAngle - _transformStartAngle;
         widget.controller.transformSelectedStrokes(
           scaleFactor: 1,
           rotationAngle: delta,
           pivotPoint: pivot,
         );
-        _transformStartWorld = world;
+        _transformStartAngle = currentAngle;
+        _transformSelectionBounds = _computeSelectionBounds(
+          widget.controller.selectedStrokes,
+        );
       }
       return;
     }

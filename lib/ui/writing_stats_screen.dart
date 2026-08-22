@@ -53,7 +53,9 @@ class _WritingStatsScreenState extends State<WritingStatsScreen> {
       ),
       body: totals == null
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
+          : (totals.totalStrokes == 0 && totals.totalMinutesActive == 0)
+              ? _buildEmptyState()
+              : ListView(
               padding: const EdgeInsets.all(20),
               children: [
                 // --- Resumen rápido ---
@@ -133,6 +135,47 @@ class _WritingStatsScreenState extends State<WritingStatsScreen> {
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: kAccentColor.withAlpha(20),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.analytics_outlined,
+                size: 40,
+                color: kAccentColor.withAlpha(150),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Sin datos todavía',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Empieza a escribir en tus cuadernos y tus estadísticas\naparecerán aquí.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isDark ? Colors.white54 : ThemeColors.of(context).textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

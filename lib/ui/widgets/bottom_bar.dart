@@ -19,14 +19,44 @@ class BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: controller,
-      builder: (context, _) {
-        final isEraser = controller.tool == ToolType.eraser;
-        final isSelect = controller.tool == ToolType.select;
-        final range = controller.sizeRange;
+    return ValueListenableBuilder<int>(
+      valueListenable: controller.bottomBarContextNotifier,
+      builder: (context, _, child) {
+        final tool = controller.tool;
+        final isDark = ThemeColors.of(context).isDark;
         final tc = ThemeColors.of(context);
-        final isDark = tc.isDark;
+
+        // Contenido contextual según herramienta activa
+        Widget content;
+        switch (tool) {
+          case ToolType.pen:
+          case ToolType.pencil:
+          case ToolType.calligraphy:
+          case ToolType.brush:
+          case ToolType.marker:
+          case ToolType.spray:
+            content = _buildDrawingToolContent(controller, tc, isDark, showStrokeOptions: true);
+            break;
+          case ToolType.highlighter:
+            content = _buildDrawingToolContent(controller, tc, isDark, showStrokeOptions: false);
+            break;
+          case ToolType.eraser:
+            content = _buildEraserContent(controller, tc, isDark);
+            break;
+          case ToolType.select:
+            content = _buildSelectContent(controller, tc);
+            break;
+          case ToolType.lasso:
+            content = _buildLassoContent(controller, tc);
+            break;
+          case ToolType.text:
+            content = _buildTextContent(controller, tc, isDark);
+            break;
+          case ToolType.bucket:
+            content = _buildBucketContent(controller, tc, isDark);
+            break;
+        }
+
         return Container(
           decoration: BoxDecoration(
             color: isDark ? kSurfaceDark : Colors.white,
@@ -42,155 +72,330 @@ class BottomBar extends StatelessWidget {
             top: false,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Fila principal: paleta + acciones
-                  Row(
-                    children: [
-                      // ---- Paleta de colores (oculta con borrador/selección) ----
-                      if (!isEraser && !isSelect) ...[
-                        Expanded(
-                          child: SizedBox(
-                            height: 38,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: kDefaultPalette.length + 1,
-                              separatorBuilder: (_, _) => const SizedBox(width: 6),
-                              itemBuilder: (context, i) {
-                                if (i == kDefaultPalette.length) {
-                                  return _CustomColorSwatch(
-                                    controller: controller,
-                                  );
-                                }
-                                final color = kDefaultPalette[i];
-                                return _ColorSwatch(
-                                  color: color,
-                                  selected: controller.color == color,
-                                  onTap: () => controller.setColor(color),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-
-                      // ---- Acciones de selección con lazo ----
-                      if (controller.selectedStrokes.isNotEmpty) ...[
-                        _ActionIcon(
-                          icon: Icons.copy,
-                          tooltip: 'Copiar',
-                          color: kAccentColor,
-                          onTap: controller.copySelectedStrokes,
-                        ),
-                        _ActionIcon(
-                          icon: Icons.delete_outline,
-                          tooltip: 'Eliminar',
-                          color: kErrorColor,
-                          onTap: controller.deleteSelectedStrokes,
-                        ),
-                      ],
-                      if (controller.hasClipboard && controller.selectedStrokes.isEmpty)
-                        _ActionIcon(
-                          icon: Icons.paste,
-                          tooltip: 'Pegar',
-                          color: kAccentColor,
-                          onTap: controller.pasteStrokes,
-                        ),
-
-                      // ---- Toggles de herramienta ----
-                      if (!isEraser && !isSelect && controller.tool != ToolType.lasso) ...[
-                        _ToggleIcon(
-                          icon: Icons.change_history,
-                          tooltip: 'Formas',
-                          active: controller.shapeDetectionEnabled,
-                          onTap: () => controller.setShapeDetection(
-                            !controller.shapeDetectionEnabled,
-                          ),
-                        ),
-                        _ToggleIcon(
-                          icon: Icons.back_hand,
-                          tooltip: 'Dedo',
-                          active: controller.fingerDrawingEnabled,
-                          onTap: () => controller.setFingerDrawing(
-                            !controller.fingerDrawingEnabled,
-                          ),
-                        ),
-                      ],
-                      // ---- Regla y lupa ----
-                      _ToggleIcon(
-                        icon: controller.rulerType == RulerType.protractor
-                            ? Icons.contrast
-                            : Icons.straighten,
-                        tooltip: controller.rulerType == RulerType.protractor
-                            ? 'Transportador'
-                            : 'Regla',
-                        active: controller.rulerEnabled,
-                        onTap: controller.cycleRulerType,
-                      ),
-                      _ToggleIcon(
-                        icon: Icons.search,
-                        tooltip: 'Lupa',
-                        active: controller.magnifierEnabled,
-                        onTap: controller.toggleMagnifier,
-                      ),
-
-                      // ---- Opciones de trazo ----
-                      if (!isEraser && !isSelect && controller.tool != ToolType.lasso)
-                        _ActionIcon(
-                          icon: Icons.tune,
-                          tooltip: 'Opciones de trazo',
-                          color: tc.iconSecondary,
-                          onTap: onStrokeOptions ?? () {},
-                        ),
-                    ],
-                  ),
-
-                  // ---- Slider de tamaño (segunda fila) ----
-                  if (!isSelect)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isEraser ? Icons.cleaning_services : Icons.circle,
-                            size: 14,
-                            color: tc.iconTertiary,
-                          ),
-                          Expanded(
-                            child: SliderTheme(
-                              data: SliderThemeData(
-                                trackHeight: 3,
-                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                                activeTrackColor: kAccentColor,
-                                inactiveTrackColor: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
-                                thumbColor: kAccentColor,
-                                overlayColor: kAccentColor.withAlpha(30),
-                              ),
-                              child: Slider(
-                                value: controller.toolSize,
-                                min: range.$1,
-                                max: range.$2,
-                                onChanged: controller.setToolSize,
-                              ),
-                            ),
-                          ),
-                          Icon(
-                            isEraser ? Icons.cleaning_services : Icons.circle,
-                            size: 22,
-                            color: tc.iconTertiary,
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                child: KeyedSubtree(
+                  key: ValueKey(tool),
+                  child: content,
+                ),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  // ------------------------------------------------------------------------
+  // Contenido por herramienta
+  // ------------------------------------------------------------------------
+
+  /// Herramientas de escritura: paleta + slider + opciones.
+  Widget _buildDrawingToolContent(
+    CanvasController controller,
+    ThemeColors tc,
+    bool isDark, {
+    required bool showStrokeOptions,
+  }) {
+    final range = controller.sizeRange;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Fila principal: paleta + toggles + opciones
+        Row(
+          children: [
+            // Paleta de colores
+            Expanded(
+              child: SizedBox(
+                height: 38,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: kDefaultPalette.length + 1,
+                  separatorBuilder: (_, _) => const SizedBox(width: 6),
+                  itemBuilder: (context, i) {
+                    if (i == kDefaultPalette.length) {
+                      return _CustomColorSwatch(controller: controller);
+                    }
+                    final color = kDefaultPalette[i];
+                    return _ColorSwatch(
+                      color: color,
+                      selected: controller.color == color,
+                      onTap: () => controller.setColor(color),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Toggles de forma y dedo
+            _ToggleIcon(
+              icon: Icons.change_history,
+              tooltip: 'Formas',
+              active: controller.shapeDetectionEnabled,
+              onTap: () => controller.setShapeDetection(!controller.shapeDetectionEnabled),
+            ),
+            _ToggleIcon(
+              icon: Icons.back_hand,
+              tooltip: 'Dedo',
+              active: controller.fingerDrawingEnabled,
+              onTap: () => controller.setFingerDrawing(!controller.fingerDrawingEnabled),
+            ),
+            // Opciones de trazo
+            if (showStrokeOptions)
+              _ActionIcon(
+                icon: Icons.tune,
+                tooltip: 'Opciones de trazo',
+                color: tc.iconSecondary,
+                onTap: onStrokeOptions ?? () {},
+              ),
+          ],
+        ),
+        // Slider de tamaño
+        _buildSizeSlider(controller, tc, isDark, range),
+      ],
+    );
+  }
+
+  /// Borrador: solo slider de tamaño.
+  Widget _buildEraserContent(
+    CanvasController controller,
+    ThemeColors tc,
+    bool isDark,
+  ) {
+    final range = controller.sizeRange;
+    return _buildSizeSlider(controller, tc, isDark, range);
+  }
+
+  /// Selección: copiar, pegar, eliminar.
+  Widget _buildSelectContent(CanvasController controller, ThemeColors tc) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (controller.selectedStrokes.isNotEmpty) ...[
+          _ActionIcon(
+            icon: Icons.copy,
+            tooltip: 'Copiar',
+            color: kAccentColor,
+            onTap: controller.copySelectedStrokes,
+          ),
+          _ActionIcon(
+            icon: Icons.delete_outline,
+            tooltip: 'Eliminar',
+            color: kErrorColor,
+            onTap: controller.deleteSelectedStrokes,
+          ),
+        ],
+        if (controller.hasClipboard && controller.selectedStrokes.isEmpty)
+          _ActionIcon(
+            icon: Icons.paste,
+            tooltip: 'Pegar',
+            color: kAccentColor,
+            onTap: controller.pasteStrokes,
+          ),
+        if (controller.selectedStrokes.isEmpty && !controller.hasClipboard)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Toca un trazo para seleccionarlo',
+              style: TextStyle(
+                fontSize: 13,
+                color: tc.textSecondary,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Lazo: copiar, pegar, eliminar, transformar.
+  Widget _buildLassoContent(CanvasController controller, ThemeColors tc) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (controller.selectedStrokes.isNotEmpty) ...[
+          _ActionIcon(
+            icon: Icons.copy,
+            tooltip: 'Copiar',
+            color: kAccentColor,
+            onTap: controller.copySelectedStrokes,
+          ),
+          _ActionIcon(
+            icon: Icons.delete_outline,
+            tooltip: 'Eliminar',
+            color: kErrorColor,
+            onTap: controller.deleteSelectedStrokes,
+          ),
+          _ActionIcon(
+            icon: Icons.transform,
+            tooltip: 'Transformar',
+            color: kAccentColor,
+            onTap: () {}, // Transformación se maneja con handles en canvas
+          ),
+        ],
+        if (controller.hasClipboard && controller.selectedStrokes.isEmpty)
+          _ActionIcon(
+            icon: Icons.paste,
+            tooltip: 'Pegar',
+            color: kAccentColor,
+            onTap: controller.pasteStrokes,
+          ),
+        if (controller.selectedStrokes.isEmpty && !controller.hasClipboard)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Dibuja un lazo alrededor de los trazos',
+              style: TextStyle(
+                fontSize: 13,
+                color: tc.textSecondary,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Texto: tamaño de fuente + color.
+  Widget _buildTextContent(
+    CanvasController controller,
+    ThemeColors tc,
+    bool isDark,
+  ) {
+    return Row(
+      children: [
+        // Paleta de colores (mínima)
+        Expanded(
+          child: SizedBox(
+            height: 38,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: kDefaultPalette.length + 1,
+              separatorBuilder: (_, _) => const SizedBox(width: 6),
+              itemBuilder: (context, i) {
+                if (i == kDefaultPalette.length) {
+                  return _CustomColorSwatch(controller: controller);
+                }
+                final color = kDefaultPalette[i];
+                return _ColorSwatch(
+                  color: color,
+                  selected: controller.color == color,
+                  onTap: () => controller.setColor(color),
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _ActionIcon(
+          icon: Icons.tune,
+          tooltip: 'Opciones de texto',
+          color: tc.iconSecondary,
+          onTap: onStrokeOptions ?? () {},
+        ),
+      ],
+    );
+  }
+
+  /// Bucket: solo color de relleno.
+  Widget _buildBucketContent(
+    CanvasController controller,
+    ThemeColors tc,
+    bool isDark,
+  ) {
+    return Row(
+      children: [
+        // Paleta de colores
+        Expanded(
+          child: SizedBox(
+            height: 38,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: kDefaultPalette.length + 1,
+              separatorBuilder: (_, _) => const SizedBox(width: 6),
+              itemBuilder: (context, i) {
+                if (i == kDefaultPalette.length) {
+                  return _CustomColorSwatch(controller: controller);
+                }
+                final color = kDefaultPalette[i];
+                return _ColorSwatch(
+                  color: color,
+                  selected: controller.color == color,
+                  onTap: () => controller.setColor(color),
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Indicador de color actual
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: controller.color,
+            shape: BoxShape.circle,
+            border: Border.all(color: tc.border, width: 2),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ------------------------------------------------------------------------
+  // Widgets compartidos
+  // ------------------------------------------------------------------------
+
+  /// Slider de tamaño reutilizable con valor numérico visible.
+  Widget _buildSizeSlider(
+    CanvasController controller,
+    ThemeColors tc,
+    bool isDark,
+    dynamic range,
+  ) {
+    final size = controller.toolSize.round();
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        children: [
+          Icon(
+            controller.tool == ToolType.eraser ? Icons.cleaning_services : Icons.circle,
+            size: 14,
+            color: tc.iconTertiary,
+          ),
+          Expanded(
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 3,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                activeTrackColor: kAccentColor,
+                inactiveTrackColor: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+                thumbColor: kAccentColor,
+                overlayColor: kAccentColor.withAlpha(30),
+              ),
+              child: Slider(
+                value: controller.toolSize,
+                min: range.$1 as double,
+                max: range.$2 as double,
+                onChanged: controller.setToolSize,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 32,
+            child: Text(
+              '$size',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: tc.textSecondary,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -533,14 +738,18 @@ class _ActionIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: IconButton(
-        icon: Icon(icon, size: 20),
-        color: color,
-        onPressed: onTap,
-        padding: const EdgeInsets.all(4),
-        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+    return Semantics(
+      label: tooltip,
+      button: true,
+      child: Tooltip(
+        message: tooltip,
+        child: IconButton(
+          icon: Icon(icon, size: 20),
+          color: color,
+          onPressed: onTap,
+          padding: const EdgeInsets.all(12),
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        ),
       ),
     );
   }
@@ -561,14 +770,19 @@ class _ToggleIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: IconButton(
-        icon: Icon(icon, size: 20),
-        color: active ? kAccentColor : ThemeColors.of(context).iconSecondary,
-        onPressed: onTap,
-        padding: const EdgeInsets.all(4),
-        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+    return Semantics(
+      label: '$tooltip${active ? ' (activado)' : ''}',
+      button: true,
+      toggled: active,
+      child: Tooltip(
+        message: tooltip,
+        child: IconButton(
+          icon: Icon(icon, size: 20),
+          color: active ? kAccentColor : ThemeColors.of(context).iconSecondary,
+          onPressed: onTap,
+          padding: const EdgeInsets.all(12),
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        ),
       ),
     );
   }

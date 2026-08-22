@@ -4,7 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 /// Tipos de portada disponibles para el cuaderno.
-enum CoverStyle { simple, circle, waves, dots, lines }
+enum CoverStyle { simple, circle, waves, dots, lines, custom }
 
 /// Painter de portada de cuaderno.
 ///
@@ -38,6 +38,10 @@ class NotebookCoverPainter extends CustomPainter {
         break;
       case CoverStyle.lines:
         _paintLines(canvas, size);
+        break;
+      case CoverStyle.custom:
+        // Fallback: gradiente con el color asignado.
+        _paintSimple(canvas, size);
         break;
     }
   }
@@ -177,6 +181,7 @@ const Map<CoverStyle, String> coverStyleNames = {
   CoverStyle.waves: 'Olas',
   CoverStyle.dots: 'Puntos',
   CoverStyle.lines: 'Líneas',
+  CoverStyle.custom: 'Imagen',
 };
 
 /// Icono representativo de cada estilo.
@@ -186,4 +191,5 @@ const Map<CoverStyle, IconData> coverStyleIcons = {
   CoverStyle.waves: Icons.waves,
   CoverStyle.dots: Icons.grain,
   CoverStyle.lines: Icons.format_list_bulleted,
+  CoverStyle.custom: Icons.image_outlined,
 };

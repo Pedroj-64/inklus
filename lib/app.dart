@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'constants.dart';
 import 'ui/notebook_library.dart';
 import 'ui/onboarding_screen.dart';
-import 'ui/settings_screen.dart';
 
 /// Widget raíz de Inklus.
 ///
@@ -71,15 +70,6 @@ class _InklusAppState extends State<InklusApp> {
             )
           : NotebookLibraryScreen(
               onToggleTheme: _toggleTheme,
-              onOpenSettings: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => SettingsScreen(
-                      onToggleTheme: _toggleTheme,
-                    ),
-                  ),
-                );
-              },
             ),
     );
   }

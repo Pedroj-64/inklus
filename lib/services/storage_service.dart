@@ -27,8 +27,11 @@ class NotebookMeta {
   /// Etiquetas del cuaderno.
   final List<String> tags;
 
-  /// Estilo de portada (simple, circle, waves, dots, lines).
+  /// Estilo de portada (simple, circle, waves, dots, lines, custom).
   final String coverStyle;
+
+  /// Ruta de imagen personalizada para la portada (estilo 'custom').
+  final String? coverImagePath;
 
   const NotebookMeta({
     required this.id,
@@ -37,6 +40,7 @@ class NotebookMeta {
     this.colorValue,
     this.syncEnabled,
     this.coverStyle = 'simple',
+    this.coverImagePath,
     List<String>? tags,
   })  : tags = tags ?? const [];
 
@@ -49,6 +53,8 @@ class NotebookMeta {
     int? colorValue,
     bool? syncEnabled,
     String? coverStyle,
+    String? coverImagePath,
+    bool clearCoverImage = false,
     List<String>? tags,
   }) =>
       NotebookMeta(
@@ -58,6 +64,7 @@ class NotebookMeta {
         colorValue: colorValue ?? this.colorValue,
         syncEnabled: syncEnabled ?? this.syncEnabled,
         coverStyle: coverStyle ?? this.coverStyle,
+        coverImagePath: clearCoverImage ? null : (coverImagePath ?? this.coverImagePath),
         tags: tags ?? this.tags,
       );
 
@@ -70,6 +77,7 @@ class NotebookMeta {
         colorValue: (json['color'] as num?)?.toInt(),
         syncEnabled: json['syncEnabled'] as bool?,
         coverStyle: json['coverStyle'] as String? ?? 'simple',
+        coverImagePath: json['coverImagePath'] as String?,
         tags: (json['tags'] as List? ?? [])
             .map((t) => t as String)
             .toList(),
@@ -82,6 +90,7 @@ class NotebookMeta {
         if (colorValue != null) 'color': colorValue,
         if (syncEnabled != null) 'syncEnabled': syncEnabled,
         if (coverStyle != 'simple') 'coverStyle': coverStyle,
+        if (coverImagePath != null) 'coverImagePath': coverImagePath,
         if (tags.isNotEmpty) 'tags': tags,
       };
 }
@@ -578,6 +587,8 @@ class StorageService {
       title: notebook.title,
       updatedAt: notebook.updatedAt,
       colorValue: notebook.colorValue,
+      coverStyle: notebook.coverStyle,
+      coverImagePath: notebook.coverImagePath,
       tags: notebook.tags,
     ));
     await _writeIndex(base, metas);
@@ -594,6 +605,7 @@ class StorageService {
     String? title,
     int? colorValue,
     String coverStyle = 'simple',
+    String? coverImagePath,
     List<String>? tags,
     PageTemplate? template,
   }) async {
@@ -606,6 +618,7 @@ class StorageService {
       title: title ?? 'Mi cuaderno',
       colorValue: colorValue,
       coverStyle: coverStyle,
+      coverImagePath: coverImagePath,
       tags: tags,
       notes: [note],
     );
@@ -712,6 +725,9 @@ class StorageService {
     final metas = await _readIndex(base);
     metas.removeWhere((m) => m.id == id);
     await _writeIndex(base, metas);
+
+    // Limpiar imágenes huérfanas en background (no bloquea el retorno).
+    collectOrphanedImages();
   }
 
   // -------------------------------------------------------------------------
@@ -802,6 +818,9 @@ class StorageService {
     }
 
     await saveNotebook(nb);
+
+    // Limpiar imágenes huérfanas en background.
+    collectOrphanedImages();
   }
 
   /// Duplica un Note dentro del mismo Notebook.
@@ -842,7 +861,8 @@ class StorageService {
   // -------------------------------------------------------------------------
 
   /// Lista los cuadernos en la papelera, ordenados por fecha de eliminación
-  /// (el más reciente primero).
+  /// (el más reciente primero). Soporta formato legacy (Document) y
+  /// formato actual (Notebook + Note).
   Future<List<NotebookMeta>> loadTrash() async {
     final base = await _baseDir();
     final trashDir = Directory('${base.path}/trash');
@@ -853,15 +873,21 @@ class StorageService {
       try {
         final raw = await entity.readAsString();
         if (raw.trim().isEmpty) continue;
-        final doc = Document.fromJson(
-          jsonDecode(raw) as Map<String, dynamic>,
-        );
-        metas.add(NotebookMeta(
-          id: doc.id,
-          title: doc.title,
-          updatedAt: doc.updatedAt,
-          colorValue: doc.colorValue,
-        ));
+        final json = jsonDecode(raw) as Map<String, dynamic>;
+        // Detectar formato: si tiene 'noteIds' es Notebook; si tiene 'pages' es Document.
+        if (json.containsKey('noteIds')) {
+          // Formato Notebook (v2)
+          metas.add(NotebookMeta.fromJson(json));
+        } else {
+          // Formato Document legacy
+          final doc = Document.fromJson(json);
+          metas.add(NotebookMeta(
+            id: doc.id,
+            title: doc.title,
+            updatedAt: doc.updatedAt,
+            colorValue: doc.colorValue,
+          ));
+        }
       } catch (_) {
         // Archivo corrupto, ignorar.
       }
@@ -871,17 +897,59 @@ class StorageService {
   }
 
   /// Restaura un cuaderno desde la papelera al índice.
+  /// Soporta formato legacy (Document) y formato actual (Notebook + Note).
   Future<void> restoreFromTrash(String id) async {
     final base = await _baseDir();
     final trashFile = File('${base.path}/trash/$id.json');
     if (!await trashFile.exists()) return;
-    final docs = await _docsDir(base);
-    final docFile = File('${docs.path}/$id.json');
-    await trashFile.copy(docFile.path);
-    await trashFile.delete();
-    // Reconstruir el índice leyendo el documento restaurado.
-    final doc = await load(id);
-    if (doc != null) await save(doc);
+
+    final raw = await trashFile.readAsString();
+    if (raw.trim().isEmpty) return;
+    final json = jsonDecode(raw) as Map<String, dynamic>;
+
+    if (json.containsKey('noteIds')) {
+      // ---- Formato Notebook (v2) ----
+      // Restaurar el notebook y cada note asociado.
+      final noteIds = (json['noteIds'] as List? ?? [])
+          .map((e) => e as String)
+          .toList();
+      for (final nid in noteIds) {
+        final noteTrash = File('${base.path}/trash/$nid.json');
+        if (await noteTrash.exists()) {
+          final notesDir = await _notesDir(base);
+          await noteTrash.copy('${notesDir.path}/$nid.json');
+          await noteTrash.delete();
+        }
+      }
+      // Mover el notebook a su carpeta.
+      final notebooksDir = await _notebooksDir(base);
+      await trashFile.copy('${notebooksDir.path}/$id.json');
+      await trashFile.delete();
+      // Reconstruir el índice.
+      final nb = await loadNotebook(id);
+      if (nb != null) {
+        final metas = await _readIndex(base);
+        metas.add(NotebookMeta(
+          id: nb.id,
+          title: nb.title,
+          updatedAt: nb.updatedAt,
+          colorValue: nb.colorValue,
+          coverStyle: nb.coverStyle,
+          coverImagePath: nb.coverImagePath,
+          tags: nb.tags,
+        ));
+        await _writeIndex(base, metas);
+      }
+    } else {
+      // ---- Formato Document legacy ----
+      final docs = await _docsDir(base);
+      final docFile = File('${docs.path}/$id.json');
+      await trashFile.copy(docFile.path);
+      await trashFile.delete();
+      // Reconstruir el índice leyendo el documento restaurado.
+      final doc = await load(id);
+      if (doc != null) await save(doc);
+    }
   }
 
   /// Carga un documento completo desde la papelera.
@@ -892,7 +960,22 @@ class StorageService {
       if (!await trashFile.exists()) return null;
       final raw = await trashFile.readAsString();
       if (raw.trim().isEmpty) return null;
-      return Document.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      if (json.containsKey('noteIds')) {
+        // Notebook format: reconstruct a Document for backward compatibility.
+        final nb = await loadNotebook(id);
+        if (nb == null) return null;
+        return Document(
+          id: nb.id,
+          title: nb.title,
+          createdAt: nb.createdAt,
+          updatedAt: nb.updatedAt,
+          pages: nb.notes.expand((n) => n.pages).toList(),
+          colorValue: nb.colorValue,
+          tags: nb.tags,
+        );
+      }
+      return Document.fromJson(json);
     } catch (e) {
       debugPrint('StorageService.loadFromTrash: $e');
       return null;
@@ -904,6 +987,8 @@ class StorageService {
     final base = await _baseDir();
     final trashFile = File('${base.path}/trash/$id.json');
     if (await trashFile.exists()) await trashFile.delete();
+    // Limpiar imágenes huérfanas.
+    collectOrphanedImages();
   }
 
   /// Vacía toda la papelera (elimina definitivamente todo).
@@ -911,6 +996,8 @@ class StorageService {
     final base = await _baseDir();
     final trashDir = Directory('${base.path}/trash');
     if (await trashDir.exists()) await trashDir.delete(recursive: true);
+    // Limpiar imágenes huérfanas.
+    collectOrphanedImages();
   }
 
   // -------------------------------------------------------------------------
@@ -991,5 +1078,95 @@ class StorageService {
     }
 
     return count;
+  }
+
+  // -------------------------------------------------------------------------
+  // Limpieza de imágenes huérfanas
+  // -------------------------------------------------------------------------
+
+  /// Recopila todas las rutas de imágenes referenciadas por algún Note activo.
+  Future<Set<String>> _collectReferencedImagePaths() async {
+    final base = await _baseDir();
+    final referenced = <String>{};
+
+    // 1. Recorrer todos los notebooks del índice y cargar sus notes.
+    final metas = await _readIndex(base);
+    for (final meta in metas) {
+      final nbFile = await _notebookFile(base, meta.id);
+      if (!await nbFile.exists()) continue;
+      try {
+        final raw = await nbFile.readAsString();
+        if (raw.trim().isEmpty) continue;
+        final json = jsonDecode(raw) as Map<String, dynamic>;
+        final noteIds = (json['noteIds'] as List? ?? [])
+            .map((e) => e as String)
+            .toList();
+        for (final nid in noteIds) {
+          final note = await loadNote(nid);
+          if (note == null) continue;
+          _extractImagePaths(note, referenced);
+        }
+      } catch (_) {}
+    }
+
+    // 2. También considerar images en la papelera (no borrar si podrían restaurarse).
+    final trashDir = Directory('${base.path}/trash');
+    if (await trashDir.exists()) {
+      await for (final entity in trashDir.list()) {
+        if (entity is! File || !entity.path.endsWith('.json')) continue;
+        try {
+          final raw = await entity.readAsString();
+          if (raw.trim().isEmpty) continue;
+          // Intentar como Note
+          final noteJson = jsonDecode(raw);
+          if (noteJson is Map<String, dynamic> && noteJson.containsKey('pages')) {
+            final note = Note.fromJson(noteJson);
+            _extractImagePaths(note, referenced);
+          }
+        } catch (_) {}
+      }
+    }
+
+    return referenced;
+  }
+
+  /// Extrae todas las rutas de imágenes de un Note (images + templates custom).
+  void _extractImagePaths(Note note, Set<String> referenced) {
+    for (final page in note.pages) {
+      for (final img in page.images) {
+        referenced.add(img.localPath);
+      }
+      final tplPath = page.template.imagePath;
+      if (tplPath != null) referenced.add(tplPath);
+    }
+  }
+
+  /// Elimina imágenes de `inklus/images/` que no están referenciadas por
+  /// ningún Note (activo o en papelera). Ejecuta en background.
+  Future<void> collectOrphanedImages() async {
+    try {
+      final base = await _baseDir();
+      final imagesDir = Directory('${base.path}/images');
+      if (!await imagesDir.exists()) return;
+
+      final referenced = await _collectReferencedImagePaths();
+      var deleted = 0;
+
+      await for (final entity in imagesDir.list(recursive: true)) {
+        if (entity is! File) continue;
+        if (!referenced.contains(entity.path)) {
+          try {
+            await entity.delete();
+            deleted++;
+          } catch (_) {}
+        }
+      }
+
+      if (deleted > 0) {
+        debugPrint('StorageService: $deleted imagen(es) huérfana(s) eliminada(s).');
+      }
+    } catch (e) {
+      debugPrint('StorageService.collectOrphanedImages: $e');
+    }
   }
 }

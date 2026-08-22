@@ -537,23 +537,18 @@ class _CompactTemplateGrid extends StatelessWidget {
       (TemplateType.habit, Icons.checklist, 'Hábitos'),
     ];
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        childAspectRatio: 0.9,
-      ),
-      itemCount: templates.length,
-      itemBuilder: (context, index) {
-        final (type, icon, label) = templates[index];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: templates.map((t) {
+        final (type, icon, label) = t;
         final isSelected = selected == type;
         return GestureDetector(
           onTap: () => onSelect(type),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
               color: isSelected
                   ? kAccentColor.withAlpha(20)
@@ -595,7 +590,7 @@ class _CompactTemplateGrid extends StatelessWidget {
             ),
           ),
         );
-      },
+      }).toList(),
     );
   }
 }

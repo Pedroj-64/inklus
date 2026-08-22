@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants.dart';
 import '../models/document.dart';
@@ -107,6 +108,31 @@ class CanvasController extends ChangeNotifier {
 
   final UndoStack _undoStack = UndoStack(maxDepth: kMaxUndoDepth);
 
+  // ---- Notificadores granulares ----
+  // Estos permiten que ToolRail y BottomBar solo se reconstruyan cuando
+  // cambia lo que realmente les importa, en vez de en cada trazo.
+  /// Cambia cuando: tool, rulerEnabled, magnifierEnabled.
+  final ValueNotifier<int> _toolContextNotifier = ValueNotifier<int>(0);
+  ValueListenable<int> get toolContextNotifier => _toolContextNotifier;
+
+  /// Cambia cuando: tool, color, toolSize, shapeDetection, fingerDrawing,
+  /// selectedStrokes, hasClipboard.
+  final ValueNotifier<int> _bottomBarContextNotifier = ValueNotifier<int>(0);
+  ValueListenable<int> get bottomBarContextNotifier => _bottomBarContextNotifier;
+
+  int _toolContextVersion = 0;
+  int _bottomBarContextVersion = 0;
+
+  /// Notifica solo a los listeners del tool rail.
+  void _notifyToolContext() {
+    _toolContextNotifier.value = ++_toolContextVersion;
+  }
+
+  /// Notifica solo a los listeners de la bottom bar.
+  void _notifyBottomBarContext() {
+    _bottomBarContextNotifier.value = ++_bottomBarContextVersion;
+  }
+
   /// Versión del contenido (trazos/imágenes/plantilla). La capa confirmada
   /// del lienzo la usa para saber cuándo debe repintar de verdad.
   int _contentVersion = 0;
@@ -124,13 +150,40 @@ class CanvasController extends ChangeNotifier {
   /// para replicar el Note en Google Drive cuando hay sesión.
   Future<void> Function(Note note)? onRemoteSync;
 
+  /// Callback invocado cuando se intenta editar en una capa bloqueada.
+  VoidCallback? _onLayerBlocked;
+
+  /// Registra el callback de capa bloqueada.
+  void set onLayerBlocked(VoidCallback? cb) => _onLayerBlocked = cb;
+
   Timer? _saveTimer;
+  Duration _autosaveDebounce = kSaveDebounce;
 
   CanvasController(this._storage, {Note? initial, String? notebookId})
       : _note = initial ?? Note.newBlank(),
         _notebookId = notebookId ?? '' {
+    _loadAutosaveInterval();
     _scheduleSave();
   }
+
+  /// Carga el intervalo de autoguardado desde SharedPreferences.
+  Future<void> _loadAutosaveInterval() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seconds = prefs.getInt('autosave_interval') ?? 0;
+      if (seconds > 0) {
+        _autosaveDebounce = Duration(seconds: seconds);
+      }
+    } catch (_) {}
+  }
+
+  /// Persiste el intervalo de autoguardado.
+  static Future<void> setAutosaveInterval(Duration interval) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('autosave_interval', interval.inSeconds);
+  }
+
+  Duration get autosaveDebounce => _autosaveDebounce;
 
   // ------------------------------------------------------------------
   // Accesores
@@ -197,6 +250,26 @@ class CanvasController extends ChangeNotifier {
   Size get sheetSize => page.template.sheetSize;
 
   // ------------------------------------------------------------------
+  // Capas bloqueadas
+  // ------------------------------------------------------------------
+
+  /// Verifica si la capa activa está bloqueada.
+  bool get isActiveLayerLocked {
+    if (_activeLayerIndex < page.layers.length) {
+      return page.layers[_activeLayerIndex].locked;
+    }
+    return false;
+  }
+
+  /// Verifica si la capa de un trazo/imagen/texto está bloqueada.
+  bool _isLayerLocked(int layerIndex) {
+    if (layerIndex < page.layers.length) {
+      return page.layers[layerIndex].locked;
+    }
+    return false;
+  }
+
+  // ------------------------------------------------------------------
   // Herramientas
   // ------------------------------------------------------------------
 
@@ -204,11 +277,12 @@ class CanvasController extends ChangeNotifier {
     if (_tool == tool) return;
     _tool = tool;
     _selectedImageId = null;
+    _notifyToolContext();
+    _notifyBottomBarContext();
     notifyListeners();
-  }
-
-  void setColor(Color color) {
+  }  void setColor(Color color) {
     _color = color;
+    _notifyBottomBarContext();
     notifyListeners();
   }
 
@@ -217,18 +291,22 @@ class CanvasController extends ChangeNotifier {
     if (range != null) {
       _toolSizes[_tool] = size.clamp(range.$1, range.$2);
     }
+    _notifyBottomBarContext();
     notifyListeners();
   }
 
   void setFingerDrawing(bool enabled) {
     _fingerDrawingEnabled = enabled;
+    _notifyBottomBarContext();
     notifyListeners();
   }
 
   bool get shapeDetectionEnabled => _shapeDetectionEnabled;
 
+
   void setShapeDetection(bool enabled) {
     _shapeDetectionEnabled = enabled;
+    _notifyBottomBarContext();
     notifyListeners();
   }
 
@@ -243,6 +321,7 @@ class CanvasController extends ChangeNotifier {
         viewportSize,
       );
     }
+    _notifyToolContext();
     notifyListeners();
   }
 
@@ -252,6 +331,7 @@ class CanvasController extends ChangeNotifier {
     final idx = types.indexOf(_rulerType);
     _rulerType = types[(idx + 1) % types.length];
     if (!_rulerEnabled) _rulerEnabled = true;
+    _notifyToolContext();
     notifyListeners();
   }
 
@@ -340,6 +420,7 @@ class CanvasController extends ChangeNotifier {
 
   void toggleMagnifier() {
     _magnifierEnabled = !_magnifierEnabled;
+    _notifyToolContext();
     notifyListeners();
   }
 
@@ -412,6 +493,11 @@ class CanvasController extends ChangeNotifier {
     }
     if (tool == ToolType.text) {
       addTextItem(worldPoint);
+      return;
+    }
+    // Bloquear escritura si la capa activa está bloqueada.
+    if (_isLayerLocked(_activeLayerIndex) && tool != ToolType.eraser) {
+      _onLayerBlocked?.call();
       return;
     }
     _isDrawing = true;
@@ -511,11 +597,21 @@ class CanvasController extends ChangeNotifier {
       _undoStack.push(CanvasAction(strokesAdded: [finalStroke]));
     } else if (eraserPath.isNotEmpty) {
       final before = List<Stroke>.from(page.strokes);
-      final survivors = StrokeEraser.erase(
-        before,
+      // Proteger trazos en capas bloqueadas: el borrador no los toca.
+      final protected = <String, Stroke>{};
+      for (final s in before) {
+        if (_isLayerLocked(s.layerIndex)) {
+          protected[s.id] = s;
+        }
+      }
+      final erasable = before.where((s) => !protected.containsKey(s.id)).toList();
+      final erasableSurvivors = StrokeEraser.erase(
+        erasable,
         eraserPath,
         eraserRadius,
       );
+      // Reconstruir la lista: protegidos + sobrevivientes.
+      final survivors = [...protected.values, ...erasableSurvivors];
       final removed = before.where((s) => !survivors.contains(s)).toList();
       if (removed.isNotEmpty) {
         page.strokes
@@ -693,6 +789,7 @@ class CanvasController extends ChangeNotifier {
   // ------------------------------------------------------------------
 
   void addImage(ImageItem item) {
+    if (_isLayerLocked(item.layerIndex)) return;
     page.images.add(item);
     _selectedImageId = item.id;
     _undoStack.push(CanvasAction(imagesAdded: [item]));
@@ -700,6 +797,7 @@ class CanvasController extends ChangeNotifier {
   }
 
   void updateImage(ImageItem oldItem, ImageItem newItem) {
+    if (_isLayerLocked(oldItem.layerIndex)) return;
     final index = page.images.indexOf(oldItem);
     if (index < 0) return;
     page.images[index] = newItem;
@@ -712,6 +810,7 @@ class CanvasController extends ChangeNotifier {
   /// Actualiza la posición/tamaño de una imagen en vivo (durante el arrastre)
   /// sin empujar acciones de deshacer por cada frame.
   void updateImageLive(ImageItem updated) {
+    if (_isLayerLocked(updated.layerIndex)) return;
     final index = page.images.indexWhere((i) => i.id == updated.id);
     if (index < 0) return;
     page.images[index] = updated;
@@ -721,6 +820,7 @@ class CanvasController extends ChangeNotifier {
   /// Confirma el cambio de una imagen al soltar el dedo: reemplaza el item y
   /// registra una única acción de deshacer ([before] → [after]).
   void commitImageChange(ImageItem before, ImageItem after) {
+    if (_isLayerLocked(before.layerIndex)) return;
     final index = page.images.indexWhere((i) => i.id == after.id);
     if (index >= 0) page.images[index] = after;
     _undoStack.push(
@@ -730,6 +830,7 @@ class CanvasController extends ChangeNotifier {
   }
 
   void removeImage(ImageItem item) {
+    if (_isLayerLocked(item.layerIndex)) return;
     page.images.remove(item);
     if (_selectedImageId == item.id) _selectedImageId = null;
     _undoStack.push(CanvasAction(imagesRemoved: [item]));
@@ -759,22 +860,189 @@ class CanvasController extends ChangeNotifier {
   }
 
   /// Termina el lazo y selecciona los trazos que caen dentro.
+  ///
+  /// Usa una estrategia de 3 niveles para una selección precisa:
+  /// 1. **Punto dentro**: al menos un punto del trazo está dentro del polígono.
+  /// 2. **Borde cruzado**: el contorno del trazo cruza el borde del lazo.
+  /// 3. **Bounding box**: el rectángulo delimitador del trazo está completamente
+  ///    dentro del lazo (para trazos grandes que no tienen puntos dentro).
   void endLasso() {
     if (_lassoPath.length < 3) {
       _lassoPath = [];
       notifyListeners();
       return;
     }
-    // Hit-test: ¿qué trazos tienen al menos un punto dentro del polígono?
     final lassoPolygon = _lassoPath;
+    final lassoBounds = _computeLassoBounds(lassoPolygon);
+
     _selectedStrokes = page.strokes.where((stroke) {
-      for (final p in stroke.points) {
-        if (pointInPolygon(p.offset, lassoPolygon)) return true;
+      // Ignorar trazos en capas ocultas.
+      if (stroke.layerIndex < page.layers.length &&
+          !page.layers[stroke.layerIndex].visible) {
+        return false;
       }
-      return false;
+      // Ignorar herramientas especiales.
+      if (stroke.tool == ToolType.eraser ||
+          stroke.tool == ToolType.select ||
+          stroke.tool == ToolType.lasso) {
+        return false;
+      }
+      return _isStrokeInLasso(stroke, lassoPolygon, lassoBounds);
     }).toList();
+
     _lassoPath = [];
+    // Auto-cambiar a herramienta select para poder mover/redimensionar.
+    if (_selectedStrokes.isNotEmpty) {
+      _tool = ToolType.select;
+    }
+    _notifyToolContext();
+    _notifyBottomBarContext();
     notifyListeners();
+  }
+
+  /// Calcula los límites del polígono del lazo.
+  Rect _computeLassoBounds(List<Offset> polygon) {
+    if (polygon.isEmpty) return Rect.zero;
+    var left = double.infinity, top = double.infinity;
+    var right = double.negativeInfinity, bottom = double.negativeInfinity;
+    for (final p in polygon) {
+      if (p.dx < left) left = p.dx;
+      if (p.dy < top) top = p.dy;
+      if (p.dx > right) right = p.dx;
+      if (p.dy > bottom) bottom = p.dy;
+    }
+    return Rect.fromLTRB(left, top, right, bottom);
+  }
+
+  /// Determina si un trazo está "dentro" del lazo usando 3 estrategias.
+  bool _isStrokeInLasso(
+    Stroke stroke,
+    List<Offset> lassoPolygon,
+    Rect lassoBounds,
+  ) {
+    if (stroke.points.isEmpty) return false;
+
+    // --- Estrategia 1: Bounding box rápido ---
+    // Si el bounding box del trazo no interseca el del lazo, no puede estar dentro.
+    final strokeBounds = _computeStrokeBounds(stroke);
+    if (!strokeBounds.overlaps(lassoBounds)) return false;
+
+    // --- Estrategia 2: Punto dentro del polígono ---
+    // El más preciso: algún punto del trazo está dentro del lazo.
+    for (final p in stroke.points) {
+      if (pointInPolygon(p.offset, lassoPolygon)) return true;
+    }
+
+    // --- Estrategia 3: Bounding box completamente dentro ---
+    // Para trazos grandes cuyos puntos están fuera pero el área del trazo
+    // (considerando su grosor) está dentro del lazo.
+    final halfSize = stroke.size / 2;
+    final inflatedStroke = strokeBounds.inflate(halfSize);
+    if (_isRectInsidePolygon(inflatedStroke, lassoPolygon)) return true;
+
+    // --- Estrategia 4: Intersección de bordes ---
+    // Verificar si algún segmento del trazo cruza algún segmento del lazo.
+    if (_strokeIntersectsLasso(stroke, lassoPolygon)) return true;
+
+    return false;
+  }
+
+  /// Calcula el bounding box de un trazo (solo puntos, sin grosor).
+  Rect _computeStrokeBounds(Stroke stroke) {
+    var left = double.infinity, top = double.infinity;
+    var right = double.negativeInfinity, bottom = double.negativeInfinity;
+    for (final p in stroke.points) {
+      if (p.x < left) left = p.x;
+      if (p.y < top) top = p.y;
+      if (p.x > right) right = p.x;
+      if (p.y > bottom) bottom = p.y;
+    }
+    return Rect.fromLTRB(left, top, right, bottom);
+  }
+
+  /// Verifica si un rectángulo está completamente dentro de un polígono.
+  bool _isRectInsidePolygon(Rect rect, List<Offset> polygon) {
+    // Verificar las 4 esquinas + centro + puntos medios de los lados.
+    final testPoints = [
+      rect.topLeft,
+      rect.topRight,
+      rect.bottomLeft,
+      rect.bottomRight,
+      rect.center,
+      rect.centerLeft,
+      rect.centerRight,
+      rect.topCenter,
+      rect.bottomCenter,
+    ];
+    for (final p in testPoints) {
+      if (!pointInPolygon(p, polygon)) return false;
+    }
+    return true;
+  }
+
+  /// Verifica si algún segmento del trazo cruza algún segmento del lazo.
+  bool _strokeIntersectsLasso(
+    Stroke stroke,
+    List<Offset> lassoPolygon,
+  ) {
+    // Muestrear el trazo para no hacer O(n*m) con todos los puntos.
+    final step = max(1, stroke.points.length ~/ 20);
+    final strokeSegments = <(Offset, Offset)>[];
+    for (var i = 0; i < stroke.points.length - 1; i += step) {
+      final next = min(i + step, stroke.points.length - 1);
+      strokeSegments.add((
+        stroke.points[i].offset,
+        stroke.points[next].offset,
+      ));
+    }
+
+    // Verificar intersección entre cada segmento del trazo y cada segmento del lazo.
+    for (final (a, b) in strokeSegments) {
+      for (var i = 0; i < lassoPolygon.length; i++) {
+        final j = (i + 1) % lassoPolygon.length;
+        if (_segmentsIntersect(
+          a, b,
+          lassoPolygon[i], lassoPolygon[j],
+        )) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// Verifica si dos segmentos de línea se cruzan (intersección proper).
+  bool _segmentsIntersect(Offset a1, Offset a2, Offset b1, Offset b2) {
+    final d1 = _direction(b1, b2, a1);
+    final d2 = _direction(b1, b2, a2);
+    final d3 = _direction(a1, a2, b1);
+    final d4 = _direction(a1, a2, b2);
+
+    if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+        ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+      return true;
+    }
+
+    // Casos especiales: puntos colineales.
+    if (d1 == 0 && _onSegment(b1, b2, a1)) return true;
+    if (d2 == 0 && _onSegment(b1, b2, a2)) return true;
+    if (d3 == 0 && _onSegment(a1, a2, b1)) return true;
+    if (d4 == 0 && _onSegment(a1, a2, b2)) return true;
+
+    return false;
+  }
+
+  /// Producto cruz para determinar orientación.
+  double _direction(Offset a, Offset b, Offset c) {
+    return (c.dx - a.dx) * (b.dy - a.dy) - (c.dy - a.dy) * (b.dx - a.dx);
+  }
+
+  /// Verifica si el punto [p] está en el segmento [a]-[b].
+  bool _onSegment(Offset a, Offset b, Offset p) {
+    return p.dx >= min(a.dx, b.dx) &&
+        p.dx <= max(a.dx, b.dx) &&
+        p.dy >= min(a.dy, b.dy) &&
+        p.dy <= max(a.dy, b.dy);
   }
 
   void clearLassoSelection() {
@@ -800,12 +1068,15 @@ class CanvasController extends ChangeNotifier {
   /// Elimina los trazos seleccionados con el lazo (deshacer possible).
   void deleteSelectedStrokes() {
     if (_selectedStrokes.isEmpty) return;
-    final removed = List<Stroke>.from(_selectedStrokes);
-    for (final s in removed) {
+    // No eliminar trazos en capas bloqueadas.
+    final removable = _selectedStrokes.where((s) => !_isLayerLocked(s.layerIndex)).toList();
+    if (removable.isEmpty) return;
+    for (final s in removable) {
       page.strokes.remove(s);
     }
-    _undoStack.push(CanvasAction(strokesRemoved: removed));
-    _selectedStrokes = [];
+    _selectedStrokes.removeWhere((s) => removable.contains(s));
+    _undoStack.push(CanvasAction(strokesRemoved: removable));
+    _notifyBottomBarContext();
     _touch();
   }
 
@@ -813,6 +1084,7 @@ class CanvasController extends ChangeNotifier {
   void copySelectedStrokes() {
     if (_selectedStrokes.isEmpty) return;
     _clipboardStrokes = List<Stroke>.from(_selectedStrokes);
+    _notifyBottomBarContext();
   }
 
   /// Pega los trazos del portapapeles en la página actual,
@@ -837,6 +1109,7 @@ class CanvasController extends ChangeNotifier {
     }
     _undoStack.push(CanvasAction(strokesAdded: newStrokes));
     _selectedStrokes = newStrokes;
+    _notifyBottomBarContext();
     _touch();
   }
 
@@ -859,6 +1132,8 @@ class CanvasController extends ChangeNotifier {
     final sinA = sin(rotationAngle);
 
     for (final original in List<Stroke>.from(_selectedStrokes)) {
+      // Invalidar caché del outline antes de transformar.
+      StrokeEngine.invalidate(original.id);
       final newPoints = original.points.map((p) {
         // 1. Trasladar al origen relativo al pivot.
         var dx = p.x - pivotPoint.dx;
@@ -936,8 +1211,13 @@ class CanvasController extends ChangeNotifier {
   /// para evitar acumulación durante el arrastre.
   void moveSelectedStrokes(Offset delta, {required List<Stroke> before}) {
     if (before.isEmpty) return;
+    // Filtrar trazos en capas bloqueadas.
+    final movable = before.where((s) => !_isLayerLocked(s.layerIndex)).toList();
+    if (movable.isEmpty) return;
     _selectedStrokes = [];
     for (final original in before) {
+      // Invalidar caché del outline antes de transformar.
+      StrokeEngine.invalidate(original.id);
       final newPoints = original.points.map((p) {
         return StrokePoint(p.x + delta.dx, p.y + delta.dy, p.pressure);
       }).toList();
@@ -1009,6 +1289,7 @@ class CanvasController extends ChangeNotifier {
   }
 
   void removeTextItem(TextItem item) {
+    if (_isLayerLocked(item.layerIndex)) return;
     page.textItems.remove(item);
     if (_editingTextId == item.id) _editingTextId = null;
     _undoStack.push(CanvasAction(textItemsRemoved: [item]));
@@ -1071,7 +1352,7 @@ class CanvasController extends ChangeNotifier {
 
   /// Rellena el área más cercana al punto con el color actual.
   void _bucketFill(Offset worldPoint) {
-    // Encuentra el trazo más cercano cuyo contorno encierre el punto.
+    // --- Paso 1: buscar un trazo individual cuyo contorno encierre el punto ---
     Stroke? enclosingStroke;
     var bestDistance = double.infinity;
 
@@ -1079,7 +1360,6 @@ class CanvasController extends ChangeNotifier {
       final outline = StrokeEngine.outlineFor(stroke);
       if (outline.length < 3) continue;
       if (pointInPolygon(worldPoint, outline)) {
-        // El punto está dentro del contorno del trazo.
         final center = polygonCenter(outline);
         final dist = (worldPoint - center).distance;
         if (dist < bestDistance) {
@@ -1090,7 +1370,7 @@ class CanvasController extends ChangeNotifier {
     }
 
     if (enclosingStroke != null) {
-      // Crea un trazo de relleno usando los puntos del trazo encontrado.
+      // Rellena el trazo encontrado directamente.
       final fillStroke = Stroke(
         id: 'st_${DateTime.now().microsecondsSinceEpoch}',
         points: enclosingStroke.points,
@@ -1102,8 +1382,133 @@ class CanvasController extends ChangeNotifier {
       page.strokes.add(fillStroke);
       _undoStack.push(CanvasAction(strokesAdded: [fillStroke]));
       _touch();
+      return;
+    }
+
+    // --- Paso 2: buscar entre trazos agrupados (forma cerrada por
+    //     múltiples trazos). Agrupa trazos cercanos en componentes
+    //     conectados y comprueba si el punto está dentro del bounding
+    //     polygon de cada componente. ---
+    final visibleStrokes = page.strokes.where((s) {
+      if (s.layerIndex < page.layers.length &&
+          !page.layers[s.layerIndex].visible) {
+        return false;
+      }
+      return true;
+    }).toList();
+    if (visibleStrokes.isEmpty) return;
+
+    // Agrupar trazos cercanos en componentes conectados.
+    final components = _groupStrokesIntoComponents(visibleStrokes, 80.0);
+
+    for (final component in components) {
+      // Calcular el polígono delimitador de todos los trazos del componente.
+      final allPoints = <Offset>[];
+      for (final s in component) {
+        for (final p in s.points) {
+          allPoints.add(p.offset);
+        }
+      }
+      if (allPoints.length < 3) continue;
+
+      // Convex hull como polígono aproximado.
+      final hull = _convexHull(allPoints);
+      if (hull.length < 3) continue;
+
+      if (pointInPolygon(worldPoint, hull)) {
+        // El punto está dentro del componente: crea un fill que cubra
+        // el área usando el polígono convexo como referencia.
+        final fillStroke = Stroke(
+          id: 'st_${DateTime.now().microsecondsSinceEpoch}',
+          points: component.first.points,
+          tool: component.first.tool,
+          colorValue: component.first.colorValue,
+          size: component.first.size,
+          fillColorValue: _color.toARGB32(),
+        );
+        page.strokes.add(fillStroke);
+        _undoStack.push(CanvasAction(strokesAdded: [fillStroke]));
+        _touch();
+        return;
+      }
     }
   }
+
+  /// Agrupa trazos en componentes conectados usando distancia umbral.
+  List<List<Stroke>> _groupStrokesIntoComponents(
+    List<Stroke> strokes,
+    double maxDistance,
+  ) {
+    final visited = List<bool>.filled(strokes.length, false);
+    final components = <List<Stroke>>[];
+
+    for (var i = 0; i < strokes.length; i++) {
+      if (visited[i]) continue;
+      final component = <Stroke>[];
+      final queue = [i];
+      while (queue.isNotEmpty) {
+        final idx = queue.removeLast();
+        if (visited[idx]) continue;
+        visited[idx] = true;
+        component.add(strokes[idx]);
+        // Buscar trazos cercanos no visitados.
+        for (var j = idx + 1; j < strokes.length; j++) {
+          if (visited[j]) continue;
+          if (_strokesClose(strokes[idx], strokes[j], maxDistance)) {
+            queue.add(j);
+          }
+        }
+      }
+      components.add(component);
+    }
+    return components;
+  }
+
+  /// Determina si dos trazos están cerca (algún punto de uno está a
+  /// distancia < [maxDistance] de algún punto del otro).
+  bool _strokesClose(Stroke a, Stroke b, double maxDistance) {
+    // Muestreo rápido: comparar puntos cada N para no hacer O(n²).
+    final stepA = max(1, a.points.length ~/ 10);
+    final stepB = max(1, b.points.length ~/ 10);
+    for (var i = 0; i < a.points.length; i += stepA) {
+      for (var j = 0; j < b.points.length; j += stepB) {
+        final dx = a.points[i].x - b.points[j].x;
+        final dy = a.points[i].y - b.points[j].y;
+        if (dx * dx + dy * dy < maxDistance * maxDistance) return true;
+      }
+    }
+    return false;
+  }
+
+  /// Convex hull de Andrew (O(n log n)).
+  List<Offset> _convexHull(List<Offset> points) {
+    if (points.length < 3) return points;
+    final sorted = List<Offset>.from(points)
+      ..sort((a, b) => a.dx != b.dx ? a.dx.compareTo(b.dx) : a.dy.compareTo(b.dy));
+    final hull = <Offset>[];
+    // Lower hull
+    for (final p in sorted) {
+      while (hull.length >= 2 &&
+          _cross(hull[hull.length - 2], hull[hull.length - 1], p) <= 0) {
+        hull.removeLast();
+      }
+      hull.add(p);
+    }
+    // Upper hull
+    final lowerLen = hull.length + 1;
+    for (var i = sorted.length - 2; i >= 0; i--) {
+      while (hull.length >= lowerLen &&
+          _cross(hull[hull.length - 2], hull[hull.length - 1], sorted[i]) <= 0) {
+        hull.removeLast();
+      }
+      hull.add(sorted[i]);
+    }
+    hull.removeLast(); // duplicado del primer punto
+    return hull;
+  }
+
+  double _cross(Offset o, Offset a, Offset b) =>
+      (a.dx - o.dx) * (b.dy - o.dy) - (a.dy - o.dy) * (b.dx - o.dx);
 
 
 
@@ -1190,7 +1595,7 @@ class CanvasController extends ChangeNotifier {
 
   void _scheduleSave() {
     _saveTimer?.cancel();
-    _saveTimer = Timer(kSaveDebounce, () async {
+    _saveTimer = Timer(_autosaveDebounce, () async {
       // Guardar el Note en su archivo individual
       if (_notebookId.isNotEmpty) {
         await _storage.saveNote(_notebookId, _note);

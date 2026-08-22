@@ -28,11 +28,11 @@ import '../services/search_service.dart';
 import 'canvas/drawing_canvas.dart';
 import 'widgets/bottom_bar.dart';
 import 'widgets/layers_sidebar.dart';
-import 'widgets/minimap.dart';
 import 'widgets/page_thumbnails.dart';
 import 'widgets/stroke_options_sheet.dart';
 import 'widgets/template_picker_sheet.dart';
 import 'widgets/tool_rail.dart';
+import 'settings_screen.dart';
 import 'writing_stats_screen.dart';
 import '../utils/theme_colors.dart';
 
@@ -85,6 +85,18 @@ class _HomeScreenState extends State<HomeScreen> {
     // Replica automática a Drive en cada guardado local (solo si hay sesión
     // y el scope ya está autorizado; nunca muestra UI).
     // A8: ahora se sincroniza cada Note individualmente (no el Document).
+    _controller.onLayerBlocked = () {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text('Capa bloqueada — desbloquea para editar'),
+              duration: Duration(milliseconds: 1500),
+            ),
+          );
+      }
+    };
     _controller.onRemoteSync = (note) async {
       if (!_syncService.isSignedIn) return;
       // Sync selectiva: solo subir si el notebook lo tiene habilitado.
@@ -288,7 +300,12 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
   Future<void> _exportInklusCopy() => _export(
-        () => InklusFormat.exportBytes(_c.document),
+        () async {
+          final nb = await _storage.loadNotebook(widget.notebookId);
+          if (nb != null) return InklusFormat.exportNotebookBytes(nb);
+          // Fallback: exportar solo el note actual.
+          return InklusFormat.exportNoteBytes(_c.note);
+        },
         '${_safeName(_c.document.title)}.inklus',
       );
 
@@ -305,6 +322,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Reconoce el texto escrito a mano en la página actual (OCR).
+  ///
+  /// Usa digital ink recognition (trazos vectoriales) como estrategia
+  /// principal, con fallback a bitmap si no hay trazos.
   Future<void> _recognizeText() async {
     if (!OcrService.isSupported) {
       _snack('OCR solo está disponible en Android e iOS');
@@ -325,7 +345,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     try {
-      final result = await OcrService.recognizeText(
+      final result = await OcrService.recognizeSmart(
         _c.page,
         sheetSize: _c.sheetSize,
         imageCache: _imageService.cache,
@@ -940,6 +960,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _openStats();
       case 'searchContent':
         _searchContent();
+      case 'settings':
+        _openSettings();
     }
   }
 
@@ -1081,6 +1103,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+    );
+  }
+
   // --- Búsqueda en contenido ---
   Future<void> _searchContent() async {
     // Indexar el documento actual.
@@ -1145,6 +1173,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final minutes = DateTime.now().difference(_sessionStart!).inMinutes;
       if (minutes > 0) _stats.recordActivity(minutes: minutes);
     }
+    // Flush: forzar guardado inmediato antes de destruir el controlador.
+    _controller.saveNow();
     super.dispose();
   }
 
@@ -1219,12 +1249,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                 right: 12,
                                 bottom: 12,
                                 child: _ZoomControls(controller: controller),
-                              ),
-                            if (!presentMode && !controller.sheetSize.isEmpty)
-                              Positioned(
-                                left: 12,
-                                bottom: 12,
-                                child: MinimapWidget(controller: controller),
                               ),
                             if (presentMode)
                               Positioned(
@@ -1345,9 +1369,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   tooltip: 'Volver a la biblioteca',
                   icon: const Icon(Icons.arrow_back),
                   onPressed: _goBack,
+                  padding: const EdgeInsets.all(12),
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                 ),
-                const Icon(Icons.edit, color: kAccentColor),
-                const SizedBox(width: 8),
                 InkWell(
                   onTap: _editTitle,
                   borderRadius: BorderRadius.circular(6),
@@ -1364,37 +1388,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                IconButton(
-                  tooltip: 'Página anterior',
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: controller.pageIndex > 0
-                      ? () => controller.goToPage(controller.pageIndex - 1)
-                      : null,
-                ),
-                Text(
-                  '${controller.pageIndex + 1} / ${controller.pageCount}',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                IconButton(
-                  tooltip: 'Página siguiente',
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: controller.pageIndex < controller.pageCount - 1
-                      ? () => controller.goToPage(controller.pageIndex + 1)
-                      : null,
-                ),
-                IconButton(
-                  tooltip: 'Nueva página',
-                  icon: const Icon(Icons.add),
-                  onPressed: controller.addPage,
-                ),
-                IconButton(
-                  tooltip: 'Eliminar página',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: controller.pageCount > 1
-                      ? () => _confirmDeletePage()
-                      : null,
                 ),
                 const Spacer(),
                 IconButton(
@@ -1423,47 +1416,25 @@ class _HomeScreenState extends State<HomeScreen> {
                   tooltip: 'Más opciones',
                   onSelected: _onMenuAction,
                   itemBuilder: (context) => [
-                    // --- Exportar ---
-                    const PopupMenuItem(
-                      value: 'png',
-                      child: ListTile(
-                        leading: Icon(Icons.image_outlined),
-                        title: Text('Exportar página (PNG)'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'pdf',
-                      child: ListTile(
-                        leading: Icon(Icons.picture_as_pdf_outlined),
-                        title: Text('Exportar página (PDF)'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'pdfAll',
-                      child: ListTile(
-                        leading: Icon(Icons.menu_book_outlined),
-                        title: Text('Exportar cuaderno (PDF)'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'inklus',
-                      child: ListTile(
-                        leading: Icon(Icons.save_alt),
-                        title: Text('Guardar copia (.inklus)'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'svg',
-                      child: ListTile(
-                        leading: Icon(Icons.code_outlined),
-                        title: Text('Exportar trazos (SVG)'),
-                        dense: true,
-                      ),
-                    ),
+                    // ━━━ EXPORTAR ━━━
+                    _menuHeader('Exportar'),
+                    _menuItem('png', Icons.image_outlined, 'Página (PNG)'),
+                    _menuItem('pdf', Icons.picture_as_pdf_outlined, 'Página (PDF)'),
+                    _menuItem('pdfAll', Icons.menu_book_outlined, 'Cuaderno (PDF)'),
+                    _menuItem('svg', Icons.code_outlined, 'Trazos (SVG)'),
+                    _menuItem('pptx', Icons.slideshow_outlined, 'PowerPoint'),
+                    _menuItem('inklus', Icons.save_alt, 'Copia .inklus'),
+
+                    // ━━━ COMPARTIR ━━━
+                    const PopupMenuDivider(),
+                    _menuHeader('Compartir'),
+                    _menuItem('sharePng', Icons.share_outlined, 'Compartir PNG'),
+                    _menuItem('sharePdf', Icons.share_outlined, 'Compartir PDF'),
+                    _menuItem('shareInklus', Icons.share_outlined, 'Compartir .inklus'),
+
+                    // ━━━ HERRAMIENTAS ━━━
+                    const PopupMenuDivider(),
+                    _menuHeader('Herramientas'),
                     PopupMenuItem(
                       value: 'ocr',
                       enabled: OcrService.isSupported,
@@ -1475,59 +1446,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         dense: true,
                       ),
                     ),
+                    _menuItem('importPdf', Icons.picture_as_pdf_outlined, 'Importar PDF como fondo'),
+                    _menuItem('searchContent', Icons.search, 'Buscar en contenido'),
+
+                    // ━━━ CONFIGURACIÓN ━━━
                     const PopupMenuDivider(),
-                    // --- Compartir ---
-                    const PopupMenuItem(
-                      value: 'sharePng',
-                      child: ListTile(
-                        leading: Icon(Icons.share_outlined),
-                        title: Text('Compartir página (PNG)'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'sharePdf',
-                      child: ListTile(
-                        leading: Icon(Icons.share_outlined),
-                        title: Text('Compartir página (PDF)'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'shareInklus',
-                      child: ListTile(
-                        leading: Icon(Icons.share_outlined),
-                        title: Text('Compartir cuaderno (.inklus)'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: 'clear',
-                      child: ListTile(
-                        leading: Icon(Icons.cleaning_services_outlined),
-                        title: Text('Limpiar página'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: 'backup',
-                      child: ListTile(
-                        leading: Icon(Icons.backup_outlined),
-                        title: Text('Exportar respaldo completo'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'restoreBackup',
-                      child: ListTile(
-                        leading: Icon(Icons.restore_outlined),
-                        title: Text('Importar respaldo completo'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuDivider(),
+                    _menuHeader('Configuración'),
+                    _menuItem('settings', Icons.settings_outlined, 'Configuración'),
                     PopupMenuItem(
                       value: 'haptics',
                       child: ListTile(
@@ -1552,64 +1477,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         dense: true,
                       ),
                     ),
-                    PopupMenuItem(
-                      value: 'nightMode',
-                      child: ListTile(
-                        leading: const Icon(Icons.dark_mode_outlined),
-                        title: const Text('Modo nocturno de escritura'),
-                        dense: true,
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'importPdf',
-                      child: const ListTile(
-                        leading: Icon(Icons.picture_as_pdf_outlined),
-                        title: Text('Importar PDF como fondo'),
-                        dense: true,
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'versions',
-                      child: const ListTile(
-                        leading: Icon(Icons.history),
-                        title: Text('Historial de versiones'),
-                        dense: true,
-                      ),
-                    ),
+                    _menuItem('nightMode', Icons.dark_mode_outlined, 'Modo nocturno de escritura'),
+
+                    // ━━━ DATOS ━━━
                     const PopupMenuDivider(),
-                    // --- Herramientas de calidad de vida ---
-                    const PopupMenuItem(
-                      value: 'pptx',
-                      child: ListTile(
-                        leading: Icon(Icons.slideshow_outlined),
-                        title: Text('Exportar como PowerPoint'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'reminder',
-                      child: ListTile(
-                        leading: Icon(Icons.alarm_add_outlined),
-                        title: Text('Crear recordatorio'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'stats',
-                      child: ListTile(
-                        leading: Icon(Icons.analytics_outlined),
-                        title: Text('Estadísticas de escritura'),
-                        dense: true,
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'searchContent',
-                      child: ListTile(
-                        leading: Icon(Icons.search),
-                        title: Text('Buscar en contenido'),
-                        dense: true,
-                      ),
-                    ),
+                    _menuHeader('Datos'),
+                    _menuItem('backup', Icons.backup_outlined, 'Exportar respaldo'),
+                    _menuItem('restoreBackup', Icons.restore_outlined, 'Importar respaldo'),
+                    _menuItem('versions', Icons.history, 'Historial de versiones'),
+
+                    // ━━━ UTILIDADES ━━━
+                    const PopupMenuDivider(),
+                    _menuHeader('Utilidades'),
+                    _menuItem('reminder', Icons.alarm_add_outlined, 'Crear recordatorio'),
+                    _menuItem('stats', Icons.analytics_outlined, 'Estadísticas de escritura'),
+                    _menuItem('clear', Icons.cleaning_services_outlined, 'Limpiar página'),
                   ],
                 ),
               ],
@@ -1624,29 +1506,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _goBack() async {
     await _controller.saveNow();
     if (mounted) Navigator.of(context).maybePop();
-  }
-
-  Future<void> _confirmDeletePage() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar página'),
-        content: const Text(
-          'Se borrarán todos los trazos e imágenes de esta página. Esta acción no se puede deshacer.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) _c.deleteCurrentPage();
   }
 
   Future<void> _confirmClearPage() async {
@@ -1668,6 +1527,45 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (ok == true) _c.clearPage();
+  }
+
+  // ------------------------------------------------------------------------
+  // Helpers del menú ⋮
+  // ------------------------------------------------------------------------
+
+  /// Encabezado de categoría en el menú (texto en mayúsculas, gris).
+  PopupMenuItem<String> _menuHeader(String label) {
+    return PopupMenuItem<String>(
+      enabled: false,
+      height: 32,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white38
+                : Colors.black38,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Elemento de menú simple (icono + texto).
+  PopupMenuItem<String> _menuItem(String value, IconData icon, String label) {
+    return PopupMenuItem<String>(
+      value: value,
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(label),
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+      ),
+    );
   }
 }
 

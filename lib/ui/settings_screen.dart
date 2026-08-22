@@ -1,8 +1,10 @@
 import '../constants.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import '../services/drive_sync_service.dart';
+import '../logic/canvas_controller.dart';
+import '../services/drive_sync_service.dart' show DriveSyncService, GoogleConfigException;
 import '../services/storage_service.dart';
 import 'writing_stats_screen.dart';
 import 'reminder_screen.dart';
@@ -38,7 +40,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadAutosaveInterval() async {
-    // TODO: cargar de SharedPreferences cuando esté implementado
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seconds = prefs.getInt('autosave_interval') ?? 300;
+      if (mounted) setState(() => _autosaveInterval = seconds);
+    } catch (_) {}
   }
 
   String _autosaveLabel(int seconds) {
@@ -96,7 +102,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     ).then((v) {
-      if (v != null) setState(() => _autosaveInterval = v);
+      if (v != null) {
+        setState(() => _autosaveInterval = v);
+        // Persistir el intervalo y notificar al CanvasController.
+        CanvasController.setAutosaveInterval(Duration(seconds: v));
+      }
     });
   }
 
@@ -314,11 +324,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (ok && mounted) {
         _snack('Conectado como ${_syncService.email}');
       }
+    } on GoogleConfigException catch (e) {
+      if (mounted) _showConfigErrorDialog(e.message);
     } catch (e) {
       if (mounted) _snack('Error: $e');
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
+  }
+
+  void _showConfigErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.error_outline, color: Colors.orange, size: 48),
+        title: const Text('Error de configuración Google'),
+        content: SingleChildScrollView(
+          child: Text(message, style: const TextStyle(fontSize: 13, height: 1.5)),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _signOut() async {
@@ -450,7 +481,6 @@ class _SettingsCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -462,7 +492,11 @@ class _SettingsCard extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: Column(children: children),
+        child: Material(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          child: Column(children: children),
+        ),
       ),
     );
   }

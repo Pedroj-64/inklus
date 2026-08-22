@@ -42,10 +42,11 @@ const Color kWarningColor = Color(0xFFF59E0B);
 const Color kPaperColorLight = Color(0xFFFEFDF9);
 
 /// Fondo del escritorio en modo claro.
-const Color kDeskColorLight = Color(0xFFEFEDE8);
+/// Debe ser lo suficientemente oscuro para que el papel blanco se distinga.
+const Color kDeskColorLight = Color(0xFFD6D3CC);
 
 /// Fondo de la hoja en modo oscuro.
-const Color kPaperColorDark = Color(0xFF424242);
+const Color kPaperColorDark = Color(0xFF4A4A4A);
 
 /// Fondo del escritorio en modo oscuro.
 const Color kDeskColorDark = Color(0xFF1A1B1E);
@@ -61,6 +62,15 @@ const Color kSurfaceDark = Color(0xFF2A2A2A);
 
 /// Fondo de búsqueda en modo oscuro.
 const Color kSearchDark = Color(0xFF333333);
+
+/// Fondo de superficie claro (cards, inputs).
+const Color kSurfaceLight = Color(0xFFF5F5F5);
+
+/// Fondo de superficie oscuro alternativo (thumbnails, rail).
+const Color kSurfaceDarkAlt = Color(0xFF3A3A3A);
+
+/// Fondo de selección de accent en modo claro.
+const Color kAccentSelectionLight = Color(0xFFE3EDFF);
 
 // ---------------------------------------------------------------------------
 // Colores de interfaz
@@ -128,6 +138,8 @@ const Map<ToolType, (double, double)> kToolSizeRanges = {
   ToolType.highlighter: (12, 60),
   ToolType.calligraphy: (2, 20),
   ToolType.brush: (3, 24),
+  ToolType.marker: (8, 40),
+  ToolType.spray: (20, 100),
   ToolType.eraser: (12, 120),
   ToolType.lasso: (0, 0),
 };
@@ -139,6 +151,8 @@ const Map<ToolType, double> kDefaultToolSizes = {
   ToolType.highlighter: 26,
   ToolType.calligraphy: 6,
   ToolType.brush: 8,
+  ToolType.marker: 16,
+  ToolType.spray: 50,
   ToolType.eraser: 36,
 };
 
@@ -149,6 +163,8 @@ const Map<ToolType, double> kDefaultThinning = {
   ToolType.highlighter: 0,
   ToolType.calligraphy: 0.3,
   ToolType.brush: 0.4,
+  ToolType.marker: 0,
+  ToolType.spray: 0,
 };
 
 /// Smoothing por defecto.
@@ -158,6 +174,8 @@ const Map<ToolType, double> kDefaultSmoothing = {
   ToolType.highlighter: 0.6,
   ToolType.calligraphy: 0.4,
   ToolType.brush: 0.55,
+  ToolType.marker: 0.65,
+  ToolType.spray: 0.4,
 };
 
 /// Streamline por defecto.
@@ -167,6 +185,8 @@ const Map<ToolType, double> kDefaultStreamline = {
   ToolType.highlighter: 0.75,
   ToolType.calligraphy: 0.35,
   ToolType.brush: 0.6,
+  ToolType.marker: 0.7,
+  ToolType.spray: 0.3,
 };
 
 // ---------------------------------------------------------------------------

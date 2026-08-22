@@ -317,7 +317,7 @@ void drawMagnifier(
   canvas.drawCircle(
     magnifierCenter,
     radius,
-    Paint()..color = const Color(0xFFF5F5F5),
+    Paint()..color = kSurfaceLight,
   );
 
   // Renderiza el contenido del mundo en la lupa.

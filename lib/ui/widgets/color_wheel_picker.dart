@@ -165,6 +165,10 @@ class _ColorWheelPainter extends CustomPainter {
   final double innerRadius;
   final double sbSize;
 
+  /// Bitmap cacheado del cuadrado SB. Se regenera solo cuando cambia el hue.
+  static ui.Image? _cachedSBImage;
+  static double _cachedHue = -1;
+
   _ColorWheelPainter({
     required this.hue,
     required this.saturation,
@@ -246,8 +250,14 @@ class _ColorWheelPainter extends CustomPainter {
     );
   }
 
-  /// Crea un bitmap 256×256 del cuadrado Saturación × Brillo.
+  /// Crea (o reutiliza) un bitmap 256×256 del cuadrado Saturación × Brillo.
+  /// Se cachea estáticamente y solo se regenera cuando cambia el hue.
   ui.Image? _createSBImage() {
+    // Reutilizar cache si el hue no cambió significativamente.
+    if (_cachedSBImage != null && (_cachedHue - hue).abs() < 0.5) {
+      return _cachedSBImage;
+    }
+
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     const size = 256;
@@ -266,8 +276,10 @@ class _ColorWheelPainter extends CustomPainter {
     }
 
     final picture = recorder.endRecording();
-    // Síncrono: usar toImageSync si está disponible (Flutter 3.7+)
-    return picture.toImageSync(size, size);
+    _cachedSBImage?.dispose();
+    _cachedSBImage = picture.toImageSync(size, size);
+    _cachedHue = hue;
+    return _cachedSBImage;
   }
 
   /// Dibuja el indicador circular del matiz en el anillo.

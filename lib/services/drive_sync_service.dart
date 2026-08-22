@@ -134,6 +134,8 @@ class DriveSyncService extends ChangeNotifier {
   Future<void> restoreSession() async {
     if (_account != null || _restoreAttempted) return;
     _restoreAttempted = true;
+    // Google Sign-In no está soportado en Linux desktop.
+    if (defaultTargetPlatform == TargetPlatform.linux) return;
     try {
       final future = GoogleSignIn.instance.attemptLightweightAuthentication();
       final account = future == null ? null : await future;
@@ -155,6 +157,24 @@ class DriveSyncService extends ChangeNotifier {
       );
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) return false;
+      // clientConfigurationError: el OAuth client ID no coincide con
+      // la SHA-1 del keystore o no está habilitado en Google Cloud.
+      if (e.code ==
+          // ignore: lines_longer_than_80_chars
+          GoogleSignInExceptionCode.clientConfigurationError) {
+        throw GoogleConfigException(
+          'Error de configuración Google (clientConfigurationError).\n\n'
+          'Causa probable: la SHA-1 del keystore de firma no está registrada '
+          'en Google Cloud Console para el package com.inklus.inklus.\n\n'
+          'Solución:\n'
+          '1. Obtén la SHA-1: keytool -list -v -alias androiddebugkey \\\n' '             -keystore ~/.android/debug.keystore -storepass android\n'
+          '2. Ve a Google Cloud Console → APIs y servicios → Credenciales\n'
+          '3. Crea/edita el OAuth client ID Android con package '
+          'com.inklus.inklus y la SHA-1 obtenida\n'
+          '4. Habilita Google Sign-In en la pantalla de consentimiento\n\n'
+          'Error original: ${e.description}',
+        );
+      }
       rethrow;
     }
     _account = account;
@@ -783,4 +803,15 @@ class NotSignedInException implements Exception {
 
   @override
   String toString() => 'Inicia sesión con Google primero.';
+}
+
+/// Error de configuración OAuth de Google (SHA-1 no registrada, etc.).
+///
+/// Propaga un mensaje de ayuda al usuario en lugar de un stack trace críptico.
+class GoogleConfigException implements Exception {
+  final String message;
+  const GoogleConfigException(this.message);
+
+  @override
+  String toString() => message;
 }

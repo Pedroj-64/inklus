@@ -8,38 +8,196 @@ import 'package:path_provider/path_provider.dart';
 import '../models/document.dart';
 import '../models/image_item.dart';
 import '../models/note.dart';
+import '../models/notebook.dart';
 import '../models/page.dart';
+import '../models/stroke.dart';
+import '../models/text_item.dart';
+import '../models/template.dart';
 
-/// Formato propietario **.inklus**: contenedor autocontenido de un cuaderno.
+/// Formato propietario **.inklus v2**: contenedor autocontenido de un cuaderno.
 ///
-/// Es un archivo ZIP con dos partes:
-/// - `document.json` — el JSON del documento (trazos, páginas, plantillas),
-///   con las rutas de imágenes/plantillas reescritas a
-///   `inklus://images/<nombre>` cuando el archivo local existe.
-/// - `images/<nombre>` — las imágenes insertadas y plantillas propias
-///   embebidas dentro del propio archivo.
+/// Estructura ZIP optimizada:
+/// ```
+/// .inklus
+/// ├── format.json          ← version marker {"version":2}
+/// ├── notebook.json        ← metadata del cuaderno
+/// ├── notes/<note-id>.json  ← un archivo por Note (páginas, trazos, plantillas)
+/// └── images/<name>        ← imágenes embebidas
+/// ```
 ///
-/// Así el cuaderno viaja en **un único archivo** (como `.goodnotes`/`.sdoc`),
-/// sin archivos sueltos: se puede exportar, compartir o subir a Google Drive,
-/// y al importarlo se restauran también las imágenes (no hace falta ningún
-/// archivo externo).
+/// **Ventajas vs v1** (document.json monolítico):
+/// - Los Notes se guardan por separado → parseo parcial posible.
+/// - La metadata se lee sin cargar el contenido de las páginas.
+/// - Las imágenes siguen embebidas (autocontenido).
+///
+/// Se mantiene compatibilidad con v1 (document.json) para importar
+/// archivos antiguos.
 class InklusFormat {
   InklusFormat._();
 
-  static const _docEntry = 'document.json';
+  // Nombres de entrada en el ZIP
+  static const _formatEntry = 'format.json';
+  static const _docEntry = 'document.json'; // v1 (legacy)
+  static const _notebookEntry = 'notebook.json'; // v2
+  static const _notesPrefix = 'notes/';
   static const _imagesPrefix = 'images/';
   static const scheme = 'inklus://';
 
+  static const _currentVersion = 2;
+
   // -------------------------------------------------------------------------
-  // Exportación (documento → bytes .inklus)
+  // Exportación v2 (Notebook → bytes .inklus)
   // -------------------------------------------------------------------------
 
-  /// Serializa un cuaderno completo al formato .inklus.
+  /// Serializa un [Notebook] completo al formato .inklus v2.
   ///
-  /// Lee de disco las imágenes y plantillas de todas las páginas y las
-  /// embebe en el contenedor, reescribiendo las rutas del JSON a
-  /// `inklus://images/<nombre>` (los archivos que ya no existen se dejan con
-  /// su ruta original, sin romper el documento).
+  /// Cada [Note] se serializa como un archivo JSON independiente dentro
+  /// del ZIP, y las imágenes de todas las páginas se embeben en `images/`.
+  static Future<Uint8List> exportNotebookBytes(Notebook notebook) async {
+    // 1) Recopilar imágenes de todos los notes.
+    final images = <String, Future<Uint8List>>{};
+
+    final notesData = <String, Map<String, dynamic>>{};
+    for (final note in notebook.notes) {
+      final processedNote = await _processNoteForExport(note, images);
+      notesData[note.id] = processedNote;
+    }
+
+    // 2) Construir el ZIP.
+    final archive = Archive();
+
+    // format.json
+    final formatBytes = utf8.encode(jsonEncode({'version': _currentVersion}));
+    archive.addFile(ArchiveFile(_formatEntry, formatBytes.length, formatBytes));
+
+    // notebook.json (metadata sin páginas)
+    final notebookMeta = {
+      'id': notebook.id,
+      'title': notebook.title,
+      'color': notebook.colorValue,
+      'coverStyle': notebook.coverStyle,
+      if (notebook.coverImagePath != null) 'coverImagePath': notebook.coverImagePath,
+      if (notebook.tags.isNotEmpty) 'tags': notebook.tags,
+      'noteIds': notebook.notes.map((n) => n.id).toList(),
+    };
+    final nbBytes = utf8.encode(jsonEncode(notebookMeta));
+    archive.addFile(ArchiveFile(_notebookEntry, nbBytes.length, nbBytes));
+
+    // notes/<id>.json
+    for (final entry in notesData.entries) {
+      final bytes = utf8.encode(jsonEncode(entry.value));
+      archive.addFile(
+        ArchiveFile('$_notesPrefix${entry.key}.json', bytes.length, bytes),
+      );
+    }
+
+    // images/<name>
+    for (final entry in images.entries) {
+      final bytes = await entry.value;
+      archive.addFile(
+        ArchiveFile('$_imagesPrefix${entry.key}', bytes.length, bytes),
+      );
+    }
+
+    return ZipEncoder().encodeBytes(archive);
+  }
+
+  // -------------------------------------------------------------------------
+  // Importación v2 (bytes .inklus → Notebook)
+  // -------------------------------------------------------------------------
+
+  /// Detecta la versión del .inklus y delega al importer correcto.
+  static Future<Object> importAuto(
+    Uint8List bytes, {
+    Directory? extractTo,
+  }) async {
+    final archive = ZipDecoder().decodeBytes(bytes);
+    final hasFormatJson = archive.files.any((f) => f.name == _formatEntry);
+    if (hasFormatJson) {
+      return importNotebookBytes(bytes, extractTo: extractTo);
+    }
+    // v1 legacy → devuelve Document
+    return importBytes(bytes, extractTo: extractTo);
+  }
+
+  /// Importa un .inklus v2 y devuelve un [Notebook] restaurado.
+  static Future<Notebook> importNotebookBytes(
+    Uint8List bytes, {
+    Directory? extractTo,
+  }) async {
+    final archive = ZipDecoder().decodeBytes(bytes);
+
+    // Leer todas las entradas.
+    Uint8List? notebookBytes;
+    final noteEntries = <String, Uint8List>{};
+    final imageEntries = <String, Uint8List>{};
+
+    for (final file in archive.files) {
+      if (!file.isFile) continue;
+      final data = file.readBytes();
+      if (data == null) continue;
+
+      if (file.name == _notebookEntry) {
+        notebookBytes = data;
+      } else if (file.name.startsWith(_notesPrefix)) {
+        final noteId = file.name
+            .substring(_notesPrefix.length)
+            .replaceAll('.json', '');
+        noteEntries[noteId] = data;
+      } else if (file.name.startsWith(_imagesPrefix)) {
+        imageEntries[file.name] = data;
+      }
+    }
+
+    if (notebookBytes == null) {
+      throw const FormatException('No es un cuaderno .inklus v2 válido');
+    }
+
+    final nbJson = jsonDecode(utf8.decode(notebookBytes)) as Map<String, dynamic>;
+
+    // Crear directorio de extracción.
+    final docId = nbJson['id'] as String;
+    final dir = extractTo ??
+        Directory(
+          '${(await getApplicationSupportDirectory()).path}/inklus/restored/$docId',
+        );
+    await dir.create(recursive: true);
+
+    // Extraer imágenes.
+    final extractedImages = <String, String>{};
+    for (final entry in imageEntries.entries) {
+      final fileName = entry.key.split('/').last;
+      final file = File('${dir.path}/$fileName');
+      await file.writeAsBytes(entry.value);
+      extractedImages[entry.key] = file.path;
+    }
+
+    // Reconstruir Notes.
+    final notes = <Note>[];
+    final noteIds = (nbJson['noteIds'] as List?)?.cast<String>() ?? [];
+    for (final noteId in noteIds) {
+      final noteBytes = noteEntries[noteId];
+      if (noteBytes == null) continue;
+      final noteJson = jsonDecode(utf8.decode(noteBytes)) as Map<String, dynamic>;
+      final note = _rebuildNote(noteJson, extractedImages);
+      notes.add(note);
+    }
+
+    return Notebook(
+      id: docId,
+      title: nbJson['title'] as String? ?? 'Sin título',
+      colorValue: (nbJson['color'] as num?)?.toInt(),
+      coverStyle: nbJson['coverStyle'] as String? ?? 'simple',
+      coverImagePath: nbJson['coverImagePath'] as String?,
+      tags: (nbJson['tags'] as List? ?? []).map((t) => t as String).toList(),
+      notes: notes,
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Exportación v1 legacy (Document → bytes .inklus)
+  // -------------------------------------------------------------------------
+
   static Future<Uint8List> exportBytes(Document document) async {
     final images = <String, Future<Uint8List>>{};
     final pages = <Page>[];
@@ -55,7 +213,6 @@ class InklusFormat {
           newImages.add(item);
         }
       }
-
       var template = page.template;
       final templatePath = template.imagePath;
       if (templatePath != null) {
@@ -78,6 +235,8 @@ class InklusFormat {
     );
 
     final archive = Archive();
+    final formatBytes = utf8.encode(jsonEncode({'version': 1}));
+    archive.addFile(ArchiveFile(_formatEntry, formatBytes.length, formatBytes));
     final docBytes = utf8.encode(jsonEncode(outDoc.toJson()));
     archive.addFile(ArchiveFile(_docEntry, docBytes.length, docBytes));
     for (final entry in images.entries) {
@@ -90,14 +249,9 @@ class InklusFormat {
   }
 
   // -------------------------------------------------------------------------
-  // Importación (bytes .inklus → documento restaurado)
+  // Importación v1 legacy (bytes .inklus → Document)
   // -------------------------------------------------------------------------
 
-  /// Lee un archivo .inklus, extrae las imágenes a la carpeta de la app y
-  /// devuelve el documento con las rutas re-mapeadas a archivos locales.
-  ///
-  /// [extractTo] permite fijar el destino de las imágenes (tests); por
-  /// defecto se usa `<appSupport>/inklus/restored/<id del documento>/`.
   static Future<Document> importBytes(
     Uint8List bytes, {
     Directory? extractTo,
@@ -123,8 +277,7 @@ class InklusFormat {
     final doc = Document.fromJson(
       jsonDecode(utf8.decode(docBytes)) as Map<String, dynamic>,
     );
-    final dir =
-        extractTo ??
+    final dir = extractTo ??
         Directory(
           '${(await getApplicationSupportDirectory()).path}/inklus/restored/${doc.id}',
         );
@@ -156,34 +309,11 @@ class InklusFormat {
     );
   }
 
-  /// Convierte una ruta `inklus://images/<nombre>` en un archivo local
-  /// extraído; las rutas normales se devuelven tal cual.
-  static Future<String> _materialize(
-    String path,
-    Directory dir,
-    Map<String, Uint8List> entries,
-  ) async {
-    if (!path.startsWith(scheme)) return path;
-    final key = path.substring(scheme.length); // 'images/<nombre>'
-    final bytes = entries[key];
-    if (bytes == null) return path;
-    final file = File('${dir.path}/${key.split('/').last}');
-    await file.writeAsBytes(bytes);
-    return file.path;
-  }
-
-  static String _basename(String path) => path.split('/').last;
-
-  static String _embedKey(String name) => '$scheme$_imagesPrefix$name';
-
   // -------------------------------------------------------------------------
-  // Variantes para Note (nuevo formato)
+  // Variantes Note (envuelve Document)
   // -------------------------------------------------------------------------
 
-  /// Serializa un Note al formato .inklus (misma lógica que exportBytes).
   static Future<Uint8List> exportNoteBytes(Note note) async {
-    // Un Note tiene la misma estructura que un Document, así que reusamos
-    // la lógica existente construyendo un Document temporal.
     final doc = Document(
       id: note.id,
       title: note.title,
@@ -194,7 +324,6 @@ class InklusFormat {
     return exportBytes(doc);
   }
 
-  /// Importa un .inklus y devuelve un Note restaurado.
   static Future<Note> importNoteBytes(
     Uint8List bytes, {
     Directory? extractTo,
@@ -208,4 +337,136 @@ class InklusFormat {
       pages: doc.pages,
     );
   }
+
+  // -------------------------------------------------------------------------
+  // Helpers internos
+  // -------------------------------------------------------------------------
+
+  /// Procesa un Note para exportación: reescribe rutas de imágenes
+  /// a `inklus://images/<nombre>` y recopila los bytes de las imágenes.
+  static Future<Map<String, dynamic>> _processNoteForExport(
+    Note note,
+    Map<String, Future<Uint8List>> images,
+  ) async {
+    final pages = <Map<String, dynamic>>[];
+    for (final page in note.pages) {
+      final newImages = <Map<String, dynamic>>[];
+      for (final item in page.images) {
+        final file = File(item.localPath);
+        if (await file.exists()) {
+          final name = _basename(item.localPath);
+          images.putIfAbsent(name, () => file.readAsBytes());
+          newImages.add(item.copyWith(localPath: _embedKey(name)).toJson());
+        } else {
+          newImages.add(item.toJson());
+        }
+      }
+      var template = page.template;
+      final templatePath = template.imagePath;
+      if (templatePath != null) {
+        final file = File(templatePath);
+        if (await file.exists()) {
+          final name = _basename(templatePath);
+          images.putIfAbsent(name, () => file.readAsBytes());
+          template = template.copyWith(imagePath: _embedKey(name));
+        }
+      }
+      pages.add({
+        'id': page.id,
+        'name': page.name,
+        'strokes': page.strokes.map((s) => s.toJson()).toList(),
+        'images': newImages,
+        'textItems': page.textItems.map((t) => t.toJson()).toList(),
+        'template': template.toJson(),
+        'layers': page.layers.map((l) => l.toJson()).toList(),
+      });
+    }
+
+    return {
+      'id': note.id,
+      'title': note.title,
+      'createdAt': note.createdAt.toIso8601String(),
+      'updatedAt': note.updatedAt.toIso8601String(),
+      'pages': pages,
+    };
+  }
+
+  /// Reconstruye un Note desde su JSON + imágenes extraídas.
+  static Note _rebuildNote(
+    Map<String, dynamic> json,
+    Map<String, String> extractedImages,
+  ) {
+    final pages = (json['pages'] as List? ?? []).map((p) {
+      final pageJson = p as Map<String, dynamic>;
+      // Reconstruir imágenes con rutas locales.
+      final images = (pageJson['images'] as List? ?? []).map((imgJson) {
+        final item = ImageItem.fromJson(imgJson as Map<String, dynamic>);
+        if (item.localPath.startsWith(scheme)) {
+          final key = item.localPath.substring(scheme.length);
+          final localPath = extractedImages[key];
+          if (localPath != null) {
+            return item.copyWith(localPath: localPath);
+          }
+        }
+        return item;
+      }).toList();
+
+      // Reconstruir template con ruta de imagen local.
+      var template = PageTemplate.fromJson(
+        pageJson['template'] as Map<String, dynamic>,
+      );
+      if (template.imagePath != null && template.imagePath!.startsWith(scheme)) {
+        final key = template.imagePath!.substring(scheme.length);
+        final localPath = extractedImages[key];
+        if (localPath != null) {
+          template = template.copyWith(imagePath: localPath);
+        }
+      }
+
+      return Page(
+        id: pageJson['id'] as String,
+        name: pageJson['name'] as String? ?? '',
+        strokes: (pageJson['strokes'] as List? ?? [])
+            .map((s) => Stroke.fromJson(s as Map<String, dynamic>))
+            .toList(),
+        images: images,
+        textItems: (pageJson['textItems'] as List? ?? [])
+            .map((t) => TextItem.fromJson(t as Map<String, dynamic>))
+            .toList(),
+        template: template,
+        layers: (pageJson['layers'] as List? ?? [])
+            .map((l) => Layer.fromJson(l as Map<String, dynamic>))
+            .toList(),
+      );
+    }).toList();
+
+    return Note(
+      id: json['id'] as String,
+      title: json['title'] as String? ?? 'Sin título',
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      updatedAt:
+          DateTime.tryParse(json['updatedAt'] as String? ?? '') ?? DateTime.now(),
+      pages: pages,
+    );
+  }
+
+  /// Convierte una ruta `inklus://images/<nombre>` en un archivo local.
+  static Future<String> _materialize(
+    String path,
+    Directory dir,
+    Map<String, Uint8List> entries,
+  ) async {
+    if (!path.startsWith(scheme)) return path;
+    final key = path.substring(scheme.length);
+    final bytes = entries[key];
+    if (bytes == null) return path;
+    final file = File('${dir.path}/${key.split('/').last}');
+    await file.writeAsBytes(bytes);
+    return file.path;
+  }
+
+  static String _basename(String path) => path.split('/').last;
+
+  static String _embedKey(String name) => '$scheme$_imagesPrefix$name';
 }

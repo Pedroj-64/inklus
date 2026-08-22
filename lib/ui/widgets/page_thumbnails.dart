@@ -78,7 +78,7 @@ class _PageThumbnailsStripState extends State<PageThumbnailsStrip> {
         final current = _c.pageIndex;
         final isDark = Theme.of(context).brightness == Brightness.dark;
         return Container(
-          height: 110,
+          height: 120,
           color: isDark ? kSurfaceDark : Colors.white,
           child: Row(
             children: [
@@ -89,12 +89,46 @@ class _PageThumbnailsStripState extends State<PageThumbnailsStrip> {
                   width: 28,
                   margin: const EdgeInsets.symmetric(vertical: 32),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF3A3A3A) : const Color(0xFFF5F5F5),
+                    color: isDark ? kSurfaceDarkAlt : kSurfaceLight,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(Icons.keyboard_arrow_down, size: 18,
                       color: isDark ? Colors.white54 : ThemeColors.of(context).textSecondary),
                 ),
+              ),
+              // Navegación: página anterior
+              _ActionChip(
+                icon: Icons.chevron_left,
+                tooltip: 'Página anterior',
+                onPressed: current > 0
+                    ? () {
+                        _c.goToPage(current - 1);
+                        _scrollToCurrent();
+                      }
+                    : null,
+              ),
+              // Contador de páginas
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  '${current + 1}/${pages.length}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: ThemeColors.of(context).textSecondary,
+                  ),
+                ),
+              ),
+              // Navegación: página siguiente
+              _ActionChip(
+                icon: Icons.chevron_right,
+                tooltip: 'Página siguiente',
+                onPressed: current < pages.length - 1
+                    ? () {
+                        _c.goToPage(current + 1);
+                        _scrollToCurrent();
+                      }
+                    : null,
               ),
               // Botón duplicar página
               _ActionChip(
@@ -238,6 +272,7 @@ class _PageThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: Column(
@@ -247,8 +282,8 @@ class _PageThumb extends StatelessWidget {
             clipBehavior: Clip.none,
             children: [
               Container(
-                width: 72,
-                height: 82,
+                width: 80,
+                height: 96,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
@@ -257,9 +292,9 @@ class _PageThumb extends StatelessWidget {
                         : ThemeColors.of(context).borderLight,
                     width: isCurrent ? 2.5 : 1,
                   ),
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF333333)
-                      : const Color(0xFFF1F0EC),
+                  color: isDark
+                      ? kSurfaceDarkAlt
+                      : const Color(0xFFF8F7F3),
                   boxShadow: [
                     if (isCurrent)
                       BoxShadow(
@@ -277,7 +312,7 @@ class _PageThumb extends StatelessWidget {
                       if (snapshot.hasData) {
                         return Image.memory(
                           snapshot.data!,
-                          fit: BoxFit.cover,
+                          fit: BoxFit.contain,
                           gaplessPlayback: true,
                         );
                       }
@@ -359,16 +394,17 @@ class _PageThumb extends StatelessWidget {
 class _ActionChip extends StatelessWidget {
   final IconData icon;
   final String tooltip;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   const _ActionChip({
     required this.icon,
     required this.tooltip,
-    required this.onPressed,
+    this.onPressed,
   });
 
-  @override
-  Widget build(BuildContext context) {
+  @override  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final enabled = onPressed != null;
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -377,13 +413,13 @@ class _ActionChip extends StatelessWidget {
           width: 40,
           margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 32),
           decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? const Color(0xFF3A3A3A)
-                : const Color(0xFFF5F5F5),
+            color: isDark ? kSurfaceDarkAlt : kSurfaceLight,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(icon, size: 20,
-              color: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : ThemeColors.of(context).textSecondary),
+              color: enabled
+                  ? (isDark ? Colors.white54 : ThemeColors.of(context).textSecondary)
+                  : (isDark ? Colors.white24 : ThemeColors.of(context).textTertiary)),
         ),
       ),
     );

@@ -376,14 +376,6 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                   ),
                   const SizedBox(width: 8),
                   _SizePreset(
-                    label: 'Letter',
-                    width: 1275,
-                    height: 1650,
-                    isActive: false,
-                    onTap: () => _applySheetSize(1275, 1650),
-                  ),
-                  const SizedBox(width: 8),
-                  _SizePreset(
                     label: 'B5',
                     width: 1031,
                     height: 1457,
@@ -819,7 +811,7 @@ class _SizePreset extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFE3EDFF) : const Color(0xFFF5F5F5),
+          color: isActive ? kAccentSelectionLight : kSurfaceLight,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isActive ? kAccentColor : Colors.transparent,
@@ -861,7 +853,7 @@ class _SavedTemplateTile extends StatelessWidget {
       child: Container(
         width: 80,
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE3EDFF) : const Color(0xFFF5F5F5),
+          color: selected ? kAccentSelectionLight : kSurfaceLight,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: selected ? kAccentColor : Colors.transparent,
