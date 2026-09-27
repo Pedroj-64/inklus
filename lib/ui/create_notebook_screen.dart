@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -258,7 +259,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
                         File(_coverImagePath!),
                         fit: BoxFit.cover,
                         gaplessPlayback: true,
-                        errorBuilder: (_, __, ___) => CustomPaint(
+                        errorBuilder: (_, _, _) => CustomPaint(
                           painter: NotebookCoverPainter(
                             style: CoverStyle.simple,
                             color: _effectiveCoverColor,
@@ -323,7 +324,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
                               File(_coverImagePath!),
                               fit: BoxFit.cover,
                               gaplessPlayback: true,
-                              errorBuilder: (_, __, ___) => CustomPaint(
+                              errorBuilder: (_, _, _) => CustomPaint(
                                 painter: NotebookCoverPainter(
                                   style: CoverStyle.simple,
                                   color: _effectiveCoverColor,

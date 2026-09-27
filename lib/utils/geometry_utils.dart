@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:ui';
 
 import '../models/stroke.dart';
@@ -27,24 +28,20 @@ Rect boundingBoxFromPoints(List<StrokePoint> points) {
   return Rect.fromLTRB(left, top, right, bottom);
 }
 
-/// Calcula el bounding box de una lista de trazos (todos sus puntos).
-///
-/// Incluye el grosor del trazo en el cálculo.
-Rect boundingBoxFromStrokes(List<Stroke> strokes) {
-  if (strokes.isEmpty) return Rect.zero;
-  var left = double.infinity;
-  var top = double.infinity;
-  var right = double.negativeInfinity;
-  var bottom = double.negativeInfinity;
+/// Calcula el bounding box de una lista de trazos (todos sus puntos, sin
+/// grosor). Alias de [selectionBounds].
+Rect boundingBoxFromStrokes(List<Stroke> strokes) => selectionBounds(strokes);
+
+/// Rectángulo que envuelve los puntos de varios trazos (usa el bounding box
+/// cacheado de cada [Stroke]; sin grosor).
+Rect selectionBounds(Iterable<Stroke> strokes) {
+  Rect? result;
   for (final s in strokes) {
-    for (final p in s.points) {
-      if (p.x < left) left = p.x;
-      if (p.y < top) top = p.y;
-      if (p.x > right) right = p.x;
-      if (p.y > bottom) bottom = p.y;
-    }
+    if (s.points.isEmpty) continue;
+    final b = s.pointBounds;
+    result = result == null ? b : result.expandToInclude(b);
   }
-  return Rect.fromLTRB(left, top, right, bottom);
+  return result ?? Rect.zero;
 }
 
 /// Algoritmo ray-casting para determinar si un punto está dentro de un polígono.

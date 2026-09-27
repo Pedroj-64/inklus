@@ -1,0 +1,10 @@
+name: inklus_marketplace
+description: Catálogo comunitario de paquetes gratuitos para Inklus.
+publish_to: 'none'
+version: 1.0.0
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  crypto: ^3.0.3

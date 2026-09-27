@@ -137,4 +137,16 @@ flutter test   # serialización JSON de los modelos
 
 ## 🛠️ Stack
 
-Flutter 3.47 (stable) · `perfect_freehand` (suavizado) · `path_provider` · `file_picker` · `pdf` · Firebase (`firebase_core`, `firebase_auth`, `cloud_firestore`, `firebase_storage`, `google_sign_in`) · Material 3
+Flutter 3.47 (stable) · `perfect_freehand` (suavizado) · `path_provider` · `file_picker` · `pdf`/`printing` · `archive` (formato `.inklus`) · `google_sign_in` + `googleapis` (Drive, sin Firebase) · `cryptography` (AES-GCM) · ML Kit (OCR) · `share_plus` · `shared_preferences` · Material 3
+
+## 📜 Licencia
+
+Inklus es software libre: puedes redistribuirlo y/o modificarlo bajo los términos de la
+**GNU General Public License v3.0 o posterior** (GPL-3.0-or-later), publicada por la Free
+Software Foundation. Consulta el archivo [`LICENSE`](LICENSE).
+
+Copyright © 2026 Pedro ([@Pedroj-64](https://github.com/Pedroj-64)) y contribuidores de Inklus.
+
+Cada archivo fuente lleva la cabecera `// SPDX-License-Identifier: GPL-3.0-or-later`.
+Cualquier versión modificada que se distribuya debe publicarse también bajo GPL-3.0 con su código fuente.
+

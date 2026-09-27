@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+import 'id.dart';
 import 'image_item.dart';
 import 'stroke.dart';
 import 'template.dart';
@@ -63,6 +65,9 @@ class Page {
   /// Lista de capas de esta página. Siempre hay al menos una.
   List<Layer> layers;
 
+  /// Página marcada (aparece destacada y filtrable en el panel de páginas).
+  bool bookmarked;
+
   Page({
     required this.id,
     required this.name,
@@ -71,6 +76,7 @@ class Page {
     required this.template,
     List<Layer>? layers,
     List<TextItem>? textItems,
+    this.bookmarked = false,
   })  : layers = layers ?? [Layer(name: 'Capa 1')],
         textItems = textItems ?? [];
 
@@ -83,15 +89,7 @@ class Page {
         template: template ?? const PageTemplate(),
       );
 
-  static String _newId() =>
-      'pg_${DateTime.now().microsecondsSinceEpoch}_${_rand()}';
-
-  static String _rand() => (DateTime.now().microsecondsSinceEpoch % 100000)
-      .toString()
-      .padLeft(5, '0');
-
-  /// Índice de la capa activa (la última seleccionada).
-  int activeLayerIndex = 0;
+  static String _newId() => newId('pg');
 
   Page copyWith({
     String? id,
@@ -110,6 +108,7 @@ class Page {
         template: template ?? this.template,
         layers: layers ?? this.layers,
         textItems: textItems ?? this.textItems,
+        bookmarked: bookmarked,
       );
 
   factory Page.fromJson(Map<String, dynamic> json) => Page(
@@ -129,6 +128,7 @@ class Page {
         textItems: (json['textItems'] as List? ?? [])
             .map((t) => TextItem.fromJson(t as Map<String, dynamic>))
             .toList(),
+        bookmarked: json['bookmarked'] as bool? ?? false,
       );
 
   Map<String, dynamic> toJson() => {
@@ -139,5 +139,6 @@ class Page {
         'template': template.toJson(),
         'layers': layers.map((l) => l.toJson()).toList(),
         'textItems': textItems.map((t) => t.toJson()).toList(),
+        if (bookmarked) 'bookmarked': true,
       };
 }

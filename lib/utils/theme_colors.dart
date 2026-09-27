@@ -1,39 +1,38 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 
-/// Helper para obtener colores adaptativos según el tema actual.
+/// Colores adaptativos derivados del [ColorScheme] del tema actual.
 ///
-/// Uso:
-/// ```dart
-/// final colors = ThemeColors.of(context);
-/// Text('Hello', style: TextStyle(color: colors.textSecondary))
-/// ```
+/// Se mantiene por compatibilidad con pantallas existentes. **Para código
+/// nuevo** usar directamente `context.colors` / `context.inklus`
+/// (`ui/theme/inklus_colors.dart`).
 class ThemeColors {
-  final Brightness brightness;
+  const ThemeColors(this.scheme);
 
-  const ThemeColors(this.brightness);
-
-  bool get isDark => brightness == Brightness.dark;
+  final ColorScheme scheme;
 
   static ThemeColors of(BuildContext context) =>
-      ThemeColors(Theme.of(context).brightness);
+      ThemeColors(Theme.of(context).colorScheme);
+
+  bool get isDark => scheme.brightness == Brightness.dark;
 
   // -- Texto --
-  Color get textPrimary => isDark ? Colors.white : Colors.black87;
-  Color get textSecondary => isDark ? Colors.white54 : Colors.black54;
-  Color get textTertiary => isDark ? Colors.white38 : Colors.black38;
-  Color get textDisabled => isDark ? Colors.white24 : Colors.black26;
-  Color get textHint => isDark ? Colors.white54 : Colors.black45;
+  Color get textPrimary => scheme.onSurface;
+  Color get textSecondary => scheme.onSurfaceVariant;
+  Color get textTertiary => scheme.onSurfaceVariant.withValues(alpha: 0.72);
+  Color get textDisabled => scheme.onSurface.withValues(alpha: 0.38);
+  Color get textHint => scheme.onSurfaceVariant;
 
   // -- Bordes --
-  Color get border => isDark ? Colors.white24 : Colors.black26;
-  Color get borderLight => isDark ? Colors.white12 : Colors.black12;
+  Color get border => scheme.outline;
+  Color get borderLight => scheme.outlineVariant;
 
   // -- Fondos --
-  Color get iconBg => isDark ? Colors.white12 : Colors.black.withAlpha(18);
-  Color get shadow => isDark ? Colors.black26 : Colors.black12;
-  Color get surfaceOverlay => isDark ? Colors.white12 : Colors.black.withAlpha(12);
+  Color get iconBg => scheme.surfaceContainerHighest;
+  Color get shadow => scheme.shadow.withValues(alpha: isDark ? 0.4 : 0.12);
+  Color get surfaceOverlay => scheme.surfaceContainerHigh;
 
   // -- Íconos --
-  Color get iconSecondary => isDark ? Colors.white54 : Colors.black54;
-  Color get iconTertiary => isDark ? Colors.white38 : Colors.black38;
+  Color get iconSecondary => scheme.onSurfaceVariant;
+  Color get iconTertiary => scheme.onSurfaceVariant.withValues(alpha: 0.72);
 }

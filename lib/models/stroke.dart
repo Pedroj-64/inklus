@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:ui';
 
 /// Herramientas de escritura/dibujo disponibles.
@@ -69,6 +70,12 @@ class Stroke {
   /// Tipo de forma detectada (line, arrow, rectangle, circle) o null.
   final String? shapeType;
 
+  /// Ajustes de `perfect_freehand` con los que se dibujó el trazo.
+  /// null = valores por defecto de la herramienta (trazos antiguos).
+  final double? thinning;
+  final double? smoothing;
+  final double? streamline;
+
   Stroke({
     required this.id,
     required this.points,
@@ -78,9 +85,35 @@ class Stroke {
     this.fillColorValue,
     this.layerIndex = 0,
     this.shapeType,
+    this.thinning,
+    this.smoothing,
+    this.streamline,
   });
 
   Color get color => Color(colorValue);
+
+  /// Rectángulo que envuelve los puntos (sin grosor). Se calcula una vez:
+  /// un [Stroke] confirmado es inmutable (editar = crear otra instancia).
+  late final Rect pointBounds = _computeBounds();
+
+  /// Rectángulo que envuelve el trazo pintado (puntos + grosor). Se usa
+  /// para descartar trazos fuera de pantalla (culling) y hit-tests rápidos.
+  /// El aerosol dispersa partículas hasta `size` alrededor de cada punto.
+  Rect get paintBounds =>
+      pointBounds.inflate(tool == ToolType.spray ? size + 4 : size);
+
+  Rect _computeBounds() {
+    if (points.isEmpty) return Rect.zero;
+    var left = double.infinity, top = double.infinity;
+    var right = double.negativeInfinity, bottom = double.negativeInfinity;
+    for (final p in points) {
+      if (p.x < left) left = p.x;
+      if (p.y < top) top = p.y;
+      if (p.x > right) right = p.x;
+      if (p.y > bottom) bottom = p.y;
+    }
+    return Rect.fromLTRB(left, top, right, bottom);
+  }
 
   Stroke copyWith({
     String? id,
@@ -103,6 +136,17 @@ class Stroke {
         fillColorValue: clearFillColor ? null : (fillColorValue ?? this.fillColorValue),
         layerIndex: layerIndex ?? this.layerIndex,
         shapeType: clearShapeType ? null : (shapeType ?? this.shapeType),
+        thinning: thinning,
+        smoothing: smoothing,
+        streamline: streamline,
+      );
+
+  /// Copia desplazada [delta] (mismo id y atributos).
+  Stroke translated(Offset delta) => copyWith(
+        points: [
+          for (final p in points)
+            StrokePoint(p.x + delta.dx, p.y + delta.dy, p.pressure),
+        ],
       );
 
   factory Stroke.fromJson(Map<String, dynamic> json) => Stroke(
@@ -116,6 +160,9 @@ class Stroke {
         fillColorValue: (json['fillColor'] as num?)?.toInt(),
         layerIndex: (json['layer'] as num?)?.toInt() ?? 0,
         shapeType: json['shape'] as String?,
+        thinning: (json['th'] as num?)?.toDouble(),
+        smoothing: (json['sm'] as num?)?.toDouble(),
+        streamline: (json['sl'] as num?)?.toDouble(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -127,5 +174,8 @@ class Stroke {
         if (fillColorValue != null) 'fillColor': fillColorValue,
         if (layerIndex != 0) 'layer': layerIndex,
         if (shapeType != null) 'shape': shapeType,
+        if (thinning != null) 'th': thinning,
+        if (smoothing != null) 'sm': smoothing,
+        if (streamline != null) 'sl': streamline,
       };
 }

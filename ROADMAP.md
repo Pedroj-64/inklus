@@ -13,7 +13,7 @@
 
 ## ✅ Lo que la app ofrece hoy
 
-> Verificado contra el código fuente (29,437 líneas Dart, 82 tests pasando).
+> Verificado contra el código fuente (~22,200 líneas Dart en `lib/`, 173 tests pasando).
 
 ### ✨ UX y Onboarding
 - **Onboarding tutorial**: 4 páginas ilustradas skippable al primer inicio; persiste con `SharedPreferences`.
@@ -22,10 +22,12 @@
 - **Barra de herramientas (tool rail)**: diseño flotante con bordes redondeados, separadores visuales, animaciones de selección.
 - **Bottom bar rediseñada**: paleta de colores + slider de tamaño en dos filas, iconos toggle para formas/dedo, acciones de lazo.
 - **Template picker**: secciones "Lienzo infinito" y "Hoja fija", tiles con preview, selector de formato al crear Note.
-- **Portada de cuaderno**: primera página se usa como miniatura en la biblioteca.
+- **Portada de cuaderno**: estilos de portada (color/patrón/imagen propia) en la biblioteca.
 
 ### ✍️ Escritura y herramientas (10 herramientas)
-- **Escritura con stylus**: detección de puntero, **rechazo de palma**, presión real, borrador automático con `invertedStylus`.
+- **Escritura con stylus**: presión real; **rechazo de palma** por lápiz apoyado, *hover* del lápiz (S-Pen/Apple Pencil), ventana de gracia tras levantarlo y tamaño de contacto (`PalmRejection`); al apoyar el lápiz se descarta lo que estuviera haciendo la palma.
+- **Modo solo lápiz automático**: al detectar un lápiz, el dedo deja de dibujar y **desplaza la página con un dedo** (se recuerda; conmutable en la barra).
+- **Borrador por hardware**: goma del lápiz (`invertedStylus`) y **botón lateral del S-Pen** mantenido = borrar.
 - **Zoom/pan con dos dedos** (el stylus nunca panea); trazo suavizado con `perfect_freehand`.
 - **Herramientas**: lapicero (`pen`), lápiz (`pencil`), resaltador (`highlighter`), **caligrafía** (`calligraphy`), **pincel** (`brush`), borrador (`eraser`), selección/mover (`select`), lazo (`lasso`), bucket (`bucket`), cajas de texto (`text`).
 - **Paleta + color personalizado (HSV)**, tamaño por herramienta, deshacer/rehacer (60 niveles).
@@ -60,15 +62,17 @@
 - **Guardado local** JSON automático (debounce 600 ms).
 - **Formato `.inklus`**: ZIP autocontenido (`document.json` + imágenes embebidas) — compatible con `.goodnotes`/`.sdoc`.
 - **Migración automática**: formato antiguo (`current_document.json`) → `Notebook + Note`.
-- **Respaldo local completo** (todos los cuadernos + imágenes en un ZIP).
+- **Respaldo local completo** (ZIP con `notebooks/` + `notes/` + imágenes + papelera + recordatorios/estadísticas). Al importar **fusiona** con lo local, re-mapea rutas de imágenes entre dispositivos y rechaza rutas inseguras (zip-slip).
+- **Escrituras atómicas** (temporal + `rename`) y cola serializada del índice: un cierre inesperado nunca deja un JSON truncado; si `index.json` se corrompe, se reconstruye desde `notebooks/`.
+- **Historial de versiones local** (`VersionHistoryService`): instantáneas gzip en `inklus/versions/<noteId>/` al abrir/cerrar la nota (máx. 20); menú ⋮ → "Historial de versiones" para restaurar (la versión actual se guarda antes).
 
 ### ☁️ Sincronización con Google Drive
 - **Offline-first**: signIn con `drive.file`, sesión silenciosa (One Tap), backup automático silencioso.
-- **Sync individual por Note**: cada Note se sincroniza como `.inklus` separado (minimiza tráfico y conflictos).
+- **Sync individual por Note**: cada Note se sincroniza como `.inklus` separado (minimiza tráfico y conflictos). La subida automática se agrupa (máx. una cada 20 s + al salir del editor).
 - **Estado visible**: iconos por Notebook (sincronizado/sincronizando/error/deshabilitado).
-- **Cifrado AES-256-GCM**: `cryptography` v2.9, PBKDF2 100k iteraciones (reemplaza XOR legacy).
+- **Cifrado AES-256-GCM** (`BackupCrypto`): `cryptography` v2.9, PBKDF2 100k iteraciones en un isolate; clave derivada de UTF-8 (compatible con backups antiguos derivados de `codeUnits`).
 - **Conflictos**: selección de versión cuando hay múltiples copias en Drive.
-- **Historial de revisiones**: listar versiones de una Note en Drive y restaurar.
+- **Historial de revisiones en Drive**: `DriveSyncService.downloadVersion` (sin UI propia aún; el historial *local* sí tiene UI).
 - **Sync selectiva**: flag `syncEnabled` por Notebook.
 - **Cambiar de cuenta** / cerrar sesión.
 - **Subir/bajar `.inklus` manual**.
@@ -92,10 +96,10 @@
 - **Capas por página**: visibilidad, bloqueo, **opacidad por capa** (0–100%).
 - **Sidebar de capas docked** (~240px, patrón Canva, empuja el canvas).
 - **Cajas de texto** (`TextItem` + `TextEditOverlay`).
-- **Minimapa** en lienzos infinitos.
-- **Regla visible** desde tool rail (overlay sobre canvas).
+- **Regla y transportador** (botón: regla → transportador → ocultar): tamaño fijo en pantalla, escala en **cm/mm de la hoja**, ángulo en vivo con imán a 0/45/90°, se arrastra con un dedo y se rota con dos; el lápiz se **engancha al borde** cercano (o al arco del transportador, como compás).
 - **Lupa** (overlay flotante, se cierra al soltar).
 - **Modo presentación / pizarra** (oculta todas las barras).
+- **Modo nocturno de escritura**: invierte la luminosidad del lienzo conservando el tono (solo en pantalla; la exportación no cambia). Se recuerda entre sesiones.
 
 ### 📱 Funciones de comunidad y ecosistema
 - **Backlinks entre páginas** (`TextItem.linkToPageId` + `BacklinkService`).
@@ -104,7 +108,7 @@
 - **Integración con calendario** (`CalendarService`).
 
 ### 📤 Importación
-- **Import de PDF como fondo** (`PdfImportService`): renderiza PDF → imagen con `printing` (Android/iOS); se aplica como plantilla custom infinita.
+- **Importar PDF para anotar** (`PdfImportService.importPages`): cada página del PDF se convierte en una página de la nota (hoja fija con el PDF de fondo, proporción real), procesando página a página (Android/iOS).
 
 ### ⌨️ Atajos de teclado
 - **Ctrl+Z**: deshacer.
@@ -113,58 +117,106 @@
 - **Ctrl+V**: pegar.
 
 ### 🧪 Calidad y DevOps
-- **82 tests** pasando (modelos, storage, migración, CRUD, formatos, lógica).
-- **CI (GitHub Actions)**: `flutter analyze` + `flutter test` + `flutter build apk --debug`.
+- **173 tests** pasando (modelos, storage, backup, cifrado, migración, CRUD, formatos, lógica del lienzo, historial).
+- **CI (GitHub Actions)**: `flutter analyze` + `flutter test --coverage` + APK debug + build Linux; en tags `v*` genera APK/AAB **firmados** (secretos `ANDROID_KEYSTORE_*`) y los publica en la release.
+- **Firma de release** desde `android/key.properties` (no versionado); sin él, release usa la clave debug.
 - **Tema oscuro** adaptado (scaffold, top bar, bottom bar, tool rail, biblioteca).
-- **i18n** (español/inglés con ARB).
-- **Accesibilidad** (etiquetas `Semantics`).
 - **Animaciones de transición** suaves.
-- **Optimización de renderizado** (`RepaintBoundary` + `contentVersion`).
-- **Caché de polígonos** en `StrokeEngine`.
+- **Rendimiento del lienzo**: culling por rectángulo (solo se pinta lo visible), `Path`/polígono cacheados por instancia de trazo (`Expando`, sin fugas), aerosol cacheado como `Picture`, trazo activo O(1) por punto, borrador con prefiltro por rectángulo, deshacer compacto que conserva el orden (z-order), rebuilds acotados en el editor (`ControllerSelector`), caché de imágenes LRU acotada por memoria.
 
 ---
 
-## 🔧 Lo que falta
+## 🚀 Camino a la release 2.0 (plan por versiones)
 
-### 🔴 Prioritario (antes de launch)
+> Estado de partida (sept. 2026): base técnica sólida (persistencia atómica, backup completo, rendimiento del lienzo, rechazo de palma, regla, PDF multipágina, exportación sin recortes). Lo que separa a Inklus de GoodNotes/Notability/Samsung Notes ahora es sobre todo **experiencia** (UI, flujo de páginas, búsqueda, lazo) y **distribución** (tienda, legal, marketplace).
 
-| # | Tarea | Fase | Descripción |
-|---|---|---|---|
-| 1 | **Respaldo local de Notes** | Persistencia | `exportFullBackup`/`importFullBackup` exportan Documents, no el nuevo formato `notebooks/` + `notes/`. Adaptar para que el backup local incluya la jerarquía completa. |
-| 2 | **Papelera de Notes** | CRUD | `loadTrash`/`restoreFromTrash` solo manejan Documents. Adaptar paraNotes y Notebooks por separado. |
-| 3 | **Test B5: luminosidad** | Calidad | Test que verifique que `paperColorDark` (#424242) tiene mayor luminosidad que `deskColorDark` (fondo del canvas en modo oscuro). |
-| 4 | **iOS / macOS / Windows / Web** | Plataformas | `flutter create . --platforms=...`; revisar `google_sign_in`, `printing` (PDF import), ML Kit por plataforma. |
-| 5 | **Crash reporting opt-in** | Ops | Sentry free tier; solo con consentimiento explícito; sin tracking. |
+### ✅ v1.4 — "Escribe como debe" (hecho en la rama `optimizacion`)
+- Rechazo de palma completo + modo solo lápiz + pan con un dedo + botón S-Pen; arreglado el bug que dejaba la pantalla sin responder al tacto tras mover una selección con el lápiz.
+- Eliminado el doble toque con la goma que **borraba la página sin deshacer**. Borrar página → "Deshacer" en un aviso; limpiar página se deshace con Ctrl+Z.
+- Hoja fija centrada al abrir (salía desplazada), margen del rayado en su sitio, sin trazos invisibles fuera de la hoja, presets A4/Carta/B5/Half Letter funcionando.
+- **Exportación y miniaturas sin recortes** (antes solo salía un cuarto de la hoja en PNG/PDF/PPTX/OCR y en las miniaturas de la biblioteca).
+- Plantillas infinitas: líneas nítidas a cualquier zoom y nivel de detalle (al alejar ya no se generan >150.000 círculos por frame con puntos/hábitos); casillas de hábitos con contorno.
+- Regla/transportador rediseñados y usables. PDF multipágina para anotar. Tema claro/oscuro recordado y funcional desde cualquier pantalla. Editor con ~15 % más de lienzo visible (barra inferior en una fila, miniaturas plegadas por defecto).
 
-### 🟡 Importante (mejoras de UX)
+### ✅ v1.4 (cont.) — Lavado de cara y paridad (hecho en la rama `optimizacion`)
+- **U1 Sistema de diseño**: `ui/theme/` (ThemeData central, `InklusColors`, tokens), esquema `fidelity` que respeta el azul de marca.
+- **U2 Editor**: barra superior única con plumas, herramientas, deshacer, páginas, capas, ☁️ y ⋮; opciones en **popovers anclados**; panel lateral de páginas; indicador "‹ 2/5 ›"; zoom compacto. Se eliminaron el riel lateral, la barra inferior y la tira de miniaturas.
+- **U3 Plumas favoritas**: 3 plumas + resaltador con color/grosor propios y colores recientes (persistentes).
+- **U4 Menú ⋮** agrupado en submenús (Exportar y compartir · Página · Nota · Ver · Datos).
+- **U5 Biblioteca**: logo propio, navegación lateral (Todos, Recientes, Favoritos, Carpetas, Marketplace), buscador M3 con búsqueda en el contenido, cuadrícula/lista, favoritos.
+- **F1 Lazo**: selecciona trazos, imágenes y textos; mover/eliminar juntos (deshacible); recolorear, grosor, duplicar y **convertir a texto** (Android/iOS).
+- **F2 Borrador**: parcial, trazo completo, solo resaltador.
+- **F3 Páginas**: marcadores (+ filtro), ir a página N, anterior/siguiente, atajos de teclado.
+- **F4 Búsqueda**: índice v2 por nota (título, texto, escritura reconocida), sin acentos, global desde la biblioteca; "Indexar escritura".
+- **F5 Texto enriquecido**: negrita, cursiva, subrayado, alineación, familia, tamaño.
+- **F6 Figuras**: "mantener para enderezar" (por defecto), triángulo, elipse real, rectángulo cerrado.
+- **F8 (parcial)**: la lupa sigue al lápiz y su aumento es relativo al zoom.
+- **F9 Láser** (también en modo presentación).
+- **Marketplace propio**: pantalla, instalación verificada, catálogo incluido sin red y plantilla del repo (`marketplace/`).
 
-| # | Tarea | Fase | Descripción |
-|---|---|---|---|
-| 6 | **Widget de Android** | Estrella | `home_widget` para acceso rápido al último cuaderno desde la pantalla de inicio. |
-| 7 | **Historial de versiones local real** | Estrella | Actualmente `_showVersionHistory()` es un stub (snackbar). Implementar guardado en `inklus/versions/` con timestamps y UI para restaurar. |
-| 8 | **Audio sincronizado** | Estrella | Grabar micrófono + timestamps por trazo; reproductor con seek. Requiere paquete `record`. |
-| 9 | **Zoom writing** | Estrella | Recuadro fijo tipo Samsung Notes; auto-desplaza el lienzo al borde. |
-| 10 | **Doble página** | Estrella | Dos páginas visibles en modo apaisado; render dual `paintWorld`. |
-| 11 | **Modo nocturno de escritura real** | Estrella | Actualmente solo muestra un snackbar. Implementar inversión de colores del canvas sin cambiar el tema UI. |
+### 🟡 Pendiente (siguiente ronda)
+| # | Tarea | Detalle |
+|---|---|---|
+| P1 | **Migrar pantallas restantes al sistema de diseño** | Lista de notas, configuración, papelera, recordatorios, estadísticas, selector de plantillas y capas aún usan colores sueltos (`ThemeColors`/`kAccentColor`). |
+| P2 | **i18n** | `flutter_localizations` + ARB (ES fuente, EN); arregla selectores de fecha en inglés. |
+| P3 | **Desplazamiento vertical continuo** entre páginas (como GoodNotes/Notability) y vista doble en apaisado. |
+| P4 | **Audio sincronizado** (`record`) con reproducción que resalta lo escrito. |
+| P5 | **Ventana de zoom** tipo Samsung Notes (recuadro de escritura ampliada que avanza solo). |
+| P6 | **Portadas desde el marketplace** y plantillas con imagen/PDF en el catálogo real (hoy el catálogo incluido solo trae plantillas paramétricas y paletas). |
+| P7 | **Escalar/rotar y copiar/pegar** también imágenes y textos del lazo (hoy solo trazos). |
+| P8 | **UI de revisiones de Drive** en el historial de versiones. |
 
-### 🟢 Diferenciadores (largo plazo)
+### 🔵 v2.0 — Release pública (sin Google Play)
+> Decisión: **no se publica en Google Play**. Distribución por **GitHub Releases** (APK firmados por la CI en cada tag `v*`) y, opcionalmente, IzzyOnDroid. (F-Droid principal no admite dependencias propietarias como ML Kit / Google Sign-In.)
 
-| # | Tarea | Fase | Descripción |
-|---|---|---|---|
-| 12 | **Plantillas con IA** | Comunidad | Generar plantillas personalizadas a partir de descripción de texto; usar Gemini Nano local. |
-| 13 | **OCR en tiempo real (streaming)** | Comunidad | Actualmente `recognizeStrokes()` es on-demand. Extender a reconocimiento continuo mientras se escribe. |
+| # | Tarea | Detalle |
+|---|---|---|
+| R1 | ✅ **LICENSE GPL-3.0-or-later** | `LICENSE` + cabecera SPDX en cada `.dart` + sección en README. |
+| R2 | **Política de privacidad** | Página pública (GitHub Pages): todo local; Drive con `drive.file` (solo archivos creados por la app); sin analítica. Necesaria para verificar la pantalla de consentimiento OAuth. |
+| R3 | **OAuth en producción** | Pasar la pantalla de consentimiento de Google Cloud de *Testing* a *In production* (si no: máx. 100 usuarios de prueba y tokens que caducan a los 7 días). |
+| R4 | **Releases en GitHub** | Tags `v*` → la CI firma y adjunta APK por ABI; notas desde `CHANGELOG.md`; instrucciones de instalación (orígenes desconocidos) en README. |
+| R5 | **Pruebas en dispositivo** | Galaxy Tab S (S-Pen), tablet con lápiz USI, teléfono. Guion manual + `integration_test` de flujos críticos. |
+| R6 | **Crash reporting opt-in** | Sentry (free) solo con consentimiento explícito; sin datos de contenido. |
+| R7 | **Latencia del lápiz** | Medir; si es alta, plugin nativo Android con *front-buffered rendering* + predicción de movimiento. |
+| R8 | **Otras plataformas** | iPadOS / Windows (revisar `google_sign_in`, ML Kit y `printing`). |
+| R9 | **Versionado** | SemVer + `CHANGELOG.md`. |
 
----
+### 🛒 Marketplace propio de Inklus
+
+**Estado actual:** `TemplateMarketplaceService` es **código muerto** (ninguna pantalla lo usa). Solo maneja *parámetros* de plantillas integradas (tipo, color, espaciado), no archivos, sin validación, y apunta a un repo externo (`nicblo/inclus-templates`). Se puede reutilizar su estructura de caché/parseo, pero el formato hay que rehacerlo.
+
+**Propuesta (coste 0 €, coherente con "todo gratis"):**
+
+1. **Repositorio propio** `inklus-marketplace` (en tu cuenta u organización de GitHub). Cada paquete es una carpeta `packs/<id>/` con `manifest.json` + archivos + `preview.webp`.
+2. **Tipos de contenido**: plantillas (paramétricas o imagen/PDF de fondo, finitas o infinitas), **planners PDF** con enlaces, paquetes de **stickers** (PNG/SVG), **portadas**, **paletas de color**, **presets de pluma**, fondos para la regla.
+3. **Catálogo generado por CI**: una GitHub Action valida cada PR (esquema JSON, tamaños máximos, dimensiones de imagen, tipos permitidos —nunca ejecutables—, licencia declarada CC0/CC-BY, autor) y publica `catalog.json` v2 con **sha256** de cada archivo y `minAppVersion`.
+4. **Distribución por CDN gratuito**: `https://cdn.jsdelivr.net/gh/<usuario>/inklus-marketplace@<tag>/…` (caché global, versionado por tag) o GitHub Releases. La app verifica el sha256 antes de instalar.
+5. **En la app**: pantalla *Marketplace* (categorías, búsqueda, vista previa, instalar/desinstalar), instalación en `inklus/marketplace/<packId>/`, uso offline; los paquetes instalados aparecen en el selector de plantillas, el panel de stickers y las portadas.
+6. **Publicar**: fase A por Pull Request (moderación con `CODEOWNERS`); fase B, botón "Publicar" en la app que abre un *issue form* de GitHub o un Cloudflare Worker gratuito que crea el PR; valoraciones con reacciones o Workers KV.
+7. **Legal**: normas de contenido, proceso de retirada (DMCA) y licencia obligatoria por paquete.
+
+Contenido inicial sugerido: agenda semanal/mensual real (con días y cabeceras, la plantilla "planner" actual es solo una rejilla), Cornell, hoja de cálculo/ingeniería, papel milimetrado, pentagrama con clave, storyboard, calendario, rastreador de hábitos de 31 días, portadas y 3-4 paquetes de stickers.
+
+### 🛠️ Deuda técnica pendiente
+| Tarea | Descripción |
+|---|---|
+| **Dividir `CanvasController` (estado)** | Ya se extrajo la geometría pura (`lasso.dart`, `bucket_fill.dart`, `ruler.dart`, `palm_rejection.dart`). Falta separar `ViewTransform`, `SelectionController` y `LayerManager`. |
+| **Consolidar Drive legacy** | Caminos paralelos Document vs Note en `drive_sync_service`; `SearchService` aún indexa `Document`. |
+| **`AppPaths` único** | Cinco servicios reconstruyen `getApplicationSupportDirectory()/inklus` (usar `StorageService.baseDirectory()`). |
+| **Papelera de Notes sueltas** | Una Note borrada individualmente se trata como `Document` legacy al restaurar. |
+| **Timeouts de Drive** | Las llamadas a `googleapis` no tienen timeout propio. |
+| **Pan sin límites** | En hoja fija se puede desplazar la vista indefinidamente; acotar a la hoja con margen. |
+| **Trazo activo incremental** | `getStroke` recorre todo el trazo en curso en cada evento; medir en trazos muy largos. |
 
 ## 📊 Métricas del proyecto
 
 | Métrica | Valor |
 |---|---|
-| Archivos Dart (lib/) | ~55 |
-| Líneas de código | ~29,400 |
-| Tests | 82 (todos pasando) |
+| Archivos Dart (lib/) | ~65 |
+| Líneas de código | ~22,200 |
+| Tests | 173 (todos pasando) |
 | Modelos | 9 (`document`, `note`, `notebook`, `page`, `stroke`, `template`, `image_item`, `text_item`, `id`) |
-| Servicios | 14 |
+| Servicios | 17 (+ `file_utils`) |
 | Herramientas de escritura | 10 (pen, pencil, highlighter, calligraphy, brush, eraser, select, lasso, bucket, text) |
 | Tipos de plantilla | 9 (blank, sheet, ruled, grid, custom, music, planner, habit, dots) |
 | Pantallas | 8 (library, note_list, home, settings, onboarding, trash, reminder, writing_stats) |
@@ -181,7 +233,7 @@
 - La app es **offline-first**: nunca romper el flujo local por una dependencia de red/cuenta.
 - Todo es **gratis y open source**: no crear funciones premium ni dependencias de pago.
 - Iconos: `dart run flutter_launcher_icons` (fuente en `assets/icon/`). Release: `flutter build apk --release --split-per-abi`.
-- CI: `flutter analyze` + `flutter test` + `flutter build apk --debug` en GitHub Actions.
+- CI: `flutter analyze` + `flutter test --coverage` + APK debug + Linux; release firmado en tags `v*`.
 - Onboarding: se guarda en `SharedPreferences('onboarding_seen')` = false tras completar.
 - **ToolType** tiene 10 valores: `pen`, `pencil`, `highlighter`, `calligraphy`, `brush`, `eraser`, `select`, `lasso`, `bucket`, `text`.
 - **Stroke.shapeType** persiste la forma detectada (`line`, `arrow`, `rectangle`, `circle`).

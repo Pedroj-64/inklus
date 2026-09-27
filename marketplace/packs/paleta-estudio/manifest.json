@@ -1,0 +1,10 @@
+{
+  "id": "paleta-estudio",
+  "name": "Paleta Estudio",
+  "description": "Tinta azul y negra, rojo de corrección, verde y naranja para destacar.",
+  "type": "palette",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "palette": ["#1E3A8A", "#111827", "#DC2626", "#15803D", "#EA580C"]
+}

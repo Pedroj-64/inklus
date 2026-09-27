@@ -1,4 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'page.dart';
+import 'id.dart';
 
 /// Un apunte (note) dentro de un cuaderno.
 ///
@@ -21,7 +23,7 @@ class Note {
   });
 
   factory Note.newBlank({String? id, String? title}) => Note(
-        id: id ?? 'note_${DateTime.now().microsecondsSinceEpoch}',
+        id: id ?? newId('note'),
         title: title ?? 'Sin título',
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),

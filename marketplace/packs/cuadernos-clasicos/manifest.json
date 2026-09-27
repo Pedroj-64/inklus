@@ -1,0 +1,17 @@
+{
+  "id": "cuadernos-clasicos",
+  "name": "Cuadernos clásicos",
+  "description": "Rayado ancho y estrecho, cuadrícula de 5 mm, puntos y pentagrama.",
+  "type": "template",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": ["estudio", "básicos"],
+  "templates": [
+    { "name": "Rayado ancho", "params": { "type": "ruled", "spacing": 64 } },
+    { "name": "Rayado estrecho", "params": { "type": "ruled", "spacing": 40 } },
+    { "name": "Cuadrícula 5 mm", "params": { "type": "grid", "spacing": 28 } },
+    { "name": "Puntos", "params": { "type": "dots", "spacing": 30 } },
+    { "name": "Pentagrama", "params": { "type": "music", "spacing": 60 } }
+  ]
+}

@@ -21,27 +21,17 @@
 -keep class com.google.android.gms.common.** { *; }
 -dontwarn com.google.android.gms.**
 
-# --- Google APIs (googleapis / _discoveryapis_commons) ---
-# Los clientes HTTP de Google usan reflección para parsear JSON.
--keep class com.google.api.client.** { *; }
+# --- Guava (dependencia transitiva de ML Kit / Play Services) ---
 -keep class com.google.common.** { *; }
--dontwarn com.google.api.client.**
 -dontwarn com.google.common.**
 -keepattributes *Annotation*
 -keepattributes Signature
 -keepattributes Exceptions
 
-# --- HTTP / IO ---
--keep class org.apache.http.** { *; }
--dontwarn org.apache.http.**
+# --- Avisos de clases opcionales ---
 -dontwarn java.lang.instrument.ClassFileTransformer
 -dontwarn sun.misc.Unsafe
 -dontwarn com.google.errorprone.annotations.**
 
-# --- Cryptography ---
--keep class com.goterl.lazycode.lazysodium.** { *; }
--dontwarn com.goterl.lazycode.lazysodium.**
-
-# --- PDF / printing ---
--keep class com.itextpdf.** { *; }
--dontwarn com.itextpdf.**
+# Nota: googleapis, cryptography y pdf son paquetes Dart puros (no Java):
+# no necesitan reglas de R8.

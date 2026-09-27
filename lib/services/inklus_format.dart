@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -13,6 +14,7 @@ import '../models/page.dart';
 import '../models/stroke.dart';
 import '../models/text_item.dart';
 import '../models/template.dart';
+import 'file_utils.dart';
 
 /// Formato propietario **.inklus v2**: contenedor autocontenido de un cuaderno.
 ///
@@ -166,9 +168,10 @@ class InklusFormat {
     // Extraer imágenes.
     final extractedImages = <String, String>{};
     for (final entry in imageEntries.entries) {
-      final fileName = entry.key.split('/').last;
+      final fileName = safeFileName(entry.key);
+      if (fileName == null) continue; // nombre inseguro/vacío: se ignora
       final file = File('${dir.path}/$fileName');
-      await file.writeAsBytes(entry.value);
+      await writeAtomic(file, entry.value);
       extractedImages[entry.key] = file.path;
     }
 
@@ -461,8 +464,10 @@ class InklusFormat {
     final key = path.substring(scheme.length);
     final bytes = entries[key];
     if (bytes == null) return path;
-    final file = File('${dir.path}/${key.split('/').last}');
-    await file.writeAsBytes(bytes);
+    final fileName = safeFileName(key);
+    if (fileName == null) return path;
+    final file = File('${dir.path}/$fileName');
+    await writeAtomic(file, bytes);
     return file.path;
   }
 

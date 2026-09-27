@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:math';
 import 'dart:ui';
 
@@ -12,7 +13,7 @@ class DetectedShape {
   const DetectedShape(this.type, this.normalizedPoints);
 }
 
-enum ShapeType { line, rectangle, circle, arrow }
+enum ShapeType { line, rectangle, circle, arrow, triangle }
 
 /// Detecta si un trazo se aproxima a una forma geométrica simple.
 ///
@@ -24,7 +25,7 @@ class ShapeDetector {
 
   static const double _minPoints = 10;
   static const double _lineTolerance = 0.12; // 12% de la longitud
-  static const double _circleTolerance = 0.15;
+  static const double _circleTolerance = 0.09;
   static const double _rectAngleThreshold = pi / 8; // ~22.5°
 
   /// Analiza un trazo y devuelve la forma detectada o null.
@@ -43,11 +44,57 @@ class ShapeDetector {
     final rectResult = _detectRectangle(points, totalLength);
     if (rectResult != null) return rectResult;
 
+    // ¿Es un triángulo?
+    final triangleResult = _detectTriangle(points, totalLength);
+    if (triangleResult != null) return triangleResult;
+
     // ¿Es un círculo/óvalo?
     final circleResult = _detectCircle(points);
     if (circleResult != null) return circleResult;
 
     return null;
+  }
+
+  /// Polígono cerrado con lados densificados: [perfect_freehand] necesita
+  /// varios puntos por lado para que las esquinas salgan nítidas y el
+  /// grosor sea uniforme (con solo los vértices, redondea y deforma).
+  static List<StrokePoint> _closedPolygon(List<Offset> vertices, {int perSide = 12}) {
+    final out = <StrokePoint>[];
+    for (var i = 0; i < vertices.length; i++) {
+      final a = vertices[i];
+      final b = vertices[(i + 1) % vertices.length];
+      for (var k = 0; k < perSide; k++) {
+        out.add(StrokePoint.fromOffset(Offset.lerp(a, b, k / perSide)!, 0.5));
+      }
+    }
+    out.add(StrokePoint.fromOffset(vertices.first, 0.5)); // cierra la figura
+    return out;
+  }
+
+  /// true si el trazo termina cerca de donde empezó (figura cerrada).
+  static bool _isClosed(List<StrokePoint> points, double totalLength) =>
+      (points.first.offset - points.last.offset).distance < totalLength * 0.15;
+
+  /// Detecta un triángulo: trazo cerrado con exactamente 3 esquinas.
+  static DetectedShape? _detectTriangle(List<StrokePoint> points, double totalLength) {
+    if (points.length < 15 || !_isClosed(points, totalLength)) return null;
+    final rect = boundingBoxFromPoints(points);
+    if (rect.shortestSide < 30) return null;
+    // El inicio/fin del trazo suele ser un vértice que _findCorners no ve
+    // (queda en el borde de la ventana): se añade y se fusionan cercanos.
+    final candidates = [points.first.offset, ..._findCorners(points)];
+    final merged = <Offset>[];
+    final minGap = rect.shortestSide * 0.25;
+    for (final c in candidates) {
+      if (merged.every((m) => (m - c).distance > minGap)) merged.add(c);
+    }
+    if (merged.length != 3) return null;
+    // Los lados deben ser rectos: la longitud dibujada ≈ perímetro.
+    final perimeter = (merged[0] - merged[1]).distance +
+        (merged[1] - merged[2]).distance +
+        (merged[2] - merged[0]).distance;
+    if (totalLength > perimeter * 1.25) return null;
+    return DetectedShape(ShapeType.triangle, _closedPolygon(merged));
   }
 
   /// Detecta si el trazo es una línea recta o una flecha.
@@ -142,12 +189,11 @@ class ShapeDetector {
     }
 
     if (matched >= 3) {
-      return DetectedShape(ShapeType.rectangle, [
-        StrokePoint.fromOffset(rect.topLeft, 0.5),
-        StrokePoint.fromOffset(rect.topRight, 0.5),
-        StrokePoint.fromOffset(rect.bottomRight, 0.5),
-        StrokePoint.fromOffset(rect.bottomLeft, 0.5),
-      ]);
+      // Cerrado y con lados densificados (antes faltaba el cuarto lado).
+      return DetectedShape(
+        ShapeType.rectangle,
+        _closedPolygon([rect.topLeft, rect.topRight, rect.bottomRight, rect.bottomLeft]),
+      );
     }
     return null;
   }
@@ -160,35 +206,57 @@ class ShapeDetector {
     if (rect.shortestSide < 30) return null;
 
     final center = rect.center;
-    final avgRadius = (rect.width + rect.height) / 4;
+    final rx = rect.width / 2;
+    final ry = rect.height / 2;
 
-    // Verifica que los puntos estén a una distancia similar del centro.
+    // Elipse (no se fuerza a círculo): cada punto debería cumplir
+    // (dx/rx)² + (dy/ry)² ≈ 1. Se mide la desviación media de esa "distancia
+    // normalizada" respecto a 1.
     var deviation = 0.0;
     for (final p in points) {
-      final d = (p.offset - center).distance;
-      deviation += (d - avgRadius).abs();
+      final d = p.offset - center;
+      final n = sqrt((d.dx / rx) * (d.dx / rx) + (d.dy / ry) * (d.dy / ry));
+      deviation += (n - 1).abs();
     }
     deviation /= points.length;
 
-    if (deviation < avgRadius * _circleTolerance) {
-      // Genera puntos de círculo perfecto.
-      final circlePoints = <StrokePoint>[];
-      for (var i = 0; i <= 60; i++) {
-        final angle = (i / 60) * 2 * pi;
-        final p = center + Offset(cos(angle), sin(angle)) * avgRadius;
-        circlePoints.add(StrokePoint.fromOffset(p, 0.5));
+    if (deviation < _circleTolerance) {
+      // Casi redonda → círculo perfecto; si no, elipse del tamaño dibujado.
+      final round = (rx - ry).abs() < max(rx, ry) * 0.12;
+      final r = (rx + ry) / 2;
+      final ellipsePoints = <StrokePoint>[];
+      for (var i = 0; i <= 72; i++) {
+        final angle = (i / 72) * 2 * pi;
+        final p = center +
+            Offset(cos(angle) * (round ? r : rx), sin(angle) * (round ? r : ry));
+        ellipsePoints.add(StrokePoint.fromOffset(p, 0.5));
       }
-      return DetectedShape(ShapeType.circle, circlePoints);
+      return DetectedShape(ShapeType.circle, ellipsePoints);
     }
     return null;
   }
 
   /// Encuentra las esquinas (puntos de curvatura máxima) en el trazo.
+  ///
+  /// Alrededor de una esquina real hay varios puntos seguidos con giro
+  /// grande: se agrupan y se toma el de **mayor** giro de cada grupo (antes
+  /// cada punto contaba como esquina y un rectángulo daba 8-12 esquinas).
   static List<Offset> _findCorners(List<StrokePoint> points) {
     if (points.length < 10) return [];
 
     final corners = <Offset>[];
-    final windowSize = max(3, points.length ~/ 10);
+    final windowSize = max(3, points.length ~/ 12);
+    Offset? best;
+    var bestTurn = 0.0;
+
+    void flush() {
+      final b = best;
+      if (b != null && (corners.isEmpty || (b - corners.last).distance > 20)) {
+        corners.add(b);
+      }
+      best = null;
+      bestTurn = 0;
+    }
 
     for (var i = windowSize; i < points.length - windowSize; i++) {
       final prev = points[i - windowSize].offset;
@@ -198,19 +266,18 @@ class ShapeDetector {
       final d1 = (curr - prev).direction;
       final d2 = (next - curr).direction;
       final angleDiff = (d2 - d1).abs();
-      final normalizedDiff = angleDiff > pi ? 2 * pi - angleDiff : angleDiff;
+      final turn = angleDiff > pi ? 2 * pi - angleDiff : angleDiff;
 
-      if (normalizedDiff > _rectAngleThreshold) {
-        // Evita esquinas muy cercanas entre sí.
-        if (corners.isEmpty ||
-            (curr - corners.last).distance > 20) {
-          corners.add(curr);
+      if (turn > _rectAngleThreshold) {
+        if (turn > bestTurn) {
+          bestTurn = turn;
+          best = curr;
         }
+      } else {
+        flush();
       }
     }
-
+    flush();
     return corners;
   }
-
-
 }

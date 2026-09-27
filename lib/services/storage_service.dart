@@ -1,5 +1,8 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
@@ -10,6 +13,7 @@ import '../models/note.dart';
 import '../models/notebook.dart';
 import '../models/template.dart';
 import '../models/id.dart';
+import 'file_utils.dart';
 
 /// Metadatos de un cuaderno para el índice (sin páginas/trazos).
 class NotebookMeta {
@@ -33,6 +37,9 @@ class NotebookMeta {
   /// Ruta de imagen personalizada para la portada (estilo 'custom').
   final String? coverImagePath;
 
+  /// Marcado como favorito (aparece en la sección Favoritos).
+  final bool favorite;
+
   const NotebookMeta({
     required this.id,
     required this.title,
@@ -41,6 +48,7 @@ class NotebookMeta {
     this.syncEnabled,
     this.coverStyle = 'simple',
     this.coverImagePath,
+    this.favorite = false,
     List<String>? tags,
   })  : tags = tags ?? const [];
 
@@ -56,6 +64,7 @@ class NotebookMeta {
     String? coverImagePath,
     bool clearCoverImage = false,
     List<String>? tags,
+    bool? favorite,
   }) =>
       NotebookMeta(
         id: id,
@@ -66,6 +75,7 @@ class NotebookMeta {
         coverStyle: coverStyle ?? this.coverStyle,
         coverImagePath: clearCoverImage ? null : (coverImagePath ?? this.coverImagePath),
         tags: tags ?? this.tags,
+        favorite: favorite ?? this.favorite,
       );
 
   factory NotebookMeta.fromJson(Map<String, dynamic> json) => NotebookMeta(
@@ -78,6 +88,7 @@ class NotebookMeta {
         syncEnabled: json['syncEnabled'] as bool?,
         coverStyle: json['coverStyle'] as String? ?? 'simple',
         coverImagePath: json['coverImagePath'] as String?,
+        favorite: json['fav'] as bool? ?? false,
         tags: (json['tags'] as List? ?? [])
             .map((t) => t as String)
             .toList(),
@@ -92,6 +103,7 @@ class NotebookMeta {
         if (coverStyle != 'simple') 'coverStyle': coverStyle,
         if (coverImagePath != null) 'coverImagePath': coverImagePath,
         if (tags.isNotEmpty) 'tags': tags,
+        if (favorite) 'fav': true,
       };
 }
 
@@ -133,6 +145,9 @@ class StorageService {
     if (!await folder.exists()) await folder.create(recursive: true);
     return folder;
   }
+
+  /// Carpeta raíz de datos (`<appSupport>/inklus`, o la de tests).
+  Future<Directory> baseDirectory() => _baseDir();
 
   Future<Directory> _docsDir(Directory base) async {
     final folder = Directory('${base.path}/$_documentsFolder');
@@ -178,12 +193,22 @@ class StorageService {
   // Índice
   // -------------------------------------------------------------------------
 
+  /// Serializa todas las lecturas-modificación-escritura del índice para que
+  /// guardados concurrentes (autoguardado, saveNow, biblioteca) no se pisen.
+  final SerialQueue _indexQueue = SerialQueue();
+
   Future<List<NotebookMeta>> _readIndex(Directory base) async {
     final file = await _indexFile(base);
     if (!await file.exists()) return [];
+    String raw;
     try {
-      final raw = await file.readAsString();
-      if (raw.trim().isEmpty) return [];
+      raw = await file.readAsString();
+    } catch (e) {
+      debugPrint('StorageService._readIndex (lectura): $e');
+      return [];
+    }
+    if (raw.trim().isEmpty) return _recoverIndex(base, file);
+    try {
       final json = jsonDecode(raw) as Map<String, dynamic>;
       // Intentar formato nuevo (v2) primero
       if (json['formatVersion'] == _formatVersion) {
@@ -196,17 +221,66 @@ class StorageService {
           .map((m) => NotebookMeta.fromJson(m as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      debugPrint('StorageService._readIndex: $e');
-      return [];
+      debugPrint('StorageService._readIndex: índice corrupto ($e)');
+      return _recoverIndex(base, file);
     }
+  }
+
+  /// El índice está vacío o corrupto: se aparta (`index.json.corrupt-<ts>`)
+  /// y se reconstruye a partir de `notebooks/*.json` para que la biblioteca
+  /// no aparezca vacía (y el siguiente guardado no pise el resto).
+  Future<List<NotebookMeta>> _recoverIndex(Directory base, File file) async {
+    final nbDir = Directory('${base.path}/$_notebooksFolder');
+    if (!await nbDir.exists()) return [];
+    final metas = <NotebookMeta>[];
+    await for (final entity in nbDir.list()) {
+      if (entity is! File || !entity.path.endsWith('.json')) continue;
+      try {
+        final json =
+            jsonDecode(await entity.readAsString()) as Map<String, dynamic>;
+        var meta = NotebookMeta.fromJson(json);
+        if (!json.containsKey('updatedAt')) {
+          meta = meta.copyWith(updatedAt: await entity.lastModified());
+        }
+        metas.add(meta);
+      } catch (e) {
+        debugPrint('StorageService._recoverIndex: ${entity.path}: $e');
+      }
+    }
+    if (metas.isEmpty) return [];
+    debugPrint(
+      'StorageService: índice reconstruido con ${metas.length} cuaderno(s).',
+    );
+    try {
+      await file.rename(
+        '${file.path}.corrupt-${DateTime.now().millisecondsSinceEpoch}',
+      );
+    } catch (_) {}
+    await _writeIndex(base, metas);
+    return metas;
   }
 
   Future<void> _writeIndex(Directory base, List<NotebookMeta> metas) async {
     final file = await _indexFile(base);
-    await file.writeAsString(jsonEncode({
-      'formatVersion': _formatVersion,
-      'notebooks': metas.map((m) => m.toJson()).toList(),
-    }));
+    await writeAtomic(
+      file,
+      jsonEncode({
+        'formatVersion': _formatVersion,
+        'notebooks': metas.map((m) => m.toJson()).toList(),
+      }),
+    );
+  }
+
+  /// Lee, modifica y reescribe el índice de forma serializada.
+  Future<void> _updateIndex(
+    Directory base,
+    void Function(List<NotebookMeta> metas) mutate,
+  ) {
+    return _indexQueue.run(() async {
+      final metas = await _readIndex(base);
+      mutate(metas);
+      await _writeIndex(base, metas);
+    });
   }
 
   /// Lista los cuadernos guardados, ordenados por `updatedAt` descendente.
@@ -289,7 +363,7 @@ class StorageService {
       pages: doc.pages,
     );
     final noteFile = File('${notesDir.path}/$noteId.json');
-    await noteFile.writeAsString(jsonEncode(note.toJson()));
+    await writeAtomic(noteFile, jsonEncode(note.toJson()));
 
     // 2. Crear Notebook con colorValue y tags del Document
     final notebook = Notebook(
@@ -300,7 +374,7 @@ class StorageService {
       notes: [note],
     );
     final nbFile = File('${notebooksDir.path}/${notebook.id}.json');
-    await nbFile.writeAsString(jsonEncode(notebook.toJson()));
+    await writeAtomic(nbFile, jsonEncode(notebook.toJson()));
 
     // 3. Devolver meta para el índice
     return NotebookMeta(
@@ -392,25 +466,20 @@ class StorageService {
   Future<NotebookMeta> save(Document document) async {
     final base = await _baseDir();
     final file = await _docFile(base, document.id);
-    await file.writeAsString(jsonEncode(document.toJson()));
+    await writeAtomic(file, jsonEncode(document.toJson()));
 
-    final metas = await _readIndex(base);
-    metas.removeWhere((m) => m.id == document.id);
-    metas.add(NotebookMeta(
-      id: document.id,
-      title: document.title,
-      updatedAt: document.updatedAt,
-      colorValue: document.colorValue,
-      tags: document.tags,
-    ));
-    await _writeIndex(base, metas);
-    return NotebookMeta(
+    final meta = NotebookMeta(
       id: document.id,
       title: document.title,
       updatedAt: document.updatedAt,
       colorValue: document.colorValue,
       tags: document.tags,
     );
+    await _updateIndex(base, (metas) {
+      metas.removeWhere((m) => m.id == document.id);
+      metas.add(meta);
+    });
+    return meta;
   }
 
   /// Crea un cuaderno nuevo en blanco y lo guarda.
@@ -486,14 +555,20 @@ class StorageService {
   /// Activa o desactiva la sincronización de un cuaderno con Google Drive.
   Future<void> setSyncEnabled(String id, bool enabled) async {
     final base = await _baseDir();
-    final metas = await _readIndex(base);
-    final idx = metas.indexWhere((m) => m.id == id);
-    if (idx < 0) return;
-    metas[idx] = metas[idx].copyWith(
-      updatedAt: metas[idx].updatedAt,
-      syncEnabled: enabled,
-    );
-    await _writeIndex(base, metas);
+    await _updateIndex(base, (metas) {
+      final idx = metas.indexWhere((m) => m.id == id);
+      if (idx < 0) return;
+      metas[idx] = metas[idx].copyWith(syncEnabled: enabled);
+    });
+  }
+
+  /// Marca / desmarca un cuaderno como favorito (solo toca el índice).
+  Future<void> setFavorite(String id, bool favorite) async {
+    final base = await _baseDir();
+    await _updateIndex(base, (metas) {
+      final idx = metas.indexWhere((m) => m.id == id);
+      if (idx >= 0) metas[idx] = metas[idx].copyWith(favorite: favorite);
+    });
   }
 
   /// Duplica un cuaderno con un id nuevo y título "... (copia)".
@@ -519,9 +594,7 @@ class StorageService {
     final file = await _docFile(base, id);
     if (!await file.exists()) {
       // Solo estaba en el índice; quitar.
-      final metas = await _readIndex(base);
-      metas.removeWhere((m) => m.id == id);
-      await _writeIndex(base, metas);
+      await _updateIndex(base, (metas) => metas.removeWhere((m) => m.id == id));
       return;
     }
     // Mover a carpeta trash/ para poder recuperar.
@@ -530,9 +603,7 @@ class StorageService {
     final trashFile = File('${trashDir.path}/$id.json');
     await file.copy(trashFile.path);
     await file.delete();
-    final metas = await _readIndex(base);
-    metas.removeWhere((m) => m.id == id);
-    await _writeIndex(base, metas);
+    await _updateIndex(base, (metas) => metas.removeWhere((m) => m.id == id));
   }
 
   // -------------------------------------------------------------------------
@@ -577,27 +648,30 @@ class StorageService {
 
     // Guardar el Notebook (solo IDs, no contenido de notes)
     final file = await _notebookFile(base, notebook.id);
-    await file.writeAsString(jsonEncode(notebook.toJson()));
+    await writeAtomic(file, jsonEncode(notebook.toJson()));
 
-    // Actualizar índice
-    final metas = await _readIndex(base);
-    metas.removeWhere((m) => m.id == notebook.id);
-    metas.add(NotebookMeta(
-      id: notebook.id,
-      title: notebook.title,
-      updatedAt: notebook.updatedAt,
-      colorValue: notebook.colorValue,
-      coverStyle: notebook.coverStyle,
-      coverImagePath: notebook.coverImagePath,
-      tags: notebook.tags,
-    ));
-    await _writeIndex(base, metas);
+    // Actualizar índice (conserva syncEnabled del meta anterior).
+    await _updateIndex(base, (metas) {
+      final prev = metas.where((m) => m.id == notebook.id).firstOrNull;
+      metas.removeWhere((m) => m.id == notebook.id);
+      metas.add(NotebookMeta(
+        id: notebook.id,
+        title: notebook.title,
+        updatedAt: notebook.updatedAt,
+        colorValue: notebook.colorValue,
+        syncEnabled: prev?.syncEnabled,
+        favorite: prev?.favorite ?? false,
+        coverStyle: notebook.coverStyle,
+        coverImagePath: notebook.coverImagePath,
+        tags: notebook.tags,
+      ));
+    });
   }
 
   /// Guarda solo un Note (sin tocar el Notebook ni el índice).
   Future<void> _saveNoteRaw(Directory base, Note note) async {
     final file = await _noteFile(base, note.id);
-    await file.writeAsString(jsonEncode(note.toJson()));
+    await writeAtomic(file, jsonEncode(note.toJson()));
   }
 
   /// Crea un Notebook nuevo con un Note en blanco.
@@ -701,7 +775,9 @@ class StorageService {
               .map((e) => e as String)
               .toList();
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('StorageService.deleteNotebook: $e');
+      }
     }
 
     // Mover notebook a papelera
@@ -722,12 +798,10 @@ class StorageService {
     }
 
     // Quitar del índice
-    final metas = await _readIndex(base);
-    metas.removeWhere((m) => m.id == id);
-    await _writeIndex(base, metas);
+    await _updateIndex(base, (metas) => metas.removeWhere((m) => m.id == id));
 
     // Limpiar imágenes huérfanas en background (no bloquea el retorno).
-    collectOrphanedImages();
+    unawaited(collectOrphanedImages());
   }
 
   // -------------------------------------------------------------------------
@@ -742,7 +816,7 @@ class StorageService {
       if (!await file.exists()) return null;
       final raw = await file.readAsString();
       if (raw.trim().isEmpty) return null;
-      return Note.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      return Note.fromJson(await decodeJsonAsync(raw) as Map<String, dynamic>);
     } catch (e) {
       debugPrint('StorageService.loadNote: $e');
       return null;
@@ -756,12 +830,12 @@ class StorageService {
 
     // Actualizar el updatedAt del Notebook en el índice
     note.touch();
-    final metas = await _readIndex(base);
-    final idx = metas.indexWhere((m) => m.id == notebookId);
-    if (idx >= 0) {
-      metas[idx] = metas[idx].copyWith(updatedAt: DateTime.now());
-      await _writeIndex(base, metas);
-    }
+    await _updateIndex(base, (metas) {
+      final idx = metas.indexWhere((m) => m.id == notebookId);
+      if (idx >= 0) {
+        metas[idx] = metas[idx].copyWith(updatedAt: DateTime.now());
+      }
+    });
   }
 
   /// Crea un Note nuevo dentro de un Notebook.
@@ -820,7 +894,7 @@ class StorageService {
     await saveNotebook(nb);
 
     // Limpiar imágenes huérfanas en background.
-    collectOrphanedImages();
+    unawaited(collectOrphanedImages());
   }
 
   /// Duplica un Note dentro del mismo Notebook.
@@ -888,8 +962,9 @@ class StorageService {
             colorValue: doc.colorValue,
           ));
         }
-      } catch (_) {
-        // Archivo corrupto, ignorar.
+      } catch (e) {
+        // Archivo corrupto: se ignora pero queda registrado.
+        debugPrint('StorageService.loadTrash: ${entity.path}: $e');
       }
     }
     metas.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
@@ -928,17 +1003,18 @@ class StorageService {
       // Reconstruir el índice.
       final nb = await loadNotebook(id);
       if (nb != null) {
-        final metas = await _readIndex(base);
-        metas.add(NotebookMeta(
-          id: nb.id,
-          title: nb.title,
-          updatedAt: nb.updatedAt,
-          colorValue: nb.colorValue,
-          coverStyle: nb.coverStyle,
-          coverImagePath: nb.coverImagePath,
-          tags: nb.tags,
-        ));
-        await _writeIndex(base, metas);
+        await _updateIndex(base, (metas) {
+          metas.removeWhere((m) => m.id == nb.id);
+          metas.add(NotebookMeta(
+            id: nb.id,
+            title: nb.title,
+            updatedAt: nb.updatedAt,
+            colorValue: nb.colorValue,
+            coverStyle: nb.coverStyle,
+            coverImagePath: nb.coverImagePath,
+            tags: nb.tags,
+          ));
+        });
       }
     } else {
       // ---- Formato Document legacy ----
@@ -988,7 +1064,7 @@ class StorageService {
     final trashFile = File('${base.path}/trash/$id.json');
     if (await trashFile.exists()) await trashFile.delete();
     // Limpiar imágenes huérfanas.
-    collectOrphanedImages();
+    unawaited(collectOrphanedImages());
   }
 
   /// Vacía toda la papelera (elimina definitivamente todo).
@@ -997,87 +1073,189 @@ class StorageService {
     final trashDir = Directory('${base.path}/trash');
     if (await trashDir.exists()) await trashDir.delete(recursive: true);
     // Limpiar imágenes huérfanas.
-    collectOrphanedImages();
+    unawaited(collectOrphanedImages());
   }
 
   // -------------------------------------------------------------------------
   // Respaldo local completo (todos los cuadernos en un ZIP)
   // -------------------------------------------------------------------------
 
+  static const _backupManifest = 'backup.json';
+  static const _backupVersion = 2;
+
+  /// Carpetas incluidas en el respaldo completo.
+  static const _backupFolders = [
+    _notebooksFolder,
+    _notesFolder,
+    _documentsFolder,
+    'images',
+    'restored', // imágenes extraídas de .inklus / Drive
+    'pdf_imports',
+    'templates',
+    'trash',
+  ];
+
+  /// Archivos sueltos de datos del usuario incluidos en el respaldo
+  /// (el índice de búsqueda no: se regenera).
+  static const _backupRootFiles = [
+    'reminders.json',
+    'stats.json',
+    'calendar_links.json',
+  ];
+
   /// Exporta todos los cuadernos + imágenes en un único ZIP.
   ///
   /// Estructura del ZIP:
+  /// - `backup.json` — manifiesto (versión + ruta base original, para
+  ///   re-mapear rutas absolutas de imágenes al restaurar en otro equipo).
   /// - `index.json` — índice de todos los cuadernos.
-  /// - `documents/<id>.json` — cada documento.
+  /// - `notebooks/<id>.json`, `notes/<id>.json` — contenido actual.
+  /// - `documents/<id>.json` — formato legacy (si queda alguno).
   /// - `images/<path>` — imágenes compartidas.
+  /// - `trash/<id>.json` — papelera.
   Future<Uint8List> exportFullBackup() async {
     final base = await _baseDir();
-    final archive = Archive();
+    final files = <String, Uint8List>{};
 
-    // Copiar index.json
+    final manifest = utf8.encode(jsonEncode({
+      'backupVersion': _backupVersion,
+      'basePath': base.path,
+      'createdAt': DateTime.now().toIso8601String(),
+    }));
+    files[_backupManifest] = Uint8List.fromList(manifest);
+
     final indexFile = await _indexFile(base);
     if (await indexFile.exists()) {
-      final bytes = await indexFile.readAsBytes();
-      archive.addFile(ArchiveFile('index.json', bytes.length, bytes));
+      files[_indexName] = await indexFile.readAsBytes();
     }
 
-    // Copiar todos los documentos
-    final docsDir = await _docsDir(base);
-    if (await docsDir.exists()) {
-      await for (final entity in docsDir.list()) {
-        if (entity is File && entity.path.endsWith('.json')) {
-          final name = 'documents/${entity.uri.pathSegments.last}';
-          final bytes = await entity.readAsBytes();
-          archive.addFile(ArchiveFile(name, bytes.length, bytes));
-        }
+    for (final name in _backupRootFiles) {
+      final f = File('${base.path}/$name');
+      if (await f.exists()) files[name] = await f.readAsBytes();
+    }
+
+    for (final folder in _backupFolders) {
+      final dir = Directory('${base.path}/$folder');
+      if (!await dir.exists()) continue;
+      await for (final entity in dir.list(recursive: true)) {
+        if (entity is! File || entity.path.contains('.tmp-')) continue;
+        final relative = entity.path.substring(base.path.length + 1);
+        files[relative] = await entity.readAsBytes();
       }
     }
 
-    // Copiar imágenes
-    final imagesDir = Directory('${base.path}/images');
-    if (await imagesDir.exists()) {
-      await for (final entity in imagesDir.list(recursive: true)) {
-        if (entity is File) {
-          final relative = entity.path.substring(base.path.length + 1);
-          final bytes = await entity.readAsBytes();
-          archive.addFile(ArchiveFile(relative, bytes.length, bytes));
-        }
-      }
-    }
-
-    return Uint8List.fromList(ZipEncoder().encode(archive));
+    // La compresión ZIP es CPU pura: fuera del hilo de UI.
+    return Isolate.run(() {
+      final archive = Archive();
+      files.forEach((name, bytes) {
+        archive.addFile(ArchiveFile(name, bytes.length, bytes));
+      });
+      return Uint8List.fromList(ZipEncoder().encode(archive));
+    });
   }
 
   /// Importa un backup completo (ZIP exportado por [exportFullBackup]).
+  ///
+  /// **Fusiona** con lo existente: los cuadernos del backup se añaden o
+  /// reemplazan a los locales con el mismo id; los demás cuadernos locales se
+  /// conservan. Las entradas con rutas inseguras (`..`, absolutas) se ignoran.
+  ///
+  /// Devuelve el número de cuadernos restaurados.
   Future<int> importFullBackup(Uint8List zipBytes) async {
-    final archive = ZipDecoder().decodeBytes(zipBytes);
+    final entries = await Isolate.run(() {
+      final archive = ZipDecoder().decodeBytes(zipBytes);
+      return {
+        for (final f in archive)
+          if (f.isFile) f.name: Uint8List.fromList(f.content as List<int>),
+      };
+    });
     final base = await _baseDir();
-    var count = 0;
 
-    for (final file in archive) {
-      if (!file.isFile) continue;
-      final data = file.content as List<int>;
-      final outPath = '${base.path}/${file.name}';
-
-      if (file.name.startsWith('documents/')) {
-        // Guardar documento y contar.
-        final outFile = File(outPath);
-        await outFile.parent.create(recursive: true);
-        await outFile.writeAsBytes(data);
-        count++;
-      } else if (file.name.startsWith('images/')) {
-        // Restaurar imagen.
-        final outFile = File(outPath);
-        await outFile.parent.create(recursive: true);
-        await outFile.writeAsBytes(data);
-      } else if (file.name == 'index.json') {
-        // Restaurar índice.
-        final outFile = File(outPath);
-        await outFile.writeAsBytes(data);
+    // Ruta base del equipo de origen (para re-mapear rutas de imágenes).
+    String? oldBase;
+    final manifestBytes = entries[_backupManifest];
+    if (manifestBytes != null) {
+      try {
+        final m = jsonDecode(utf8.decode(manifestBytes)) as Map<String, dynamic>;
+        oldBase = m['basePath'] as String?;
+      } catch (e) {
+        debugPrint('StorageService.importFullBackup: manifiesto inválido: $e');
       }
     }
 
-    return count;
+    Uint8List remap(Uint8List data) {
+      if (oldBase == null || oldBase == base.path) return data;
+      // Las rutas se guardan como strings JSON: se reemplaza el prefijo
+      // tanto en su forma literal como escapada (`\/`).
+      final text = utf8
+          .decode(data)
+          .replaceAll(oldBase, base.path)
+          .replaceAll(
+            oldBase.replaceAll('/', r'\/'),
+            base.path.replaceAll('/', r'\/'),
+          );
+      return Uint8List.fromList(utf8.encode(text));
+    }
+
+    final legacyDocIds = <String>[];
+    for (final entry in entries.entries) {
+      final name = entry.key;
+      if (name == _backupManifest || name == _indexName) continue;
+      final top = name.split('/').first;
+      if (!_backupFolders.contains(top) && !_backupRootFiles.contains(name)) {
+        continue;
+      }
+      final outPath = safeJoin(base.path, name);
+      if (outPath == null) {
+        debugPrint('StorageService.importFullBackup: ruta insegura ignorada: $name');
+        continue;
+      }
+      final isJson = name.endsWith('.json') &&
+          top != 'images' &&
+          top != 'restored' &&
+          top != 'pdf_imports';
+      await writeAtomic(File(outPath), isJson ? remap(entry.value) : entry.value);
+      if (top == _documentsFolder && name.endsWith('.json')) {
+        legacyDocIds.add(name.split('/').last.replaceAll('.json', ''));
+      }
+    }
+
+    // Reconstruir los metas a partir del índice del backup.
+    final restored = <NotebookMeta>[];
+    final indexBytes = entries[_indexName];
+    var isLegacyIndex = indexBytes == null;
+    if (indexBytes != null) {
+      try {
+        final json = jsonDecode(utf8.decode(remap(indexBytes)))
+            as Map<String, dynamic>;
+        if (json['formatVersion'] == _formatVersion) {
+          restored.addAll((json['notebooks'] as List? ?? [])
+              .map((m) => NotebookMeta.fromJson(m as Map<String, dynamic>)));
+        } else {
+          isLegacyIndex = true;
+        }
+      } catch (e) {
+        debugPrint('StorageService.importFullBackup: índice inválido: $e');
+        isLegacyIndex = true;
+      }
+    }
+
+    // Backup antiguo (solo documents/): migrar cada Document a Notebook+Note.
+    if (isLegacyIndex) {
+      for (final id in legacyDocIds) {
+        final doc = await load(id);
+        if (doc == null) continue;
+        restored.add(await _migrateDocumentToNotebook(base, doc));
+      }
+    }
+
+    await _updateIndex(base, (metas) {
+      for (final m in restored) {
+        metas.removeWhere((e) => e.id == m.id);
+        metas.add(m);
+      }
+    });
+    return restored.length;
   }
 
   // -------------------------------------------------------------------------
@@ -1106,7 +1284,9 @@ class StorageService {
           if (note == null) continue;
           _extractImagePaths(note, referenced);
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('StorageService._collectReferencedImagePaths: $e');
+      }
     }
 
     // 2. También considerar images en la papelera (no borrar si podrían restaurarse).
@@ -1123,7 +1303,26 @@ class StorageService {
             final note = Note.fromJson(noteJson);
             _extractImagePaths(note, referenced);
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('StorageService._collectReferencedImagePaths: $e');
+        }
+      }
+    }
+
+    // 3. Versiones locales (historial): restaurarlas no debe dejar huecos.
+    final versionsDir = Directory('${base.path}/versions');
+    if (await versionsDir.exists()) {
+      await for (final entity in versionsDir.list(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.json.gz')) continue;
+        try {
+          final raw = utf8.decode(gzip.decode(await entity.readAsBytes()));
+          final json = jsonDecode(raw);
+          if (json is Map<String, dynamic>) {
+            _extractImagePaths(Note.fromJson(json), referenced);
+          }
+        } catch (e) {
+          debugPrint('StorageService._collectReferencedImagePaths: $e');
+        }
       }
     }
 
@@ -1141,24 +1340,36 @@ class StorageService {
     }
   }
 
+  bool _collectingOrphans = false;
+
   /// Elimina imágenes de `inklus/images/` que no están referenciadas por
   /// ningún Note (activo o en papelera). Ejecuta en background.
-  Future<void> collectOrphanedImages() async {
+  ///
+  /// Las imágenes modificadas hace menos de [minAge] se respetan: pueden
+  /// pertenecer a una nota cuyo autoguardado aún no se ha escrito.
+  Future<void> collectOrphanedImages({
+    Duration minAge = const Duration(minutes: 10),
+  }) async {
+    if (_collectingOrphans) return;
+    _collectingOrphans = true;
     try {
       final base = await _baseDir();
       final imagesDir = Directory('${base.path}/images');
       if (!await imagesDir.exists()) return;
 
       final referenced = await _collectReferencedImagePaths();
+      final now = DateTime.now();
       var deleted = 0;
 
       await for (final entity in imagesDir.list(recursive: true)) {
         if (entity is! File) continue;
-        if (!referenced.contains(entity.path)) {
-          try {
-            await entity.delete();
-            deleted++;
-          } catch (_) {}
+        if (referenced.contains(entity.path)) continue;
+        try {
+          if (now.difference(await entity.lastModified()) < minAge) continue;
+          await entity.delete();
+          deleted++;
+        } catch (e) {
+          debugPrint('StorageService.collectOrphanedImages: ${entity.path}: $e');
         }
       }
 
@@ -1167,6 +1378,8 @@ class StorageService {
       }
     } catch (e) {
       debugPrint('StorageService.collectOrphanedImages: $e');
+    } finally {
+      _collectingOrphans = false;
     }
   }
 }

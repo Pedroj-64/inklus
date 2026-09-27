@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:math';
 import 'dart:ui' as ui;
 
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart' hide Page;
 
 import '../../constants.dart';
 import '../../logic/canvas_controller.dart';
+import '../../logic/ruler.dart';
 import '../canvas/world_painter.dart';
 
 // ============================================================================
@@ -15,276 +17,188 @@ import '../canvas/world_painter.dart';
 // sobre el canvas del editor (no son widgets de Flutter, son CustomPainter).
 // ============================================================================
 
-/// Dibuja la regla virtual en el canvas.
+/// Dibuja la regla virtual en el canvas (en espacio de pantalla).
 ///
-/// La regla puede ser recta o transportador, según [controller.rulerType].
+/// La regla tiene tamaño constante en pantalla (ver [RulerGeometry]) y su
+/// escala está en centímetros **de la hoja** (coincide con la página A4 a
+/// cualquier zoom).
 void drawRuler(Canvas canvas, CanvasController controller, Size size) {
   switch (controller.rulerType) {
     case RulerType.straight:
-      _drawStraightRuler(canvas, controller, size);
+      _drawStraightRuler(canvas, controller);
       break;
     case RulerType.protractor:
-      _drawProtractor(canvas, controller, size);
+      _drawProtractor(canvas, controller);
       break;
   }
 }
 
-// ---------------------------------------------------------------------------
-// Regla recta
-// ---------------------------------------------------------------------------
+// Estilo "acrílico": cuerpo blanco translúcido, marcas oscuras. Se lee bien
+// sobre papel blanco y sobre el escritorio oscuro.
+const Color _rulerBody = Color(0xD9FFFFFF);
+const Color _rulerBorder = Color(0x33000000);
+const Color _rulerTick = Color(0xCC1F2937);
+const Color _rulerTickMinor = Color(0x801F2937);
 
-void _drawStraightRuler(Canvas canvas, CanvasController controller, Size size) {
-  final scale = controller.scale;
-  final translate = controller.translate;
-  final center = controller.rulerCenter;
-  final angle = controller.rulerAngle;
-  final halfLen = controller.rulerLength / 2;
+final Paint _rulerBodyPaint = Paint()..color = _rulerBody;
+final Paint _rulerBorderPaint = Paint()
+  ..color = _rulerBorder
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = 1;
+final Paint _tickPaint = Paint()..strokeWidth = 1;
+final Paint _snapEdgePaint = Paint()
+  ..color = kAccentColor
+  ..strokeWidth = 3
+  ..strokeCap = StrokeCap.round;
 
-  final screenCenter = center * scale + translate;
-  final dir = Offset(cos(angle), sin(angle));
-  final screenDir = dir * scale;
-  final screenHalfLen = halfLen * scale;
-
-  final end1 = screenCenter + screenDir * screenHalfLen;
-  final end2 = screenCenter - screenDir * screenHalfLen;
-  const rulerWidth = kRulerScreenWidth;
-
-  // Rotar al ángulo de la regla.
-  canvas.save();
-  canvas.translate(screenCenter.dx, screenCenter.dy);
-  canvas.rotate(angle);
-  canvas.translate(-screenCenter.dx, -screenCenter.dy);
-
-  // Fondo semitransparente.
-  canvas.drawRRect(
-    RRect.fromRectAndRadius(
-      Rect.fromCenter(center: screenCenter, width: screenHalfLen * 2, height: rulerWidth),
-      const Radius.circular(4),
+void _drawLabel(Canvas canvas, String text, Offset center,
+    {double fontSize = 11, Color color = _rulerTick, FontWeight weight = FontWeight.w600}) {
+  final tp = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: TextStyle(fontSize: fontSize, color: color, fontWeight: weight),
     ),
-    Paint()
-      ..color = const Color(0xFFF5F0E8).withAlpha(220)
-      ..style = PaintingStyle.fill,
-  );
-
-  // Borde.
-  canvas.drawRRect(
-    RRect.fromRectAndRadius(
-      Rect.fromCenter(center: screenCenter, width: screenHalfLen * 2, height: rulerWidth),
-      const Radius.circular(4),
-    ),
-    Paint()
-      ..color = const Color(0xFF8B7355).withAlpha(180)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5,
-  );
-
-  // Línea central de guía.
-  canvas.drawLine(
-    Offset(screenCenter.dx - screenHalfLen + 8, screenCenter.dy),
-    Offset(screenCenter.dx + screenHalfLen - 8, screenCenter.dy),
-    Paint()
-      ..color = const Color(0xFF3B82F6).withAlpha(160)
-      ..strokeWidth = 1.0
-      ..strokeCap = StrokeCap.round,
-  );
-
-  // Marcas de medición y números.
-  final markCount = (controller.rulerLength / kRulerMarkSpacing).floor();
-  final markSpacing = (screenHalfLen * 2) / markCount;
-  final textPainter = TextPainter(textDirection: TextDirection.ltr);
-
-  for (var i = 0; i <= markCount; i++) {
-    final x = screenCenter.dx - screenHalfLen + i * markSpacing;
-    final isMajor = i % 2 == 0;
-    final markLen = isMajor ? rulerWidth * 0.65 : rulerWidth * 0.35;
-    final markY = screenCenter.dy - rulerWidth / 2 + 2;
-
-    // Marca.
-    canvas.drawLine(
-      Offset(x, markY),
-      Offset(x, markY + markLen),
-      Paint()
-        ..color = const Color(0xFF333333).withAlpha(isMajor ? 200 : 120)
-        ..strokeWidth = isMajor ? 1.2 : 0.8,
-    );
-
-    // Número en marcas mayores.
-    if (isMajor && i > 0 && i < markCount) {
-      final cm = i ~/ 2;
-      textPainter.text = TextSpan(
-        text: '$cm',
-        style: const TextStyle(
-          fontSize: 7,
-          color: Color(0xFF555555),
-          fontWeight: FontWeight.w500,
-        ),
-      );
-      textPainter.layout();
-      textPainter.paint(
-        canvas,
-        Offset(x - textPainter.width / 2, markY + markLen + 1),
-      );
-    }
-  }
-
-  canvas.restore();
-
-  // Centro de la regla (handle de arrastre).
-  canvas.drawCircle(screenCenter, 9, Paint()..color = kAccentColor);
-  canvas.drawCircle(
-    screenCenter,
-    9,
-    Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..color = Colors.white,
-  );
-
-  // Handles de rotación (extremos).
-  for (final end in [end1, end2]) {
-    canvas.drawCircle(end, 6, Paint()..color = kAccentColor.withAlpha(180));
-    canvas.drawCircle(
-      end,
-      6,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..color = Colors.white,
-    );
-  }
+    textDirection: TextDirection.ltr,
+  )..layout();
+  tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
 }
 
-// ---------------------------------------------------------------------------
-// Transportador
-// ---------------------------------------------------------------------------
+/// Píldora con el ángulo actual (siempre legible: nunca boca abajo).
+void _drawAnglePill(Canvas canvas, double angle) {
+  final deg = RulerGeometry.degrees(angle);
+  var shown = deg.round();
+  if (shown > 90) shown -= 180;
+  if (shown < -90) shown += 180;
+  final text = '${shown.abs()}°';
+  final tp = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  final rect = Rect.fromCenter(center: Offset.zero, width: tp.width + 16, height: tp.height + 6);
+  canvas.drawRRect(
+    RRect.fromRectAndRadius(rect, const Radius.circular(20)),
+    Paint()..color = kAccentColor,
+  );
+  tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+}
 
-void _drawProtractor(Canvas canvas, CanvasController controller, Size size) {
-  final scale = controller.scale;
-  final translate = controller.translate;
-  final center = controller.rulerCenter;
-  final angle = controller.rulerAngle;
-
-  final screenCenter = center * scale + translate;
-  final radius = kProtractorRadius * scale;
+void _drawStraightRuler(Canvas canvas, CanvasController controller) {
+  final g = controller.rulerGeometry;
+  final screenCenter = g.center * controller.scale + controller.translate;
+  const len = RulerGeometry.lengthPx;
+  const w = RulerGeometry.widthPx;
 
   canvas.save();
   canvas.translate(screenCenter.dx, screenCenter.dy);
-  canvas.rotate(angle);
+  canvas.rotate(g.angle);
 
-  // Fondo del transportador.
-  final bgPath = Path()
-    ..addArc(
-      Rect.fromCircle(center: Offset.zero, radius: radius),
-      -pi / 2, // empieza arriba
-      pi, // semicírculo
-    )
-    ..lineTo(0, 0)
-    ..close();
-
-  canvas.drawPath(
-    bgPath,
-    Paint()
-      ..color = const Color(0xFFF5F0E8).withAlpha(210)
-      ..style = PaintingStyle.fill,
+  final body = RRect.fromRectAndRadius(
+    Rect.fromCenter(center: Offset.zero, width: len, height: w),
+    const Radius.circular(10),
   );
+  canvas.drawShadow(Path()..addRRect(body), Colors.black, 6, true);
+  canvas.drawRRect(body, _rulerBodyPaint);
+  canvas.drawRRect(body, _rulerBorderPaint);
 
-  // Borde del transportador.
-  canvas.drawPath(
-    bgPath,
-    Paint()
-      ..color = const Color(0xFF8B7355).withAlpha(180)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5,
-  );
-
-  // Marcas de grados.
-  final textPainter = TextPainter(textDirection: TextDirection.ltr);
-  for (var deg = 0; deg <= 180; deg += 5) {
-    final rad = (deg - 90) * pi / 180; // -90 para que 0° esté a la derecha
-    final cosR = cos(rad);
-    final sinR = sin(rad);
-
-    final isMajor = deg % 30 == 0;
-    final isMedium = deg % 10 == 0;
-    final innerR = isMajor ? radius * 0.72 : (isMedium ? radius * 0.80 : radius * 0.88);
-    final outerR = radius * 0.95;
-
-    // Línea de marca.
-    canvas.drawLine(
-      Offset(innerR * cosR, innerR * sinR),
-      Offset(outerR * cosR, outerR * sinR),
-      Paint()
-        ..color = const Color(0xFF333333).withAlpha(isMajor ? 220 : (isMedium ? 160 : 100))
-        ..strokeWidth = isMajor ? 1.5 : (isMedium ? 1.0 : 0.6),
-    );
-
-    // Números cada 30°.
-    if (isMajor) {
-      final labelR = radius * 0.62;
-      final labelAngle = (deg - 90) * pi / 180;
-      final showDeg = deg;
-      textPainter.text = TextSpan(
-        text: '$showDeg°',
-        style: const TextStyle(
-          fontSize: 8,
-          color: Color(0xFF444444),
-          fontWeight: FontWeight.w600,
-        ),
-      );
-      textPainter.layout();
-      // Rotar el texto para que sea legible.
-      canvas.save();
-      canvas.translate(labelR * cos(labelAngle), labelR * sin(labelAngle));
-      canvas.rotate(labelAngle + pi / 2);
-      textPainter.paint(canvas, Offset(-textPainter.width / 2, -textPainter.height / 2));
-      canvas.restore();
+  // Escala: cm de la hoja → px de pantalla según el zoom.
+  final cmPx = kWorldUnitsPerCm * controller.scale;
+  final mmPx = cmPx / 10;
+  final showMm = mmPx >= 4;
+  final showHalf = cmPx / 2 >= 6;
+  final labelEvery = cmPx >= 22 ? 1 : (cmPx >= 8 ? 5 : 10);
+  const start = -len / 2 + 14; // el 0 no queda pegado al borde
+  const end = len / 2 - 14;
+  final step = showMm ? mmPx : (showHalf ? cmPx / 2 : cmPx);
+  final perCm = (cmPx / step).round();
+  var i = 0;
+  for (var x = start; x <= end + 0.01; x += step, i++) {
+    final isCm = i % perCm == 0;
+    final isHalf = !isCm && perCm >= 2 && i % (perCm ~/ 2) == 0;
+    final tick = isCm ? 16.0 : (isHalf ? 11.0 : 6.0);
+    _tickPaint.color = isCm ? _rulerTick : _rulerTickMinor;
+    // Marcas en ambos bordes (como una regla real).
+    canvas.drawLine(Offset(x, -w / 2), Offset(x, -w / 2 + tick), _tickPaint);
+    canvas.drawLine(Offset(x, w / 2), Offset(x, w / 2 - tick * 0.6), _tickPaint);
+    final cm = i ~/ perCm;
+    if (isCm && cm % labelEvery == 0) {
+      _drawLabel(canvas, '$cm', Offset(x, -w / 2 + 26));
     }
   }
 
-  // Línea de base (horizontal).
-  canvas.drawLine(
-    Offset(-radius * 0.95, 0),
-    Offset(radius * 0.95, 0),
-    Paint()
-      ..color = const Color(0xFF8B7355).withAlpha(120)
-      ..strokeWidth = 1.0,
-  );
+  // Borde en uso (el trazo se está dibujando a lo largo de él).
+  final snap = controller.activeRulerSnap;
+  if (snap == RulerSnap.edgeTop || snap == RulerSnap.edgeBottom) {
+    final y = snap == RulerSnap.edgeTop ? -w / 2 : w / 2;
+    canvas.drawLine(Offset(-len / 2 + 6, y), Offset(len / 2 - 6, y), _snapEdgePaint);
+  }
 
-  // Línea vertical de referencia (0° arriba).
-  canvas.drawLine(
-    Offset(0, 0),
-    Offset(0, -radius * 0.72),
-    Paint()
-      ..color = const Color(0xFF3B82F6).withAlpha(160)
-      ..strokeWidth = 1.0
-      ..strokeCap = StrokeCap.round,
-  );
-
+  // Ángulo en el centro (legible: se endereza si la regla está invertida).
+  canvas.translate(0, w / 2 - 16);
+  if (cos(g.angle) < 0) canvas.rotate(pi);
+  _drawAnglePill(canvas, g.angle);
   canvas.restore();
+}
 
-  // Centro del transportador (handle de arrastre).
-  canvas.drawCircle(screenCenter, 8, Paint()..color = kAccentColor);
-  canvas.drawCircle(
-    screenCenter,
-    8,
-    Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..color = Colors.white,
-  );
+void _drawProtractor(Canvas canvas, CanvasController controller) {
+  final g = controller.rulerGeometry;
+  final screenCenter = g.center * controller.scale + controller.translate;
+  const r = RulerGeometry.protractorRadiusPx;
 
-  // Handle de rotación.
-  final rotAngle = angle - pi / 2;
-  final rotHandle = screenCenter + Offset(cos(rotAngle), sin(rotAngle)) * radius * 0.72;
-  canvas.drawCircle(rotHandle, 6, Paint()..color = kAccentColor.withAlpha(180));
-  canvas.drawCircle(
-    rotHandle,
-    6,
-    Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..color = Colors.white,
-  );
+  canvas.save();
+  canvas.translate(screenCenter.dx, screenCenter.dy);
+  canvas.rotate(g.angle);
+
+  // Semicírculo "encima" de la base (y negativa en el marco local).
+  final body = Path()
+    ..moveTo(-r - 10, 0)
+    ..arcTo(Rect.fromCircle(center: Offset.zero, radius: r + 10), pi, pi, false)
+    ..lineTo(r + 10, 14)
+    ..lineTo(-r - 10, 14)
+    ..close();
+  canvas.drawShadow(body, Colors.black, 6, true);
+  canvas.drawPath(body, _rulerBodyPaint);
+  canvas.drawPath(body, _rulerBorderPaint);
+
+  for (var deg = 0; deg <= 180; deg++) {
+    final a = pi + deg * pi / 180; // 0° a la derecha... en sentido antihorario
+    final dir = Offset(cos(a), sin(a));
+    final is10 = deg % 10 == 0;
+    final is5 = deg % 5 == 0;
+    final tick = is10 ? 16.0 : (is5 ? 10.0 : 5.0);
+    _tickPaint.color = is10 ? _rulerTick : _rulerTickMinor;
+    canvas.drawLine(dir * r, dir * (r - tick), _tickPaint);
+    if (is10) {
+      // Escala exterior 0→180 e interior 180→0, como un transportador real.
+      _drawLabel(canvas, '${180 - deg}', dir * (r - 28), fontSize: 10);
+      if (deg % 30 == 0) {
+        _drawLabel(canvas, '$deg', dir * (r - 48),
+            fontSize: 9, color: _rulerTickMinor, weight: FontWeight.w500);
+      }
+    }
+  }
+  // Base y punto central.
+  _tickPaint.color = _rulerTick;
+  canvas.drawLine(const Offset(-r, 0), const Offset(r, 0), _tickPaint);
+  canvas.drawCircle(Offset.zero, 4, Paint()..color = kAccentColor);
+
+  final snap = controller.activeRulerSnap;
+  if (snap == RulerSnap.arc) {
+    canvas.drawArc(Rect.fromCircle(center: Offset.zero, radius: r), pi, pi, false,
+        Paint()
+          ..color = kAccentColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3);
+  } else if (snap == RulerSnap.baseline) {
+    canvas.drawLine(const Offset(-r, 0), const Offset(r, 0), _snapEdgePaint);
+  }
+
+  canvas.translate(0, -r * 0.35);
+  if (cos(g.angle) < 0) canvas.rotate(pi);
+  _drawAnglePill(canvas, g.angle);
+  canvas.restore();
 }
 
 /// Dibuja la lupa (vista magnificada circular) cerca del stylus.
@@ -298,13 +212,18 @@ void drawMagnifier(
   Map<String, ui.Image> imageCache,
 ) {
   final worldPos = controller.magnifierPosition;
-  final zoom = controller.magnifierZoom;
-  final radius = controller.magnifierRadius;
+  // Aumento RELATIVO a la vista actual (antes era absoluto: con zoom alto
+  // la "lupa" podía incluso mostrar el contenido más pequeño).
+  final zoom = controller.magnifierZoom * controller.scale;
+  final radius = controller.magnifierRadius * 1.5;
 
-  // Posición de la lupa en pantalla: esquina superior derecha.
-  final magnifierCenter = Offset(
-    size.width - radius - kMagnifierMargin,
-    radius + 40,
+  // La lupa sigue al lápiz: arriba a la izquierda de la punta (para no
+  // taparla con la mano de un diestro); si no cabe, se recoloca dentro.
+  final pen = worldPos * controller.scale + controller.translate;
+  var magnifierCenter = pen + Offset(-radius * 1.3, -radius * 1.5);
+  magnifierCenter = Offset(
+    magnifierCenter.dx.clamp(radius + kMagnifierMargin, size.width - radius - kMagnifierMargin),
+    magnifierCenter.dy.clamp(radius + kMagnifierMargin, size.height - radius - kMagnifierMargin),
   );
 
   // Dibuja el fondo circular.
@@ -317,7 +236,7 @@ void drawMagnifier(
   canvas.drawCircle(
     magnifierCenter,
     radius,
-    Paint()..color = kSurfaceLight,
+    Paint()..color = kPaperColorLight,
   );
 
   // Renderiza el contenido del mundo en la lupa.
@@ -339,7 +258,11 @@ void drawMagnifier(
     page: controller.page,
     sheetSize: controller.sheetSize,
     imageCache: imageCache,
+    viewScale: zoom,
   );
+  // El trazo en curso también se ve ampliado.
+  final active = controller.activeStroke;
+  if (active != null) paintActiveStroke(canvas, active);
   canvas.restore();
   canvas.restore();
 

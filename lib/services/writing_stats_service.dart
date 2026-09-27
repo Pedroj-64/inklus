@@ -1,8 +1,10 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'file_utils.dart';
 
 /// Estadísticas de escritura de un día.
 class DayStats {
@@ -121,7 +123,7 @@ class WritingStatsService {
       for (final e in _days.entries) {
         map[e.key] = e.value.toJson();
       }
-      await f.writeAsString(jsonEncode(map));
+      await writeAtomic(f, jsonEncode(map));
     } catch (e) {
       debugPrint('WritingStatsService._save: $e');
     }

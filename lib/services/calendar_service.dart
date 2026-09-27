@@ -1,8 +1,10 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'file_utils.dart';
 
 /// Vinculación entre un cuaderno y un evento de calendario.
 class CalendarLink {
@@ -74,7 +76,7 @@ class CalendarService {
     try {
       final f = await _file();
       await f.parent.create(recursive: true);
-      await f.writeAsString(jsonEncode(_links.map((l) => l.toJson()).toList()));
+      await writeAtomic(f, jsonEncode(_links.map((l) => l.toJson()).toList()));
     } catch (e) {
       debugPrint('CalendarService._save: $e');
     }

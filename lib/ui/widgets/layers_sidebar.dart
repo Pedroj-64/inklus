@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 
 import '../../constants.dart';
 import '../../logic/canvas_controller.dart';
 import '../../models/page.dart';
 import '../../utils/theme_colors.dart';
+import 'dialogs.dart';
 
 /// Sidebar docked para gestión de capas.
 ///
@@ -105,34 +107,17 @@ class LayersSidebar extends StatelessWidget {
     );
   }
 
-  void _renameLayer(BuildContext context, int index) {
-    final ctrl = TextEditingController(
-      text: controller.page.layers[index].name,
+  Future<void> _renameLayer(BuildContext context, int index) async {
+    final name = await showTextPrompt(
+      context,
+      title: 'Renombrar capa',
+      hint: 'Nombre',
+      initialValue: controller.page.layers[index].name,
+      confirmLabel: 'Renombrar',
     );
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Renombrar capa'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Nombre'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () {
-              controller.renameLayer(index, ctrl.text);
-              Navigator.pop(context);
-            },
-            child: const Text('Renombrar'),
-          ),
-        ],
-      ),
-    );
+    if (name != null && name.trim().isNotEmpty) {
+      controller.renameLayer(index, name.trim());
+    }
   }
 }
 

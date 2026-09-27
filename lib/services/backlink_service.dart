@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import '../models/document.dart';
 import '../models/page.dart';
 import '../models/text_item.dart';

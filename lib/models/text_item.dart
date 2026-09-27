@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:ui';
 
 /// Un cuadro de texto superpuesto sobre el lienzo.
@@ -29,6 +30,21 @@ class TextItem {
   /// Id de la página destino si este texto es un enlace interno (backlink).
   final String? linkToPageId;
 
+  // ---- Formato (texto enriquecido a nivel de caja) ----
+  final bool bold;
+  final bool italic;
+  final bool underline;
+
+  /// Alineación: `left`, `center` o `right`.
+  final String align;
+
+  /// Familia: `sans`, `serif` o `mono` (familias genéricas del sistema; no
+  /// se empaquetan fuentes).
+  final String fontFamily;
+
+  static const alignments = ['left', 'center', 'right'];
+  static const families = ['sans', 'serif', 'mono'];
+
   TextItem({
     required this.id,
     required this.x,
@@ -39,6 +55,11 @@ class TextItem {
     this.colorValue = 0xFF1A1A1A, // kDefaultStrokeColor.toARGB32()
     this.layerIndex = 0,
     this.linkToPageId,
+    this.bold = false,
+    this.italic = false,
+    this.underline = false,
+    this.align = 'left',
+    this.fontFamily = 'sans',
   });
 
   Color get color => Color(colorValue);
@@ -72,6 +93,12 @@ class TextItem {
     int? colorValue,
     int? layerIndex,
     String? linkToPageId,
+    bool clearLink = false,
+    bool? bold,
+    bool? italic,
+    bool? underline,
+    String? align,
+    String? fontFamily,
   }) =>
       TextItem(
         id: id ?? this.id,
@@ -82,7 +109,12 @@ class TextItem {
         fontSize: fontSize ?? this.fontSize,
         colorValue: colorValue ?? this.colorValue,
         layerIndex: layerIndex ?? this.layerIndex,
-        linkToPageId: linkToPageId ?? this.linkToPageId,
+        linkToPageId: clearLink ? null : (linkToPageId ?? this.linkToPageId),
+        bold: bold ?? this.bold,
+        italic: italic ?? this.italic,
+        underline: underline ?? this.underline,
+        align: align ?? this.align,
+        fontFamily: fontFamily ?? this.fontFamily,
       );
 
   factory TextItem.fromJson(Map<String, dynamic> json) => TextItem(
@@ -95,6 +127,11 @@ class TextItem {
         colorValue: (json['color'] as num?)?.toInt() ?? 0xFF1A1A1A, // kDefaultStrokeColor.toARGB32()
         layerIndex: (json['layer'] as num?)?.toInt() ?? 0,
         linkToPageId: json['linkToPage'] as String?,
+        bold: json['b'] as bool? ?? false,
+        italic: json['i'] as bool? ?? false,
+        underline: json['u'] as bool? ?? false,
+        align: json['align'] as String? ?? 'left',
+        fontFamily: json['font'] as String? ?? 'sans',
       );
 
   Map<String, dynamic> toJson() => {
@@ -107,5 +144,10 @@ class TextItem {
         'color': colorValue,
         if (layerIndex != 0) 'layer': layerIndex,
         if (linkToPageId != null) 'linkToPage': linkToPageId,
+        if (bold) 'b': true,
+        if (italic) 'i': true,
+        if (underline) 'u': true,
+        if (align != 'left') 'align': align,
+        if (fontFamily != 'sans') 'font': fontFamily,
       };
 }

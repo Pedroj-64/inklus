@@ -120,6 +120,8 @@ android/app/*.jks
 *api-key*
 *secret*
 *token*
+# Excepción: tokens de DISEÑO (espaciados/radios), no son secretos.
+!lib/ui/theme/tokens.dart
 *.pem
 *.p12
 *.pfx
@@ -150,3 +152,9 @@ NOTES.md
 TODO.md
 HACKING.md
 # (mantener README.md, ROADMAP.md, AGENTS.md)
+
+# Binarios de prueba generados localmente (APK, AppImage…)
+/dist/
+
+# Worktrees y datos locales de Claude Code (no versionar)
+/.claude/

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import '../constants.dart';
 import 'dart:typed_data';
 
@@ -11,6 +12,7 @@ import '../services/image_service.dart';
 import '../services/storage_service.dart';
 import 'home_screen.dart';
 import '../utils/theme_colors.dart';
+import 'widgets/dialogs.dart';
 
 /// Pantalla que muestra la lista de apuntes (notes) dentro de un cuaderno.
 ///
@@ -227,28 +229,12 @@ class _NoteListScreenState extends State<NoteListScreen> {
     required String hint,
     required String prefilled,
   }) async {
-    final controller = TextEditingController(text: prefilled);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(titulo),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(hintText: hint),
-          onSubmitted: (v) => Navigator.pop(context, v),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
+    final result = await showTextPrompt(
+      context,
+      title: titulo,
+      hint: hint,
+      initialValue: prefilled,
+      confirmLabel: 'Guardar',
     );
     if (result == null || result.trim().isEmpty) return null;
     return result.trim();

@@ -1,6 +1,8 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 
-import 'constants.dart';
+import 'theme_controller.dart';
+import 'ui/theme/app_theme.dart';
 import 'ui/notebook_library.dart';
 import 'ui/onboarding_screen.dart';
 
@@ -16,13 +18,13 @@ class InklusApp extends StatefulWidget {
 }
 
 class _InklusAppState extends State<InklusApp> {
-  ThemeMode _themeMode = ThemeMode.system;
   bool _showOnboarding = true;
 
   @override
   void initState() {
     super.initState();
     _checkOnboarding();
+    ThemeModeController.load();
   }
 
   Future<void> _checkOnboarding() async {
@@ -30,47 +32,23 @@ class _InklusAppState extends State<InklusApp> {
     if (mounted) setState(() => _showOnboarding = shouldShow);
   }
 
-  void _toggleTheme() {
-    setState(() {
-      _themeMode = _themeMode == ThemeMode.dark
-          ? ThemeMode.light
-          : ThemeMode.dark;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
-    final lightScheme = ColorScheme.fromSeed(
-      seedColor: kAccentColor,
-      brightness: Brightness.light,
-    );
-    final darkScheme = ColorScheme.fromSeed(
-      seedColor: kAccentColor,
-      brightness: Brightness.dark,
-    );
-    return MaterialApp(
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeModeController.mode,
+      builder: (context, themeMode, _) => MaterialApp(
       title: 'Inklus',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: lightScheme,
-        useMaterial3: true,
-        scaffoldBackgroundColor: kScaffoldLight,
-        visualDensity: VisualDensity.comfortable,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: darkScheme,
-        useMaterial3: true,
-        scaffoldBackgroundColor: kScaffoldDark,
-        visualDensity: VisualDensity.comfortable,
-      ),
-      themeMode: _themeMode,
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: themeMode,
       home: _showOnboarding
           ? OnboardingScreen(
               onDone: () => setState(() => _showOnboarding = false),
             )
-          : NotebookLibraryScreen(
-              onToggleTheme: _toggleTheme,
-            ),
+          : const NotebookLibraryScreen(),
+      ),
     );
   }
 }

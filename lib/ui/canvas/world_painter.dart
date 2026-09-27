@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:math';
 import 'dart:ui' as ui;
 
@@ -32,10 +33,8 @@ void paintWorld(
   required Page page,
   required Size sheetSize,
   required Map<String, ui.Image> imageCache,
-  bool drawSelection = false,
-  String? selectedImageId,
-  double handleSizeWorld = 24,
   bool omitTemplate = false,
+  double viewScale = 1,
   bool omitImages = false,
   bool isDark = false,
 }) {
@@ -95,22 +94,31 @@ void paintWorld(
         if (template.isFinite) {
           canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
         }
-        _drawRuled(canvas, visibleWorldRect, template, isDark: isDark);
+        _drawRuled(
+          canvas,
+          visibleWorldRect,
+          template,
+          isDark: isDark,
+          // En hoja finita el margen va respecto al borde izquierdo de la hoja
+          // (centrada en el origen); en lienzo infinito, respecto al origen.
+          marginOriginX: template.isFinite ? sheetRect.left : 0,
+          viewScale: viewScale,
+        );
         break;
       case TemplateType.grid:
         if (template.isFinite) {
           canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
         }
-        _drawGrid(canvas, visibleWorldRect, template, isDark: isDark);
+        _drawGrid(canvas, visibleWorldRect, template, isDark: isDark, viewScale: viewScale);
         break;
       case TemplateType.custom:
         // Ya dibujado antes del clip si es finito.
         if (template.infiniteFill) {
           final img = template.imagePath == null ? null : imageCache[template.imagePath];
           if (img == null) {
-            _drawGrid(canvas, visibleWorldRect, template);
+            _drawGrid(canvas, visibleWorldRect, template, viewScale: viewScale);
           } else {
-            _drawTiledImage(canvas, visibleWorldRect, img);
+            _drawTiledImage(canvas, visibleWorldRect, img, viewScale: viewScale);
           }
         }
         // Para custom finito con imagen, el _drawSheet ya rellenó arriba.
@@ -119,106 +127,114 @@ void paintWorld(
         if (template.isFinite) {
           canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
         }
-        _drawMusicStaff(canvas, visibleWorldRect, template, isDark: isDark);
+        _drawMusicStaff(canvas, visibleWorldRect, template, isDark: isDark, viewScale: viewScale);
         break;
       case TemplateType.planner:
         if (template.isFinite) {
           canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
         }
-        _drawPlanner(canvas, visibleWorldRect, template, isDark: isDark);
+        _drawPlanner(canvas, visibleWorldRect, template, isDark: isDark, viewScale: viewScale);
         break;
       case TemplateType.habit:
         if (template.isFinite) {
           canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
         }
-        _drawHabitTracker(canvas, visibleWorldRect, template, isDark: isDark);
+        _drawHabitTracker(canvas, visibleWorldRect, template, isDark: isDark, viewScale: viewScale);
         break;
       case TemplateType.dots:
         if (template.isFinite) {
           canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
         }
-        _drawDotGrid(canvas, visibleWorldRect, template, isDark: isDark);
+        _drawDotGrid(canvas, visibleWorldRect, template, isDark: isDark, viewScale: viewScale);
         break;
     }
   }
 
-  // ---- Contenido: imágenes y trazos ----
+  // ---- Contenido: imágenes, trazos y textos ----
   // Para plantillas finitas, ya estamos dentro del clipRect de la hoja.
+  // Solo se pinta lo que intersecta [visibleWorldRect] (culling): con miles
+  // de trazos, el coste por frame depende de lo visible, no del total.
+  final layers = _LayerPainter(canvas, page, visibleWorldRect);
 
-  // Imágenes (omitidas si omitImages, respeta visibilidad y opacidad de capa)
   if (!omitImages) {
     for (final item in page.images) {
-      // Respeta visibilidad de la capa.
-      if (item.layerIndex < page.layers.length && !page.layers[item.layerIndex].visible) continue;
+      if (!visibleWorldRect.overlaps(_imageBounds(item))) continue;
       final img = imageCache[item.localPath];
       if (img == null) continue;
+      if (!layers.enter(item.layerIndex)) continue;
       canvas.save();
-      // Aplica opacidad de la capa via saveLayer.
-      if (item.layerIndex < page.layers.length &&
-          page.layers[item.layerIndex].opacity < 1.0) {
-        canvas.saveLayer(
-          Rect.zero,
-          Paint()..color = Colors.white.withValues(alpha: page.layers[item.layerIndex].opacity),
-        );
-      }
       canvas.translate(item.x, item.y);
       canvas.rotate(item.rotation);
-      final dst = Rect.fromCenter(
-        center: Offset.zero,
-        width: item.width,
-        height: item.height,
-      );
       canvas.drawImageRect(
         img,
         Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
-        dst,
-        Paint()..filterQuality = FilterQuality.medium,
+        Rect.fromCenter(center: Offset.zero, width: item.width, height: item.height),
+        _imagePaint,
       );
-      if (drawSelection && item.id == selectedImageId) {
-        _drawSelection(canvas, item, handleSizeWorld);
-      }
       canvas.restore();
     }
   }
 
-  // Trazos (respeta visibilidad y opacidad de la capa)
   for (final stroke in page.strokes) {
-    if (stroke.layerIndex < page.layers.length && !page.layers[stroke.layerIndex].visible) continue;      canvas.save();
-    if (stroke.layerIndex < page.layers.length &&
-        page.layers[stroke.layerIndex].opacity < 1.0) {
-      canvas.saveLayer(
-        Rect.zero,
-        Paint()..color = Colors.white.withValues(alpha: page.layers[stroke.layerIndex].opacity),
-      );
-    }
-    _paintStroke(canvas, stroke);
-    if (stroke.layerIndex < page.layers.length &&
-        page.layers[stroke.layerIndex].opacity < 1.0) {
-      canvas.restore();
-    }
-    canvas.restore();
+    if (!visibleWorldRect.overlaps(stroke.paintBounds)) continue;
+    if (!layers.enter(stroke.layerIndex)) continue;
+    paintStroke(canvas, stroke);
   }
 
-  // Cajas de texto (respeta visibilidad y opacidad de la capa)
   for (final item in page.textItems) {
-    if (item.layerIndex < page.layers.length && !page.layers[item.layerIndex].visible) continue;
-    canvas.save();
-    if (item.layerIndex < page.layers.length &&
-        page.layers[item.layerIndex].opacity < 1.0) {
-      canvas.saveLayer(
-        Rect.zero,
-        Paint()..color = Colors.white.withValues(alpha: page.layers[item.layerIndex].opacity),
-      );
-    }
+    if (!layers.enter(item.layerIndex)) continue;
     _paintTextItem(canvas, item);
-    if (item.layerIndex < page.layers.length &&
-        page.layers[item.layerIndex].opacity < 1.0) {
-      canvas.restore();
-    }
-    canvas.restore();
   }
+  layers.close();
 
   canvas.restore();
+}
+
+final Paint _imagePaint = Paint()..filterQuality = FilterQuality.medium;
+
+/// Rect que contiene la imagen aunque esté rotada (círculo circunscrito).
+Rect _imageBounds(ImageItem item) {
+  final r = sqrt(item.width * item.width + item.height * item.height) / 2;
+  return Rect.fromCircle(center: Offset(item.x, item.y), radius: r);
+}
+
+/// Aplica visibilidad y opacidad de capa al pintar elementos en orden.
+///
+/// Los elementos consecutivos de una misma capa translúcida comparten un
+/// único `saveLayer` (antes había uno por elemento, con `Rect.zero` como
+/// límites, lo que podía recortar el contenido). Así además los trazos que
+/// se solapan dentro de la capa no se oscurecen entre sí.
+class _LayerPainter {
+  final Canvas canvas;
+  final Page page;
+  final Rect bounds;
+  int? _open;
+
+  _LayerPainter(this.canvas, this.page, this.bounds);
+
+  /// Prepara el canvas para pintar un elemento de [layerIndex]. Devuelve
+  /// false si la capa está oculta (el elemento no debe pintarse).
+  bool enter(int layerIndex) {
+    final layer = layerIndex < page.layers.length ? page.layers[layerIndex] : null;
+    if (layer != null && !layer.visible) return false;
+    final opacity = layer?.opacity ?? 1.0;
+    if (_open != null && _open != layerIndex) close();
+    if (opacity < 1.0 && _open == null) {
+      canvas.saveLayer(
+        bounds,
+        Paint()..color = Color.fromRGBO(0, 0, 0, opacity),
+      );
+      _open = layerIndex;
+    }
+    return true;
+  }
+
+  void close() {
+    if (_open != null) {
+      canvas.restore();
+      _open = null;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +280,26 @@ void _drawSheet(Canvas canvas, Size sheetSize, Page page, {ui.Image? image, bool
   );
 }
 
+/// Nivel de detalle de los patrones de plantilla.
+///
+/// Devuelve el espaciado efectivo: si en pantalla las líneas/puntos quedarían
+/// a menos de [minPx] píxeles, se duplica el espaciado (se dibuja una de cada
+/// 2, 4, 8…). Así al alejar el zoom en un lienzo infinito no se generan
+/// cientos de miles de primitivas por frame y el patrón sigue siendo legible.
+double _lodSpacing(double spacing, double viewScale, double minPx) {
+  if (spacing <= 0) return 1e9; // defensivo: nunca dividir por 0
+  var s = spacing;
+  while (s * viewScale < minPx) {
+    s *= 2;
+  }
+  return s;
+}
+
+/// Grosor de línea en unidades de mundo para que mida [px] en pantalla
+/// (líneas nítidas a cualquier zoom: ni desaparecen ni engordan).
+double _hairline(double viewScale, [double px = 1]) =>
+    px / (viewScale <= 0 ? 1 : viewScale);
+
 /// Ajusta el color de línea para que sea visible sobre el papel.
 ///
 /// Dado que el papel siempre es blanco (incluso en modo oscuro), las líneas
@@ -279,32 +315,40 @@ Color _adaptiveLineColor(PageTemplate template, {bool isDark = false}) {
   return template.lineColor;
 }
 
-void _drawRuled(Canvas canvas, Rect visible, PageTemplate template, {bool isDark = false}) {
+void _drawRuled(
+  Canvas canvas,
+  Rect visible,
+  PageTemplate template, {
+  bool isDark = false,
+  double marginOriginX = 0,
+  double viewScale = 1,
+}) {
   final paint = Paint()
     ..color = _adaptiveLineColor(template, isDark: isDark)
-    ..strokeWidth = 1.0;
-  final spacing = template.spacing;
+    ..strokeWidth = _hairline(viewScale);
+  final spacing = _lodSpacing(template.spacing, viewScale, 5);
   // Líneas de texto.
   final startY = (visible.top / spacing).floor() * spacing;
   for (var y = startY; y <= visible.bottom; y += spacing) {
     canvas.drawLine(Offset(visible.left, y), Offset(visible.right, y), paint);
   }
   // Margen vertical tipo cuaderno.
-  final margin = spacing * 1.6;
+  final margin = marginOriginX + template.spacing * 1.6;
   canvas.drawLine(
     Offset(margin, visible.top),
     Offset(margin, visible.bottom),
     Paint()
       ..color = const Color(0xFFE57373)
-      ..strokeWidth = 1.2,
+      ..strokeWidth = _hairline(viewScale, 1.3),
   );
 }
 
-void _drawGrid(Canvas canvas, Rect visible, PageTemplate template, {bool isDark = false}) {
+void _drawGrid(Canvas canvas, Rect visible, PageTemplate template,
+    {bool isDark = false, double viewScale = 1}) {
   final paint = Paint()
     ..color = _adaptiveLineColor(template, isDark: isDark)
-    ..strokeWidth = 1.0;
-  final spacing = template.spacing;
+    ..strokeWidth = _hairline(viewScale);
+  final spacing = _lodSpacing(template.spacing, viewScale, 6);
   final startX = (visible.left / spacing).floor() * spacing;
   final startY = (visible.top / spacing).floor() * spacing;
   for (var x = startX; x <= visible.right; x += spacing) {
@@ -315,13 +359,16 @@ void _drawGrid(Canvas canvas, Rect visible, PageTemplate template, {bool isDark 
   }
 }
 
-void _drawTiledImage(Canvas canvas, Rect visible, ui.Image img) {
+void _drawTiledImage(Canvas canvas, Rect visible, ui.Image img, {double viewScale = 1}) {
+  if (img.width == 0 || img.height == 0) return;
   final w = img.width.toDouble();
   final h = img.height.toDouble();
+  // Demasiadas teselas diminutas al alejar el zoom: no vale la pena dibujarlas.
+  if ((visible.width / w) * (visible.height / h) > 400) return;
   final startX = (visible.left / w).floor();
-  final endX = (visible.right / w).ceil();
+  final endX = (visible.right / w).ceil() - 1;
   final startY = (visible.top / h).floor();
-  final endY = (visible.bottom / h).ceil();
+  final endY = (visible.bottom / h).ceil() - 1;
   final paint = Paint()..filterQuality = FilterQuality.low;
   final src = Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble());
   for (var ix = startX; ix <= endX; ix++) {
@@ -340,8 +387,13 @@ void _drawTiledImage(Canvas canvas, Rect visible, ui.Image img) {
 // Contenido
 // ---------------------------------------------------------------------------
 
-void _paintSprayStroke(Canvas canvas, Stroke stroke) {
-  if (stroke.points.length < 2) return;
+/// Partículas del aerosol cacheadas como Picture por instancia de trazo
+/// (antes se generaban 12-20 círculos por punto en cada repintado).
+final Expando<ui.Picture> _sprayCache = Expando('spray');
+
+/// Dibuja las partículas del aerosol. Semilla determinista por id: el
+/// resultado es idéntico mientras se dibuja y una vez confirmado.
+void _drawSprayParticles(Canvas canvas, Stroke stroke) {
   final color = StrokeEngine.paintColor(stroke);
   final random = Random(stroke.id.hashCode);
   final paint = Paint()..style = PaintingStyle.fill;
@@ -352,49 +404,69 @@ void _paintSprayStroke(Canvas canvas, Stroke stroke) {
     for (var i = 0; i < count; i++) {
       final angle = random.nextDouble() * 2 * pi;
       final dist = random.nextDouble() * radius;
-      final px = center.dx + cos(angle) * dist;
-      final py = center.dy + sin(angle) * dist;
       final dotRadius = 0.8 + random.nextDouble() * 2.5;
       paint.color = color.withValues(alpha: 0.15 + random.nextDouble() * 0.35);
-      canvas.drawCircle(Offset(px, py), dotRadius, paint);
+      canvas.drawCircle(
+        Offset(center.dx + cos(angle) * dist, center.dy + sin(angle) * dist),
+        dotRadius,
+        paint,
+      );
     }
   }
 }
 
-void _paintStroke(Canvas canvas, Stroke stroke) {
-  // Aerosol: dibuja partículas dispersas en lugar de un trazo sólido.
+final Paint _fillPaint = Paint()..style = PaintingStyle.fill;
+
+/// Pinta un trazo confirmado (usa Paths/Pictures cacheados).
+void paintStroke(Canvas canvas, Stroke stroke) {
+  // Aerosol: partículas dispersas en lugar de un trazo sólido.
   if (stroke.tool == ToolType.spray) {
-    _paintSprayStroke(canvas, stroke);
+    if (stroke.points.length < 2) return;
+    var picture = _sprayCache[stroke];
+    if (picture == null) {
+      final recorder = ui.PictureRecorder();
+      _drawSprayParticles(Canvas(recorder), stroke);
+      picture = recorder.endRecording();
+      _sprayCache[stroke] = picture;
+    }
+    canvas.drawPicture(picture);
     return;
   }
+  if (StrokeEngine.outlineFor(stroke).length < 3) return;
+  final path = StrokeEngine.pathFor(stroke);
   // Si tiene fillColorValue, dibuja el relleno primero.
   if (stroke.fillColorValue != null) {
-    final fillOutline = StrokeEngine.outlineFor(stroke);
-    if (fillOutline.length >= 3) {
-      final fillPath = Path()..addPolygon(fillOutline, true);
-      canvas.drawPath(
-        fillPath,
-        Paint()
-          ..color = Color(stroke.fillColorValue!)
-          ..style = PaintingStyle.fill,
-      );
-    }
+    _fillPaint.color = Color(stroke.fillColorValue!);
+    canvas.drawPath(path, _fillPaint);
   }
-  // Dibuja el borde del trazo.
-  final outline = StrokeEngine.outlineFor(stroke);
-  if (outline.length < 3) return;
-  final path = Path()..addPolygon(outline, true);
-  canvas.drawPath(
-    path,
-    Paint()
-      ..color = StrokeEngine.paintColor(stroke)
-      ..style = PaintingStyle.fill,
-  );
+  _fillPaint.color = StrokeEngine.paintColor(stroke);
+  canvas.drawPath(path, _fillPaint);
 
   // Si es una flecha, dibuja la cabeza triangular al final.
   if (stroke.shapeType == 'arrow' && stroke.points.length >= 2) {
     _drawArrowHead(canvas, stroke);
   }
+}
+
+/// Pinta el trazo en progreso (puntos aún cambiando: sin caché). Usa el
+/// mismo color/alpha y los mismos ajustes que tendrá al confirmarse.
+void paintActiveStroke(Canvas canvas, Stroke stroke) {
+  if (stroke.points.length < 2) return;
+  if (stroke.tool == ToolType.spray) {
+    _drawSprayParticles(canvas, stroke);
+    return;
+  }
+  final outline = StrokeEngine.outlineForPoints(
+    stroke.points,
+    stroke.tool,
+    stroke.size,
+    thinning: stroke.thinning,
+    smoothing: stroke.smoothing,
+    streamline: stroke.streamline,
+  );
+  if (outline.length < 3) return;
+  _fillPaint.color = StrokeEngine.paintColor(stroke);
+  canvas.drawPath(Path()..addPolygon(outline, true), _fillPaint);
 }
 
 /// Dibuja la cabeza de una flecha al final del trazo.
@@ -420,92 +492,55 @@ void _drawArrowHead(Canvas canvas, Stroke stroke) {
     ..lineTo(right.dx, right.dy)
     ..close();
 
-  canvas.drawPath(
-    arrowPath,
-    Paint()
-      ..color = stroke.color
-      ..style = PaintingStyle.fill,
-  );
+  _fillPaint.color = StrokeEngine.paintColor(stroke);
+  canvas.drawPath(arrowPath, _fillPaint);
 }
 
-/// Paints reutilizados para selección de imágenes (evita alloc por frame).
-final Paint _selectionBorderPaint = Paint()
-  ..style = PaintingStyle.stroke
-  ..strokeWidth = 2.5
-  ..color = kAccentColor;
-final Paint _selectionHandleFillPaint = Paint()..color = kAccentColor;
-final Paint _selectionHandleStrokePaint = Paint()
-  ..style = PaintingStyle.stroke
-  ..strokeWidth = 2
-  ..color = Colors.white;
-final Paint _selectionLinePaint = Paint()
-  ..color = kAccentColor
-  ..strokeWidth = 2;
-
-void _drawSelection(Canvas canvas, ImageItem item, double handleSize) {
-  final rect = item.rect;
-  final r = handleSize / 2;
-  // Dibuja el borde de selección rotado si es necesario.
-  if (item.rotation != 0) {
-    canvas.save();
-    canvas.translate(item.x, item.y);
-    canvas.rotate(item.rotation);
-    canvas.drawRect(
-      Rect.fromCenter(center: Offset.zero, width: rect.width, height: rect.height),
-      _selectionBorderPaint,
+/// Estilo de una caja de texto. **Única fuente** para el lienzo, la
+/// exportación y el campo de edición (lo que editas es lo que se pinta).
+/// [scale] convierte el tamaño de mundo a pantalla (1 en el mundo).
+TextStyle textItemStyle(TextItem item, {double scale = 1}) => TextStyle(
+      color: item.color,
+      fontSize: item.fontSize * scale,
+      height: 1.3,
+      fontWeight: item.bold ? FontWeight.w700 : FontWeight.w400,
+      fontStyle: item.italic ? FontStyle.italic : FontStyle.normal,
+      decoration: item.underline ? TextDecoration.underline : TextDecoration.none,
+      decorationColor: item.color,
+      fontFamily: switch (item.fontFamily) {
+        'serif' => 'serif',
+        'mono' => 'monospace',
+        _ => null, // fuente por defecto del sistema
+      },
     );
-    // Asa de redimensionado (esquina inferior derecha en espacio local).
-    final handleCenter = Offset(rect.width / 2, rect.height / 2);
-    canvas.drawCircle(handleCenter, r, _selectionHandleFillPaint);
-    canvas.drawCircle(handleCenter, r, _selectionHandleStrokePaint);
-    // Asa de rotación (centro superior).
-    final rotHandle = Offset(0, -handleSize * 1.5);
-    canvas.drawLine(Offset(0, -rect.height / 2), rotHandle, _selectionLinePaint);
-    canvas.drawCircle(rotHandle, r, _selectionHandleFillPaint);
-    canvas.drawCircle(rotHandle, r, _selectionHandleStrokePaint);
-    canvas.restore();
-  } else {
-    canvas.drawRect(rect, _selectionBorderPaint);
-    final handleCenter = rect.bottomRight;
-    canvas.drawCircle(handleCenter, r, _selectionHandleFillPaint);
-    canvas.drawCircle(handleCenter, r, _selectionHandleStrokePaint);
-    final rotHandle = Offset(rect.center.dx, rect.top - handleSize * 1.5);
-    canvas.drawLine(rect.topCenter, rotHandle, _selectionLinePaint);
-    canvas.drawCircle(rotHandle, r, _selectionHandleFillPaint);
-    canvas.drawCircle(rotHandle, r, _selectionHandleStrokePaint);
-  }
-}
+
+TextAlign textItemAlign(TextItem item) => switch (item.align) {
+      'center' => TextAlign.center,
+      'right' => TextAlign.right,
+      _ => TextAlign.left,
+    };
 
 void _paintTextItem(Canvas canvas, TextItem item) {
   final textPainter = TextPainter(
-    text: TextSpan(
-      text: item.text,
-      style: TextStyle(
-        color: item.color,
-        fontSize: item.fontSize,
-      ),
-    ),
+    text: TextSpan(text: item.text, style: textItemStyle(item)),
+    textAlign: textItemAlign(item),
     textDirection: TextDirection.ltr,
-    maxLines: null,
   );
-  textPainter.layout(maxWidth: item.width);
+  textPainter.layout(minWidth: item.width, maxWidth: item.width);
   textPainter.paint(
     canvas,
     Offset(item.x - item.width / 2, item.y - item.height / 2),
   );
 }
 
-/// Convierte un stroke a [Path] rellenable (usado también por la capa activa).
-Path strokeToPath(List<StrokePoint> points, ToolType tool, double size) {
-  final outline = StrokeEngine.outlineForPoints(points, tool, size);
-  return Path()..addPolygon(outline, true);
-}
-
 /// Pentagrama musical (5 líneas por grupo, infinito).
-void _drawMusicStaff(Canvas canvas, Rect visible, PageTemplate template, {bool isDark = false}) {
+void _drawMusicStaff(Canvas canvas, Rect visible, PageTemplate template,
+    {bool isDark = false, double viewScale = 1}) {
   final paint = Paint()
     ..color = _adaptiveLineColor(template, isDark: isDark)
-    ..strokeWidth = 1.0;
+    ..strokeWidth = _hairline(viewScale);
+  // Con el zoom muy alejado las 5 líneas se funden: no dibujar.
+  if (template.spacing * 0.4 * viewScale < 2) return;
   final groupSpacing = template.spacing * 3; // distancia entre grupos
   final lineSpacing = template.spacing * 0.4; // distancia entre líneas
   final startY = (visible.top / groupSpacing).floor() * groupSpacing;
@@ -518,11 +553,12 @@ void _drawMusicStaff(Canvas canvas, Rect visible, PageTemplate template, {bool i
 }
 
 /// Agenda semanal (columnas por día, infinita).
-void _drawPlanner(Canvas canvas, Rect visible, PageTemplate template, {bool isDark = false}) {
+void _drawPlanner(Canvas canvas, Rect visible, PageTemplate template,
+    {bool isDark = false, double viewScale = 1}) {
   final paint = Paint()
     ..color = _adaptiveLineColor(template, isDark: isDark)
-    ..strokeWidth = 1.0;
-  final spacing = template.spacing;
+    ..strokeWidth = _hairline(viewScale);
+  final spacing = _lodSpacing(template.spacing, viewScale, 5);
   // Líneas horizontales.
   final startY = (visible.top / spacing).floor() * spacing;
   for (var y = startY; y <= visible.bottom; y += spacing) {
@@ -537,11 +573,14 @@ void _drawPlanner(Canvas canvas, Rect visible, PageTemplate template, {bool isDa
 }
 
 /// Tracker de hábitos (cuadrícula con checkboxes, infinita).
-void _drawHabitTracker(Canvas canvas, Rect visible, PageTemplate template, {bool isDark = false}) {
+void _drawHabitTracker(Canvas canvas, Rect visible, PageTemplate template,
+    {bool isDark = false, double viewScale = 1}) {
+  // Casillas con contorno (antes salían como cuadrados rellenos).
   final paint = Paint()
-    ..color = _adaptiveLineColor(template, isDark: isDark).withValues(alpha: 0.5)
-    ..strokeWidth = 1.0;
-  final spacing = template.spacing;
+    ..color = _adaptiveLineColor(template, isDark: isDark).withValues(alpha: 0.7)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = _hairline(viewScale);
+  final spacing = _lodSpacing(template.spacing, viewScale, 10);
   final startX = (visible.left / spacing).floor() * spacing;
   final startY = (visible.top / spacing).floor() * spacing;
   // Cuadrícula de puntos/casillas.
@@ -556,14 +595,16 @@ void _drawHabitTracker(Canvas canvas, Rect visible, PageTemplate template, {bool
 }
 
 /// Cuadrícula de puntos (dot grid, infinita).
-void _drawDotGrid(Canvas canvas, Rect visible, PageTemplate template, {bool isDark = false}) {
+void _drawDotGrid(Canvas canvas, Rect visible, PageTemplate template,
+    {bool isDark = false, double viewScale = 1}) {
   final paint = Paint()
     ..color = _adaptiveLineColor(template, isDark: isDark)
     ..style = PaintingStyle.fill;
-  final spacing = template.spacing;
+  final spacing = _lodSpacing(template.spacing, viewScale, 10);
   final startX = (visible.left / spacing).floor() * spacing;
   final startY = (visible.top / spacing).floor() * spacing;
-  final dotRadius = spacing * 0.06;
+  // Punto de al menos ~1.2 px en pantalla para que no desaparezca.
+  final dotRadius = max(template.spacing * 0.06, _hairline(viewScale, 1.2));
   for (var x = startX; x <= visible.right; x += spacing) {
     for (var y = startY; y <= visible.bottom; y += spacing) {
       canvas.drawCircle(Offset(x, y), dotRadius, paint);
@@ -576,14 +617,18 @@ Rect contentBounds(Page page, {double padding = kExportContentPadding}) {
   var bounds = Rect.zero;
   var hasContent = false;
   for (final s in page.strokes) {
-    for (final p in s.points) {
-      final r = Rect.fromCenter(center: p.offset, width: s.size * 2, height: s.size * 2);
-      bounds = hasContent ? bounds.expandToInclude(r) : r;
-      hasContent = true;
-    }
+    if (s.points.isEmpty) continue;
+    final r = s.paintBounds;
+    bounds = hasContent ? bounds.expandToInclude(r) : r;
+    hasContent = true;
   }
   for (final i in page.images) {
-    final r = i.rect;
+    final r = _imageBounds(i);
+    bounds = hasContent ? bounds.expandToInclude(r) : r;
+    hasContent = true;
+  }
+  for (final t in page.textItems) {
+    final r = Rect.fromCenter(center: Offset(t.x, t.y), width: t.width, height: t.height);
     bounds = hasContent ? bounds.expandToInclude(r) : r;
     hasContent = true;
   }

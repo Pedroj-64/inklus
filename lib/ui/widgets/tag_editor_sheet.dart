@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import '../../constants.dart';
 import 'package:flutter/material.dart';
 import '../../utils/theme_colors.dart';

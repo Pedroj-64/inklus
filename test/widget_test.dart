@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:convert';
 import 'dart:io';
 
@@ -818,10 +819,17 @@ void main() {
   // ==========================================================================
 
   group('P1: Imágenes huérfanas', () {
-    test('collectOrphanedImages no elimina imágenes referenciadas', () async {
+    test('collectOrphanedImages borra huérfanas y respeta referenciadas',
+        () async {
       final tmpDir = await Directory.systemTemp.createTemp('inklus_test_p1_');
       try {
         final storage = StorageService(baseDir: tmpDir);
+        final imagesDir = Directory('${tmpDir.path}/images');
+        await imagesDir.create(recursive: true);
+        final orphan = File('${imagesDir.path}/orphan.png');
+        final referenced = File('${imagesDir.path}/referenced.png');
+        await orphan.writeAsBytes([0]);
+        await referenced.writeAsBytes([0]);
 
         // Crear notebook con una imagen referenciada.
         final nb = await storage.createNotebook(title: 'Test P1');
@@ -829,7 +837,7 @@ void main() {
         note.pages.first.images.add(
           ImageItem(
             id: 'img_1',
-            localPath: '/tmp/test_image.png',
+            localPath: referenced.path,
             x: 0,
             y: 0,
             width: 100,
@@ -838,19 +846,13 @@ void main() {
         );
         await storage.saveNote(nb.id, note);
 
-        // Simular imagen huérfana.
-        final imagesDir = Directory('${tmpDir.path}/images');
-        await imagesDir.create(recursive: true);
-        await File('${imagesDir.path}/orphan.png').writeAsBytes([0]);
-        await File('${imagesDir.path}/referenced.png').writeAsBytes([0]);
-
-        // Collect debería mantener la imagen referenciada.
+        // Por defecto, las imágenes recientes se respetan (periodo de gracia).
         await storage.collectOrphanedImages();
+        expect(orphan.existsSync(), isTrue);
 
-        // La imagen huérfana debe ser eliminada.
-        // (Nota: la imagen referenciada no está en /tmp/test_image.png,
-        // así que también será eliminada. El test verifica que el método no crashea.)
-        expect(true, isTrue); // No crash = éxito
+        await storage.collectOrphanedImages(minAge: Duration.zero);
+        expect(orphan.existsSync(), isFalse);
+        expect(referenced.existsSync(), isTrue);
       } finally {
         await tmpDir.delete(recursive: true);
       }
