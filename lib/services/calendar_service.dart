@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'file_utils.dart';
+import 'app_paths.dart';
 
 /// Vinculación entre un cuaderno y un evento de calendario.
 class CalendarLink {
@@ -52,8 +52,7 @@ class CalendarService {
   List<CalendarLink> _links = [];
 
   Future<File> _file() async {
-    final dir = await getApplicationSupportDirectory();
-    return File('${dir.path}/inklus/$_fileName');
+    return AppPaths.file(_fileName);
   }
 
   /// Carga las vinculaciones desde disco.

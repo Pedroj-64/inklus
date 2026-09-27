@@ -9,6 +9,7 @@ import 'package:inklus/models/page.dart';
 import 'package:inklus/models/stroke.dart';
 import 'package:inklus/models/template.dart';
 import 'package:inklus/models/note.dart';
+import 'package:inklus/services/backup_crypto.dart';
 import 'package:inklus/services/inklus_format.dart';
 
 void main() {
@@ -175,5 +176,14 @@ void main() {
       expect(doc.title, 'Compat');
       expect(doc.pages.length, 1);
     });
+  });
+
+  test('una copia cifrada no se abre como .inklus: FormatException', () async {
+    final bytes = await InklusFormat.exportNoteBytes(Note.newBlank(title: 'x'));
+    final encrypted = await BackupCrypto.encrypt(bytes, 'secreta');
+    await expectLater(
+      InklusFormat.importNoteBytes(encrypted, extractTo: extractDir),
+      throwsA(isA<FormatException>()),
+    );
   });
 }

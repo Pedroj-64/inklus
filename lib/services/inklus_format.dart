@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../models/document.dart';
 import '../models/image_item.dart';
@@ -15,6 +14,7 @@ import '../models/stroke.dart';
 import '../models/text_item.dart';
 import '../models/template.dart';
 import 'file_utils.dart';
+import 'app_paths.dart';
 
 /// Formato propietario **.inklus v2**: contenedor autocontenido de un cuaderno.
 ///
@@ -164,7 +164,7 @@ class InklusFormat {
     final docId = nbJson['id'] as String;
     final dir = extractTo ??
         Directory(
-          '${(await getApplicationSupportDirectory()).path}/inklus/restored/$docId',
+          (await AppPaths.restored(docId)).path,
         );
     await dir.create(recursive: true);
 
@@ -285,7 +285,7 @@ class InklusFormat {
     );
     final dir = extractTo ??
         Directory(
-          '${(await getApplicationSupportDirectory()).path}/inklus/restored/${doc.id}',
+          (await AppPaths.restored(doc.id)).path,
         );
     await dir.create(recursive: true);
 

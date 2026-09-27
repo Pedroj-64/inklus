@@ -27,6 +27,9 @@ const deskColorDark = kDeskColorDark;
 ///
 /// [omitTemplate] = true: no dibuja la plantilla (fondo transparente).
 /// [omitImages] = true: no dibuja imágenes (solo trazos).
+/// [paintDesk] = false: no pinta el fondo del escritorio (cuando se pintan
+/// varias hojas apiladas, solo la primera lo pinta; si no, taparía a las
+/// vecinas ya dibujadas).
 void paintWorld(
   Canvas canvas, {
   required Rect visibleWorldRect,
@@ -37,13 +40,14 @@ void paintWorld(
   double viewScale = 1,
   bool omitImages = false,
   bool isDark = false,
+  bool paintDesk = true,
 }) {
   final template = page.template;
 
   // ---- Fondo general (omitido si omitTemplate) ----
   // El papel SIEMPRE se mantiene con su color propio (blanco / kPaperColorLight).
   // Solo el "escritorio" alrededor de la hoja se oscurece en modo oscuro.
-  if (!omitTemplate) {
+  if (!omitTemplate && paintDesk) {
     final bg = isDark
         ? (template.isFinite ? kDeskColorDark : kPaperColorLight)
         : (template.isFinite ? kDeskColorLight : kPaperColorLight);

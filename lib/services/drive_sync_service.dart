@@ -8,7 +8,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 
-import '../models/document.dart';
 import '../models/id.dart';
 import '../models/note.dart';
 import '../models/notebook.dart';
@@ -34,44 +33,28 @@ enum SyncStatus {
   pending,
 }
 
-/// Resultado de listar versiones de un cuaderno en Drive.
-class DriveVersion {
+/// Revisión de la copia de una nota en Drive. Drive conserva las versiones
+/// anteriores de cada archivo (unos 30 días / 100 revisiones), así que cada
+/// subida de la nota deja una revisión restaurable.
+class DriveRevision {
   final String fileId;
-  final String name;
+  final String revisionId;
   final DateTime modifiedTime;
   final int sizeBytes;
 
-  const DriveVersion({
+  const DriveRevision({
     required this.fileId,
-    required this.name,
+    required this.revisionId,
     required this.modifiedTime,
     required this.sizeBytes,
   });
 }
 
-/// Resultado de restaurar desde Drive: puede incluir múltiples versiones
-/// cuando hay un conflicto (dos dispositivos editaron el mismo cuaderno
-/// sin conexión).
-///
-/// **C5**: Cuando dos dispositivos editan el mismo cuaderno sin conexión,
-/// el usuario puede elegir conservar la versión más reciente o ver ambas.
-class RestoreResult {
-  /// La versión más reciente (last-write-wins por defecto).
-  final Document? latest;
-
-  /// Todas las versiones encontradas (más reciente primero).
-  /// Si solo hay una versión, [versions] tiene un solo elemento.
-  /// Si hay múltiples, la UI puede mostrar un diálogo de resolución.
-  final List<Document> versions;
-
-  /// Si hay conflicto (múltiples versiones con updatedAt diferente).
-  final bool hasConflict;
-
-  const RestoreResult({
-    this.latest,
-    this.versions = const [],
-    this.hasConflict = false,
-  });
+/// La copia está cifrada y no se dio contraseña (o no es la correcta).
+class EncryptedBackupException implements Exception {
+  const EncryptedBackupException();
+  @override
+  String toString() => 'La copia está cifrada: hace falta la contraseña';
 }
 
 /// Sincronización con **Google Drive** (respaldo opcional).
@@ -252,77 +235,6 @@ class DriveSyncService extends ChangeNotifier {
   // Backup / restauración (Drive API)
   // -------------------------------------------------------------------------
 
-  /// Sube el cuaderno a la carpeta "Inklus" de Drive como `<id>.inklus`
-  /// (contenedor autocontenido con documento + imágenes embebidas).
-  ///
-  /// Por defecto es silencioso (si el scope aún no está autorizado, se omite
-  /// sin mostrar UI — el guardado local ya protege los datos). Con
-  /// [promptForConsent] = true fuerza el consentimiento si hiciera falta
-  /// (acción explícita del usuario).
-  ///
-  /// [password] opcional: si se pasa, el archivo .inklus se cifra con esa
-  /// contraseña (usa AES-256 del paquete `archive`).
-  Future<void> backupDocument(
-    Document document, {
-    bool promptForConsent = false,
-    String? password,
-  }) async {
-    if (_account == null) throw const NotSignedInException();
-    _setStatus(document.id, SyncStatus.syncing);
-    final token = promptForConsent
-        ? await _interactiveToken()
-        : await _silentToken();
-    if (token == null) {
-      _setStatus(document.id, SyncStatus.pending);
-      return; // sin autorización silenciosa: se omite
-    }
-
-    try {
-      var bytes = await InklusFormat.exportBytes(document);
-
-      // Cifrar si se proporciona contraseña.
-      if (password != null && password.isNotEmpty) {
-        bytes = await _encryptBytes(bytes, password);
-      }
-
-      final client = _authClient(token);
-      try {
-        final api = drive.DriveApi(client);
-        final folderId = await _ensureFolder(api);
-        final name = '${document.id}.inklus';
-        final existing = await _findFile(api, folderId, name);
-        final media = commons.Media(
-          Stream<List<int>>.value(bytes),
-          bytes.length,
-          contentType: _inklusMimeType,
-        );
-        if (existing == null) {
-          await api.files.create(
-            drive.File(
-              name: name,
-              mimeType: _inklusMimeType,
-              parents: [folderId],
-            ),
-            uploadMedia: media,
-          );
-        } else {
-          await api.files.update(
-            drive.File(name: name, mimeType: _inklusMimeType),
-            existing.id!,
-            uploadMedia: media,
-          );
-        }
-      } finally {
-        client.close();
-      }
-      _setStatus(document.id, SyncStatus.synced);
-      onSyncComplete?.call('Cuaderno sincronizado con Google Drive');
-    } catch (e) {
-      _setStatus(document.id, SyncStatus.error);
-      rethrow;
-    }
-  }
-
   /// Sube un archivo .inklus existente (exportado por el usuario) a Drive.
   Future<void> uploadInklusFile(
     Uint8List bytes,
@@ -365,144 +277,6 @@ class DriveSyncService extends ChangeNotifier {
       client.close();
     }
     onSyncComplete?.call('Archivo subido a Google Drive');
-  }
-
-  /// Lista versiones de notas en Drive, opcionalmente filtrado por noteId.
-  ///
-  /// Sin [noteId] devuelve todos los archivos .inklus de la carpeta.
-  /// Con [noteId] filtra solo los archivos que empiezan por ese id.
-  /// Devuelve una lista de [DriveVersion] ordenadas de más reciente a más
-  /// antigua. Útil para que el usuario elija cuál restaurar.
-  Future<List<DriveVersion>> listVersions({String? noteId}) async {
-    if (_account == null) throw const NotSignedInException();
-    final token = await _interactiveToken();
-    final client = _authClient(token);
-    try {
-      final api = drive.DriveApi(client);
-      final folderId = await _ensureFolder(api);
-      final list = await api.files.list(
-        q: "'$folderId' in parents and trashed = false",
-        $fields: 'files(id,name,modifiedTime,size)',
-        orderBy: 'modifiedTime desc',
-      );
-      final files = list.files ?? [];
-      final versions = <DriveVersion>[];
-      for (final file in files) {
-        final id = file.id;
-        final name = file.name ?? '';
-        if (id == null || !name.endsWith('.inklus')) continue;
-        if (noteId != null && !name.startsWith(noteId)) continue;
-        versions.add(DriveVersion(
-          fileId: id,
-          name: name,
-          modifiedTime: file.modifiedTime ?? DateTime.now(),
-          sizeBytes: int.tryParse(file.size ?? '0') ?? 0,
-        ));
-      }
-      return versions;
-    } finally {
-      client.close();
-    }
-  }
-
-  /// Descarga una versión específica de Drive por fileId.
-  ///
-  /// [password] opcional: si el archivo estaba cifrado, se descifra con
-  /// esta contraseña. Devuelve null si no se pudo leer.
-  Future<Document?> downloadVersion(String fileId, {String? password}) async {
-    if (_account == null) throw const NotSignedInException();
-    final token = await _interactiveToken();
-    final client = _authClient(token);
-    try {
-      final resp = await client.get(
-        Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId?alt=media'),
-      );
-      if (resp.statusCode != 200) return null;
-      var bytes = resp.bodyBytes;
-      if (password != null && password.isNotEmpty) {
-        bytes = await _decryptBytes(bytes, password);
-      }
-      return await InklusFormat.importBytes(bytes);
-    } catch (e) {
-      debugPrint('DriveSyncService.downloadVersion: $e');
-      return null;
-    } finally {
-      client.close();
-    }
-  }
-
-  /// Descarga las copias `.inklus` del usuario y devuelve la más reciente
-  /// (por `updatedAt` del documento), con las imágenes ya extraídas a local.
-  /// Devuelve null si no hay ninguna.
-  ///
-  /// Implementa **last-write-wins** por defecto, pero también devuelve
-  /// todas las versiones para que la UI pueda mostrar un diálogo de
-  /// resolución de conflictos cuando hay múltiples versiones.
-  ///
-  /// **C5**: Cuando dos dispositivos editan el mismo cuaderno sin conexión,
-  /// el usuario puede elegir conservar la versión más reciente o ver ambas.
-  Future<RestoreResult> restoreDocument({String? password}) async {
-    final token = await _interactiveToken();
-    final client = _authClient(token);
-    try {
-      final api = drive.DriveApi(client);
-      final folderId = await _ensureFolder(api);
-      final list = await api.files.list(
-        q: "'$folderId' in parents and trashed = false",
-        $fields: 'files(id,name)',
-      );
-      final files = list.files ?? [];
-
-      Document? latest;
-      DateTime? latestUpdated;
-      final versions = <Document>[];
-
-      for (final file in files) {
-        final id = file.id;
-        final name = file.name ?? '';
-        if (id == null || !name.endsWith('.inklus')) continue;
-        try {
-          final resp = await client.get(
-            Uri.parse(
-              'https://www.googleapis.com/drive/v3/files/$id?alt=media',
-            ),
-          );
-          if (resp.statusCode != 200) continue;
-          var bytes = resp.bodyBytes;
-          if (password != null && password.isNotEmpty) {
-            bytes = await _decryptBytes(bytes, password);
-          }
-          final doc = await InklusFormat.importBytes(bytes);
-          versions.add(doc);
-          if (latest == null || doc.updatedAt.isAfter(latestUpdated!)) {
-            latest = doc;
-            latestUpdated = doc.updatedAt;
-          }
-        } catch (e) {
-          debugPrint('DriveSyncService: copia no legible ($name): $e');
-        }
-      }
-
-      // Detectar conflicto: múltiples versiones con updatedAt diferente
-      final hasConflict = versions.length > 1 &&
-          versions.any((v) => v.updatedAt != latest!.updatedAt);
-
-      if (latest != null) {
-        onSyncComplete?.call(
-          hasConflict
-              ? 'Conflicto detectado: ${versions.length} versiones encontradas'
-              : 'Cuaderno restaurado desde Google Drive',
-        );
-      }
-
-      return RestoreResult(
-        latest: latest,
-        versions: versions,
-        hasConflict: hasConflict,
-      );
-    } finally {
-      client.close();
-    }
   }
 
   /// Elimina un archivo de Drive por fileId.
@@ -660,6 +434,71 @@ class DriveSyncService extends ChangeNotifier {
         rawBytes = await _decryptBytes(rawBytes, password);
       }
       return await InklusFormat.importNoteBytes(rawBytes);
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Revisiones de la copia de [noteId] en Drive (la más reciente primero).
+  /// Lista vacía si la nota aún no se ha subido.
+  Future<List<DriveRevision>> listRevisions(String noteId) async {
+    if (_account == null) throw const NotSignedInException();
+    final client = _authClient(await _interactiveToken());
+    try {
+      final api = drive.DriveApi(client);
+      final folderId = await _ensureFolder(api);
+      final file = await _findFile(api, folderId, '$noteId.inklus');
+      if (file?.id == null) return const [];
+      final list = await api.revisions.list(
+        file!.id!,
+        $fields: 'revisions(id,modifiedTime,size)',
+        pageSize: 200,
+      );
+      final revisions = [
+        for (final r in list.revisions ?? const <drive.Revision>[])
+          if (r.id != null)
+            DriveRevision(
+              fileId: file.id!,
+              revisionId: r.id!,
+              modifiedTime: r.modifiedTime ?? DateTime.now(),
+              sizeBytes: int.tryParse(r.size ?? '') ?? 0,
+            ),
+      ]..sort((a, b) => b.modifiedTime.compareTo(a.modifiedTime));
+      return revisions;
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Descarga una revisión como [Note] (imágenes extraídas a local). Lanza
+  /// [EncryptedBackupException] si está cifrada y falta la contraseña o no
+  /// es correcta.
+  Future<Note> downloadRevision(DriveRevision revision, {String? password}) async {
+    if (_account == null) throw const NotSignedInException();
+    final client = _authClient(await _interactiveToken());
+    try {
+      final resp = await client.get(Uri.parse(
+        'https://www.googleapis.com/drive/v3/files/${revision.fileId}'
+        '/revisions/${revision.revisionId}?alt=media',
+      ));
+      if (resp.statusCode != 200) {
+        throw http.ClientException('Drive respondió ${resp.statusCode}');
+      }
+      var bytes = resp.bodyBytes;
+      if (password != null && password.isNotEmpty) {
+        try {
+          bytes = await _decryptBytes(bytes, password);
+        } catch (_) {
+          throw const EncryptedBackupException();
+        }
+      }
+      try {
+        return await InklusFormat.importNoteBytes(bytes);
+      } on FormatException {
+        // Un .inklus es un ZIP (ArchiveException es un FormatException): si
+        // no se abre, está cifrado.
+        throw const EncryptedBackupException();
+      }
     } finally {
       client.close();
     }

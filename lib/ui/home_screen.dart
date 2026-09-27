@@ -2,7 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
+import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -20,6 +20,7 @@ import '../services/drive_sync_service.dart';
 import '../services/export_service.dart';
 import '../services/ocr_service.dart';
 import '../services/pdf_import_service.dart';
+import '../models/page.dart' as model show Page;
 import '../services/image_service.dart';
 import '../services/import_service.dart';
 import '../services/inklus_format.dart';
@@ -29,9 +30,9 @@ import '../services/writing_stats_service.dart';
 import '../services/reminder_service.dart';
 import '../services/search_service.dart';
 import '../services/version_history_service.dart';
-import '../utils/date_utils.dart';
 import '../logic/pen_presets.dart';
 import 'canvas/drawing_canvas.dart';
+import 'editor/version_history_sheet.dart';
 import 'editor/editor_toolbar.dart';
 import 'editor/pages_panel.dart';
 import 'editor/selection_bar.dart';
@@ -46,6 +47,7 @@ import 'settings_screen.dart';
 import 'writing_stats_screen.dart';
 import '../services/marketplace/marketplace_service.dart';
 import 'marketplace_screen.dart';
+import '../services/app_paths.dart';
 
 /// Editor de un cuaderno (pantalla principal de escritura).
 ///
@@ -356,11 +358,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Imágenes de [page] a la resolución de la exportación (ver
+  /// [ImageService.imagesForExport]).
+  Future<Map<String, ui.Image>> _exportImages(
+    model.Page page, [
+    int maxDimension = kCanvasImageMaxSide,
+  ]) =>
+      _imageService.imagesForExport([page], maxDimension: maxDimension);
+
   Future<void> _exportPng() => _exportWithOptions(
-        (opts) => ExportService.renderPagePng(
+        (opts) async => ExportService.renderPagePng(
           _c.page,
           sheetSize: _c.sheetSize,
-          imageCache: _imageService.cache,
+          imageCache: await _exportImages(_c.page, opts.maxDimension),
           options: opts,
         ),
         'inklus_pagina_${_c.pageIndex + 1}.png',
@@ -368,10 +378,10 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
   Future<void> _exportPdf() => _exportWithOptions(
-        (opts) => ExportService.renderPagePdf(
+        (opts) async => ExportService.renderPagePdf(
           _c.page,
           sheetSize: _c.sheetSize,
-          imageCache: _imageService.cache,
+          imageCache: await _exportImages(_c.page, opts.maxDimension),
           options: opts,
         ),
         'inklus_pagina_${_c.pageIndex + 1}.pdf',
@@ -380,11 +390,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _exportNotebookPdf() => _exportWithOptions(
         (opts) => ExportService.renderNotebookPdf(
-          _c.document,
+          _c.note,
           imageCache: _imageService.cache,
+          imagesFor: (page) => _exportImages(page, opts.maxDimension),
           options: opts,
         ),
-        '${_safeName(_c.document.title)}.pdf',
+        '${_safeName(_c.note.title)}.pdf',
         showStrokesOnly: true,
       );
 
@@ -395,7 +406,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Fallback: exportar solo el note actual.
           return InklusFormat.exportNoteBytes(_c.note);
         },
-        '${_safeName(_c.document.title)}.inklus',
+        '${_safeName(_c.note.title)}.inklus',
       );
 
   /// Exporta la página actual a SVG (solo trazos).
@@ -423,13 +434,18 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Reconociendo texto...', style: TextStyle(color: Colors.white)),
-          ],
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(Spacing.xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: Spacing.lg),
+                Text('Reconociendo texto…'),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -549,8 +565,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       // Fallback: carpeta de datos de la app.
       try {
-        final dir = await getApplicationSupportDirectory();
-        final folder = Directory('${dir.path}/inklus/exports');
+        final folder = await AppPaths.exports();
         await folder.create(recursive: true);
         final file = File('${folder.path}/$fileName');
         await file.writeAsBytes(bytes);
@@ -570,7 +585,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final bytes = await ExportService.renderPagePng(
         _c.page,
         sheetSize: _c.sheetSize,
-        imageCache: _imageService.cache,
+        imageCache: await _exportImages(_c.page),
       );
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/inklus_pagina_${_c.pageIndex + 1}.png');
@@ -586,7 +601,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final bytes = await ExportService.renderPagePdf(
         _c.page,
         sheetSize: _c.sheetSize,
-        imageCache: _imageService.cache,
+        imageCache: await _exportImages(_c.page),
       );
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/inklus_pagina_${_c.pageIndex + 1}.pdf');
@@ -599,9 +614,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _shareInklus() async {
     try {
-      final bytes = await InklusFormat.exportBytes(_c.document);
+      final bytes = await InklusFormat.exportNoteBytes(_c.note);
       final dir = await getTemporaryDirectory();
-      final name = '${_safeName(_c.document.title)}.inklus';
+      final name = '${_safeName(_c.note.title)}.inklus';
       final file = File('${dir.path}/$name');
       await file.writeAsBytes(bytes);
       await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Cuaderno de Inklus'));
@@ -687,7 +702,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'restore':
         await _restoreFromCloud();
       case 'versions':
-        await _showVersions();
+        await _showVersionHistory();
       case 'uploadFile':
         await _uploadInklusFile();
       case 'toggleSync':
@@ -777,121 +792,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       if (mounted) _snack('Error al restaurar: $e');
-    } finally {
-      if (mounted) setState(() => _syncing = false);
-    }
-  }
-
-  /// Muestra un diálogo de resolución de versiones cuando hay múltiples
-  /// copias de una nota en Drive.
-  Future<void> _showConflictResolution(List<DriveVersion> versions) async {
-    if (!mounted) return;
-    final chosen = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Versiones disponibles'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Se encontraron múltiples copias en Google Drive. '
-              'Selecciona la que quieres restaurar:',
-            ),
-            const SizedBox(height: 12),
-            ...versions.map((v) {
-              final t = v.modifiedTime.toLocal();
-              String two(int n) => n.toString().padLeft(2, '0');
-              final dateStr = '${two(t.day)}/${two(t.month)}/${t.year} '
-                  '${two(t.hour)}:${two(t.minute)}';
-              final sizeKb = (v.sizeBytes / 1024).round();
-              return Card(
-                child: ListTile(
-                  leading: const Icon(Icons.description_outlined),
-                  title: Text(v.name),
-                  subtitle: Text('$dateStr · $sizeKb KB'),
-                  onTap: () => Navigator.pop(context, v.fileId),
-                ),
-              );
-            }),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-        ],
-      ),
-    );
-    if (chosen != null && mounted) {
-      final password = await _promptPassword(
-        titulo: 'Descifrar versión',
-        hint: 'Contraseña (dejar vacío si no está cifrado)',
-      );
-      final doc = await _syncService.downloadVersion(
-        chosen,
-        password: password?.isEmpty == true ? null : password,
-      );
-      if (doc != null && mounted) {
-        _c.replaceNote(
-          Note(
-            id: doc.id,
-            title: doc.title,
-            createdAt: doc.createdAt,
-            updatedAt: doc.updatedAt,
-            pages: doc.pages,
-          ),
-          notebookId: widget.notebookId,
-        );
-        _snack('Versión restaurada');
-      }
-    }
-  }
-
-  /// Muestra la lista de versiones de la nota actual en Drive y deja elegir.
-  Future<void> _showVersions() async {
-    setState(() => _syncing = true);
-    try {
-      // A8: filtrar versiones por el id de la nota actual.
-      final versions = await _syncService.listVersions(noteId: _c.note.id);
-      if (!mounted) return;
-      if (versions.isEmpty) {
-        _snack('No hay versiones de esta nota en Google Drive');
-        return;
-      }
-      if (versions.length == 1) {
-        // Solo una versión: restaurar directamente.
-        final password = await _promptPassword(
-          titulo: 'Descifrar versión',
-          hint: 'Contraseña (dejar vacío si no está cifrado)',
-        );
-        final doc = await _syncService.downloadVersion(
-          versions.first.fileId,
-          password: password?.isEmpty == true ? null : password,
-        );
-        if (!mounted) return;
-        if (doc == null) {
-          _snack('No se pudo leer esa versión');
-        } else {
-          _c.replaceNote(
-            Note(
-              id: doc.id,
-              title: doc.title,
-              createdAt: doc.createdAt,
-              updatedAt: doc.updatedAt,
-              pages: doc.pages,
-            ),
-            notebookId: widget.notebookId,
-          );
-          _snack('Versión restaurada');
-        }
-      } else {
-        // Múltiples versiones: mostrar diálogo de selección.
-        await _showConflictResolution(versions);
-      }
-    } catch (e) {
-      if (mounted) _snack('Error: $e');
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
@@ -1077,87 +977,68 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- Historial de versiones local ---
+  // --- Historial de versiones (local + revisiones de Google Drive) ---
   Future<void> _showVersionHistory() async {
     await _controller.flush();
-    final versions = await _versions.list(_c.note.id);
+    final local = await _versions.list(_c.note.id);
     if (!mounted) return;
-    if (versions.isEmpty) {
-      _snack('Aún no hay versiones guardadas de esta nota');
-      return;
-    }
-    final chosen = await showModalBottomSheet<NoteVersion>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.6,
-          ),
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              const ListTile(
-                title: Text(
-                  'Historial de versiones',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text('Copias locales guardadas al abrir y cerrar la nota'),
-              ),
-              for (final v in versions)
-                ListTile(
-                  leading: const Icon(Icons.history),
-                  title: Text(_formatVersionDate(v.savedAt)),
-                  subtitle: Text(
-                    '${relativeTime(v.savedAt)} · ${(v.sizeBytes / 1024).toStringAsFixed(0)} KB',
-                  ),
-                  trailing: const Icon(Icons.restore),
-                  onTap: () => Navigator.pop(context, v),
-                ),
-            ],
-          ),
-        ),
-      ),
+    final chosen = await showVersionHistorySheet(
+      context,
+      local: local,
+      driveRevisions: _syncService.isSignedIn
+          ? _syncService.listRevisions(_c.note.id)
+          : null,
     );
     if (chosen == null || !mounted) return;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Restaurar versión'),
-        content: Text(
-          'La nota volverá a como estaba el ${_formatVersionDate(chosen.savedAt)}.\n\n'
-          'El estado actual se guarda antes como una versión más, así que '
+    final date = switch (chosen) {
+      NoteVersion v => v.savedAt,
+      DriveRevision r => r.modifiedTime,
+      _ => DateTime.now(),
+    };
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Restaurar versión',
+      message: 'La nota volverá a como estaba el ${formatVersionDate(date)}.\n\n'
+          'El estado actual se guarda antes como una versión local, así que '
           'puedes deshacer la restauración desde este mismo historial.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Restaurar'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Restaurar',
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     try {
-      await _versions.snapshot(_c.note, force: true);
-      final restored = await _versions.load(chosen);
-      _c.replaceNote(restored);
+      final restored = await runWithLoading(context, () async {
+        await _versions.snapshot(_c.note, force: true);
+        return switch (chosen) {
+          NoteVersion v => _versions.load(v),
+          DriveRevision r => _downloadRevision(r),
+          _ => throw StateError('versión desconocida'),
+        };
+      });
+      if (restored == null || !mounted) return;
+      _c.replaceNote(restored, notebookId: widget.notebookId);
       await _controller.flush();
       _snack('Versión restaurada');
     } catch (e) {
-      _snack('No se pudo restaurar la versión: $e');
+      if (mounted) _snack('No se pudo restaurar la versión: $e');
     }
   }
 
-  String _formatVersionDate(DateTime t) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    final l = t.toLocal();
-    return '${two(l.day)}/${two(l.month)}/${l.year} ${two(l.hour)}:${two(l.minute)}';
+  /// Descarga una revisión de Drive; si está cifrada pide la contraseña
+  /// (null si el usuario cancela).
+  Future<Note?> _downloadRevision(DriveRevision r) async {
+    try {
+      return await _syncService.downloadRevision(r);
+    } on EncryptedBackupException {
+      if (!mounted) return null;
+      final password = await showTextPrompt(
+        context,
+        title: 'Copia cifrada',
+        hint: 'Contraseña de la copia',
+        obscure: true,
+        confirmLabel: 'Descifrar',
+      );
+      if (password == null || password.isEmpty) return null;
+      return _syncService.downloadRevision(r, password: password);
+    }
   }
 
   // --- Exportar a PowerPoint (.pptx) ---
@@ -1166,8 +1047,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final bytes = await runWithLoading(
         context,
         () => ExportService.renderNotebookPptx(
-          _c.document,
+          _c.note,
           imageCache: _imageService.cache,
+          imagesFor: _exportImages,
         ),
       );
       if (!mounted) return;
@@ -1197,8 +1079,10 @@ class _HomeScreenState extends State<HomeScreen> {
       date.year, date.month, date.day, time.hour, time.minute,
     );
     await _reminders.create(
-      documentId: _c.document.id,
-      documentTitle: _c.document.title,
+      // Mismo id que los recordatorios creados desde la pantalla de
+      // recordatorios: el del cuaderno.
+      documentId: widget.notebookId,
+      documentTitle: _c.note.title,
       dateTime: dateTime,
     );
     _snack('Recordatorio creado para ${date.day}/${date.month} a las ${time.hour}:${time.minute.toString().padLeft(2, '0')}');
@@ -1686,6 +1570,11 @@ class _HomeScreenState extends State<HomeScreen> {
             item('present', Icons.fullscreen, 'Modo presentación'),
             item('haptics', _c.hapticEnabled ? Icons.vibration : Icons.mobile_off,
                 _c.hapticEnabled ? 'Vibración al escribir: sí' : 'Vibración al escribir: no'),
+            CheckboxMenuButton(
+              value: _c.continuousScroll,
+              onChanged: (v) => _c.setContinuousScroll(v ?? true),
+              child: const Text('Desplazamiento continuo entre hojas'),
+            ),
           ],
           child: const Text('Ver'),
         ),

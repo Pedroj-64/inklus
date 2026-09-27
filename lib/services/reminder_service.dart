@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'file_utils.dart';
 import '../models/id.dart';
+import 'app_paths.dart';
 
 /// Un recordatorio vinculado a un cuaderno.
 class Reminder {
@@ -59,8 +59,7 @@ class ReminderService {
   List<Reminder> _reminders = [];
 
   Future<File> _file() async {
-    final dir = await getApplicationSupportDirectory();
-    return File('${dir.path}/inklus/$_fileName');
+    return AppPaths.file(_fileName);
   }
 
   /// Carga los recordatorios desde disco.

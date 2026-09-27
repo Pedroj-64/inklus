@@ -179,4 +179,63 @@ void main() {
     c.toggleLaser();
     await finish(tester);
   });
+
+  testWidgets('pan con instantánea: pinta durante el gesto y vuelve a nítido',
+      (tester) async {
+    await pumpCanvas(tester);
+    // Contenido para que la instantánea tenga algo que pintar (por código:
+    // un dedo justo después del lápiz se descartaría como palma).
+    c.beginStroke(const Offset(10, 10), 0.5, tool: ToolType.pen);
+    c.addStrokePoint(const Offset(80, 40), 0.5);
+    c.endStroke();
+    c.setFingerDrawing(false); // un dedo desplaza
+    await tester.pump();
+    final before = c.translate;
+    final painter = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is CanvasPainter);
+    CanvasPainter current() =>
+        tester.widget<CustomPaint>(painter.first).painter! as CanvasPainter;
+
+    final finger = await tester.startGesture(const Offset(400, 400),
+        kind: PointerDeviceKind.touch, pointer: 5);
+    for (var i = 1; i <= 6; i++) {
+      await finger.moveTo(Offset(400 - i * 20.0, 400 - i * 10.0));
+      await tester.pump();
+    }
+    expect(current().viewGesture, isTrue);
+    expect(current().snapshot!.image, isNotNull,
+        reason: 'durante el gesto se dibuja la instantánea');
+    expect(tester.takeException(), isNull);
+
+    await finger.up();
+    await tester.pump();
+    expect(c.translate, isNot(before));
+    expect(current().viewGesture, isFalse);
+    expect(current().snapshot!.image, isNull,
+        reason: 'al soltar se libera y se repinta en vivo');
+    await finish(tester);
+  });
+
+  group('CanvasPainter.uncoveredStrips', () {
+    const view = Rect.fromLTWH(0, 0, 100, 100);
+
+    test('cubierto entero → nada que pintar en vivo', () {
+      expect(CanvasPainter.uncoveredStrips(view, view.inflate(10)), isEmpty);
+    });
+
+    test('desplazado → franjas que suman el área destapada', () {
+      final strips = CanvasPainter.uncoveredStrips(
+          view, const Rect.fromLTWH(20, -10, 100, 100));
+      final area = strips.fold<double>(0, (a, r) => a + r.width * r.height);
+      expect(area, 100 * 100 - 80 * 90);
+      for (final r in strips) {
+        expect(r.overlaps(const Rect.fromLTWH(20, 0, 80, 90)), isFalse);
+      }
+    });
+
+    test('sin intersección → toda la vista', () {
+      expect(CanvasPainter.uncoveredStrips(
+          view, const Rect.fromLTWH(500, 500, 10, 10)), [view]);
+    });
+  });
 }

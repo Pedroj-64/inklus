@@ -4,9 +4,19 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../models/id.dart';
+import '../models/page.dart';
+import 'app_paths.dart';
+
+/// Lado mayor (px) con que se decodifican las imágenes para el **lienzo**.
+/// Una foto de 12 MP a tamaño completo ocupa ~48 MB en memoria; a 2560 px
+/// ~20 MB (y la mayoría, bastante menos). En pantalla no se nota: la imagen
+/// ocupa una parte de la hoja y la hoja rara vez supera ese ancho en píxeles.
+const int kCanvasImageMaxSide = 2560;
+
+/// Resuelve las imágenes que necesita una página al exportarla.
+typedef ExportImageResolver = Future<Map<String, ui.Image>> Function(Page page);
 
 /// Gestión de imágenes del dispositivo:
 /// - copia los archivos elegidos a la carpeta de datos de la app (para que
@@ -15,9 +25,7 @@ import '../models/id.dart';
 class ImageService {
   /// Copia un archivo elegido a `inklus/images/` y devuelve la nueva ruta.
   Future<String> importToApp(String sourcePath) async {
-    final dir = await getApplicationSupportDirectory();
-    final folder = Directory('${dir.path}/inklus/images');
-    if (!await folder.exists()) await folder.create(recursive: true);
+    final folder = await AppPaths.images();
     final ext = sourcePath.contains('.')
         ? sourcePath.split('.').last.toLowerCase()
         : 'img';
@@ -26,13 +34,67 @@ class ImageService {
     return dest;
   }
 
-  /// Lee y decodifica una imagen local.
-  Future<ui.Image> decode(String path) async {
+  /// Lee y decodifica una imagen local. Si su lado mayor supera [maxSide]
+  /// se decodifica ya reducida (conservando la proporción); `null` = tamaño
+  /// original.
+  Future<ui.Image> decode(String path, {int? maxSide = kCanvasImageMaxSide}) async {
     final bytes = await File(path).readAsBytes();
-    final codec = await ui.instantiateImageCodec(bytes);
-    final frame = await codec.getNextFrame();
-    codec.dispose();
-    return frame.image;
+    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    final descriptor = await ui.ImageDescriptor.encoded(buffer);
+    final size = fitWithin(descriptor.width, descriptor.height, maxSide);
+    final codec = await descriptor.instantiateCodec(
+      targetWidth: size?.$1,
+      targetHeight: size?.$2,
+    );
+    try {
+      return (await codec.getNextFrame()).image;
+    } finally {
+      codec.dispose();
+      descriptor.dispose();
+      buffer.dispose();
+    }
+  }
+
+  /// Tamaño reducido para que el lado mayor de [width]×[height] no pase de
+  /// [maxSide], o null si ya cabe (o no hay límite).
+  @visibleForTesting
+  static (int, int)? fitWithin(int width, int height, int? maxSide) {
+    final longest = width > height ? width : height;
+    if (maxSide == null || longest <= maxSide) return null;
+    final f = maxSide / longest;
+    return ((width * f).round().clamp(1, maxSide), (height * f).round().clamp(1, maxSide));
+  }
+
+  /// Imágenes (fotos y plantilla) de [pages] para exportar a [maxDimension]
+  /// px. Hasta la resolución del lienzo se reutiliza la caché; por encima se
+  /// decodifican a la resolución de la exportación para que no pierdan
+  /// nitidez. El mapa devuelto retiene sus imágenes aunque la caché las
+  /// desaloje durante la exportación.
+  Future<Map<String, ui.Image>> imagesForExport(
+    Iterable<Page> pages, {
+    int maxDimension = kCanvasImageMaxSide,
+  }) async {
+    final paths = <String>{
+      for (final page in pages) ...[
+        for (final item in page.images) item.localPath,
+        if (page.template.imagePath != null) page.template.imagePath!,
+      ],
+    };
+    final result = <String, ui.Image>{};
+    for (final path in paths) {
+      if (maxDimension <= kCanvasImageMaxSide) {
+        await ensureCached(path);
+        final img = cache[path];
+        if (img != null) result[path] = img;
+      } else {
+        try {
+          result[path] = await decode(path, maxSide: maxDimension);
+        } catch (e) {
+          debugPrint('ImageService.imagesForExport: $e');
+        }
+      }
+    }
+    return result;
   }
 
   /// Cache de imágenes decodificadas (clave = ruta local), acotada por

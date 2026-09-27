@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 
 import '../services/storage_service.dart';
 import '../utils/date_utils.dart' as date_util;
-import '../utils/theme_colors.dart';
+import 'theme/inklus_colors.dart';
+import 'theme/tokens.dart';
+import 'widgets/dialogs.dart';
+import 'widgets/page_scaffold.dart';
 
 /// Pantalla de papelera: muestra los cuadernos eliminados y permite
 /// recuperarlos o eliminarlos definitivamente.
@@ -20,7 +23,7 @@ class TrashScreen extends StatefulWidget {
 }
 
 class _TrashScreenState extends State<TrashScreen> {
-  List<NotebookMeta>? _trashMetas;
+  List<TrashEntry>? _trashMetas;
 
   @override
   void initState() {
@@ -34,7 +37,7 @@ class _TrashScreenState extends State<TrashScreen> {
     setState(() => _trashMetas = metas);
   }
 
-  Future<void> _restore(NotebookMeta meta) async {
+  Future<void> _restore(TrashEntry meta) async {
     await widget.storage.restoreFromTrash(meta.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -43,61 +46,31 @@ class _TrashScreenState extends State<TrashScreen> {
     await _loadTrash();
   }
 
-  Future<void> _purge(NotebookMeta meta) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar definitivamente'),
-        content: Text(
-          'Se eliminará "${meta.title}" permanentemente. '
+  Future<void> _purge(TrashEntry meta) async {
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Eliminar definitivamente',
+      message: 'Se eliminará "${meta.title}" permanentemente. '
           'Esta acción no se puede deshacer.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFD32F2F),
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Eliminar',
+      destructive: true,
     );
-    if (ok != true) return;
+    if (!ok) return;
     await widget.storage.purgeFromTrash(meta.id);
     await _loadTrash();
   }
 
   Future<void> _emptyTrash() async {
     if (_trashMetas == null || _trashMetas!.isEmpty) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Vaciar papelera'),
-        content: Text(
-          'Se eliminarán permanentemente ${_trashMetas!.length} cuaderno(s). '
-          'Esta acción no se puede deshacer.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFD32F2F),
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Vaciar'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Vaciar papelera',
+      message: 'Se eliminarán permanentemente ${_trashMetas!.length} '
+          'elemento(s). Esta acción no se puede deshacer.',
+      confirmLabel: 'Vaciar',
+      destructive: true,
     );
-    if (ok != true) return;
+    if (!ok) return;
     await widget.storage.emptyTrash();
     await _loadTrash();
   }
@@ -105,130 +78,114 @@ class _TrashScreenState extends State<TrashScreen> {
   @override
   Widget build(BuildContext context) {
     final metas = _trashMetas;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Row(
-          children: [
-            Icon(Icons.delete_outline, color: Color(0xFFD32F2F)),
-            SizedBox(width: 8),
-            Text(
-              'Papelera',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        actions: [
-          if (metas != null && metas.isNotEmpty)
-            IconButton(
-              tooltip: 'Vaciar papelera',
-              icon: const Icon(Icons.delete_sweep_outlined),
+    return InklusPage(
+      title: 'Papelera',
+      subtitle: metas == null || metas.isEmpty
+          ? 'Lo que elimines se guarda aquí 30 días'
+          : '${metas.length} elemento(s) · se borran solos a los 30 días',
+      icon: Icons.delete_outline,
+      maxWidth: 820,
+      headerTrailing: metas != null && metas.isNotEmpty
+          ? TextButton.icon(
               onPressed: _emptyTrash,
+              icon: const Icon(Icons.delete_sweep_outlined),
+              label: const Text('Vaciar'),
+              style: TextButton.styleFrom(foregroundColor: context.inklus.danger),
+            )
+          : null,
+      slivers: [
+        if (metas == null)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (metas.isEmpty)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: EmptyState(
+              icon: Icons.delete_sweep_outlined,
+              title: 'Papelera vacía',
+              message: 'Los cuadernos y notas que elimines se guardarán aquí '
+                  'durante 30 días antes de borrarse definitivamente.',
             ),
-        ],
-      ),
-      body: metas == null
-          ? const Center(child: CircularProgressIndicator())
-          : metas.isEmpty
-              ? _buildEmptyState()
-              : _buildList(metas),
+          )
+        else
+          SliverToBoxAdapter(
+            child: SectionCard(
+              children: [for (final meta in metas) _tile(meta)],
+            ),
+          ),
+      ],
     );
   }
 
-  Widget _buildEmptyState() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Center(
-      child: Column(
+  Widget _tile(TrashEntry meta) {
+    final what = switch (meta.kind) {
+      TrashKind.notebook =>
+        'Cuaderno · ${meta.noteCount} nota${meta.noteCount == 1 ? '' : 's'}',
+      TrashKind.note => meta.notebookTitle == null
+          ? 'Nota'
+          : 'Nota de «${meta.notebookTitle}»',
+      TrashKind.legacyDocument => 'Cuaderno (formato antiguo)',
+    };
+    final left = meta.daysLeft;
+    return ListTile(
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: Spacing.lg, vertical: Spacing.xs),
+      leading: _TrashThumb(meta: meta),
+      title: Text(
+        meta.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: context.text.titleMedium,
+      ),
+      subtitle: Text(
+        '$what · ${date_util.deletedAgo(meta.deletedAt)} · '
+        '${left <= 1 ? 'se borra mañana' : 'quedan $left días'}',
+        style: context.text.bodyMedium
+            ?.copyWith(color: context.colors.onSurfaceVariant),
+      ),
+      trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.delete_sweep_outlined,
-            size: 72,
-            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.25),
+          IconButton(
+            tooltip: meta.kind == TrashKind.note ? 'Devolver a su cuaderno' : 'Restaurar',
+            icon: const Icon(Icons.restore_from_trash),
+            onPressed: () => _restore(meta),
           ),
-          const SizedBox(height: 16),
-          const Text(
-            'Papelera vacía',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Los cuadernos que elimines se guardarán aquí\ndurante 30 días antes de borrarse definitivamente.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: isDark ? Colors.white54 : ThemeColors.of(context).textSecondary,
-              height: 1.4,
-            ),
+          IconButton(
+            tooltip: 'Eliminar definitivamente',
+            icon: Icon(Icons.delete_forever, color: context.inklus.danger),
+            onPressed: () => _purge(meta),
           ),
         ],
       ),
     );
   }
-
-  Widget _buildList(List<NotebookMeta> metas) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: metas.length,
-      itemBuilder: (context, index) {
-        final meta = metas[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            leading: _TrashThumb(meta: meta),
-            title: Text(
-              meta.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              date_util.deletedAgo(meta.updatedAt),
-              style: TextStyle(fontSize: 12, color: Theme.of(context).textTheme.bodySmall?.color),
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'Restaurar',
-                  icon: const Icon(Icons.restore_from_trash),
-                  onPressed: () => _restore(meta),
-                ),
-                IconButton(
-                  tooltip: 'Eliminar definitivamente',
-                  icon: const Icon(Icons.delete_forever, color: Color(0xFFD32F2F)),
-                  onPressed: () => _purge(meta),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
 }
 
-/// Miniatura simple en la papelera (sin renderizar la página).
+/// Miniatura simple en la papelera (sin renderizar la página): el color de
+/// portada del cuaderno si lo tiene.
 class _TrashThumb extends StatelessWidget {
-  final NotebookMeta meta;
+  final TrashEntry meta;
 
   const _TrashThumb({required this.meta});
 
   @override
   Widget build(BuildContext context) {
-    final hasColor = meta.colorValue != null;
-    final color = hasColor ? Color(meta.colorValue!) : null;
-
+    final color = meta.colorValue == null ? null : Color(meta.colorValue!);
     return Container(
-      width: 48,
-      height: 48,
+      width: Sizes.minTouch,
+      height: Sizes.minTouch,
       decoration: BoxDecoration(
-        color: hasColor ? color!.withAlpha(30) : const Color(0xFFF1F0EC),
-        borderRadius: BorderRadius.circular(8),
-        border: hasColor ? Border.all(color: color!, width: 1.5) : null,
+        color: color?.withAlpha(30) ?? context.colors.surfaceContainerHighest,
+        borderRadius: Radii.smAll,
+        border: color == null ? null : Border.all(color: color, width: 1.5),
       ),
       child: Icon(
-        Icons.description_outlined,
-        color: hasColor ? color : (Theme.of(context).brightness == Brightness.dark ? Colors.white38 : ThemeColors.of(context).iconTertiary),
-        size: 24,
+        meta.kind == TrashKind.note ? Icons.sticky_note_2_outlined : Icons.book_outlined,
+        color: color ?? context.colors.onSurfaceVariant,
+        size: Sizes.toolIcon,
       ),
     );
   }

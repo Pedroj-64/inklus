@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
+import '../theme/inklus_colors.dart';
 
 import '../../constants.dart';
 import '../../logic/canvas_controller.dart';
 import '../../models/page.dart';
-import '../../utils/theme_colors.dart';
 import 'dialogs.dart';
 
 /// Sidebar docked para gestión de capas.
@@ -27,17 +27,16 @@ class LayersSidebar extends StatelessWidget {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
         final layers = controller.page.layers;
         final activeIdx = controller.activeLayerIndex;
 
         return Container(
           width: 240,
           decoration: BoxDecoration(
-            color: isDark ? kSurfaceDark : Colors.white,
+            color: context.colors.surfaceContainerLow,
             border: Border(
               right: BorderSide(
-                color: isDark ? Colors.white12 : Colors.grey.shade300,
+                color: context.colors.outlineVariant,
               ),
             ),
           ),
@@ -48,7 +47,7 @@ class LayersSidebar extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(12, 8, 4, 4),
                 child: Row(
                   children: [
-                    Icon(Icons.layers, size: 18, color: kAccentColor),
+                    Icon(Icons.layers, size: 18, color: context.colors.primary),
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
@@ -162,8 +161,8 @@ class _LayerTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isActive
-              ? kAccentColor
-              : (isDark ? Colors.white12 : ThemeColors.of(context).borderLight),
+              ? context.colors.primary
+              : context.colors.outlineVariant,
         ),
       ),
       child: InkWell(
@@ -184,8 +183,8 @@ class _LayerTile extends StatelessWidget {
                     height: 22,
                     decoration: BoxDecoration(
                       color: isActive
-                          ? kAccentColor
-                          : Colors.black.withAlpha(30),
+                          ? context.colors.primary
+                          : context.colors.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Center(
@@ -194,7 +193,7 @@ class _LayerTile extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: isActive ? Colors.white : ThemeColors.of(context).textSecondary,
+                          color: isActive ? context.colors.onPrimary : context.colors.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -219,8 +218,8 @@ class _LayerTile extends StatelessWidget {
                       layer.visible ? Icons.visibility : Icons.visibility_off,
                       size: 18,
                       color: layer.visible
-                          ? kAccentColor
-                          : ThemeColors.of(context).iconTertiary,
+                          ? context.colors.primary
+                          : context.colors.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -230,7 +229,7 @@ class _LayerTile extends StatelessWidget {
                     child: Icon(
                       layer.locked ? Icons.lock : Icons.lock_open,
                       size: 18,
-                      color: layer.locked ? Colors.orange : ThemeColors.of(context).iconTertiary,
+                      color: layer.locked ? context.inklus.warning : context.colors.onSurfaceVariant,
                     ),
                   ),
                   // Eliminar
@@ -238,10 +237,10 @@ class _LayerTile extends StatelessWidget {
                     const SizedBox(width: 4),
                     GestureDetector(
                       onTap: onDelete,
-                      child: const Icon(
+                      child: Icon(
                         Icons.delete_outline,
                         size: 18,
-                        color: Colors.redAccent,
+                        color: context.inklus.danger,
                       ),
                     ),
                   ],
@@ -256,7 +255,7 @@ class _LayerTile extends StatelessWidget {
                       Icon(
                         Icons.opacity,
                         size: 14,
-                        color: ThemeColors.of(context).textHint,
+                        color: context.colors.onSurfaceVariant,
                       ),
                       const SizedBox(width: 4),
                       Expanded(
@@ -284,7 +283,7 @@ class _LayerTile extends StatelessWidget {
                           '${(layer.opacity * 100).round()}%',
                           style: TextStyle(
                             fontSize: 10,
-                            color: ThemeColors.of(context).textSecondary,
+                            color: context.colors.onSurfaceVariant,
                           ),
                           textAlign: TextAlign.right,
                         ),

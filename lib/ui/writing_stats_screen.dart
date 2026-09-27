@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import '../constants.dart';
 import 'package:flutter/material.dart';
 
 import '../services/writing_stats_service.dart';
-import '../utils/theme_colors.dart';
+import 'theme/inklus_colors.dart';
+import 'theme/tokens.dart';
+import 'widgets/page_scaffold.dart';
 
 /// Pantalla de estadísticas de escritura.
 ///
@@ -39,202 +40,126 @@ class _WritingStatsScreenState extends State<WritingStatsScreen> {
   @override
   Widget build(BuildContext context) {
     final totals = _totals;
-    final maxStrokes = _last30.fold<int>(
-      0,
-      (max, d) => d.strokeCount > max ? d.strokeCount : max,
-    );
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Estadísticas',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: false,
-      ),
-      body: totals == null
-          ? const Center(child: CircularProgressIndicator())
-          : (totals.totalStrokes == 0 && totals.totalMinutesActive == 0)
-              ? _buildEmptyState()
-              : ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                // --- Resumen rápido ---
-                _SummaryRow(
-                  items: [
-                    _SummaryItem(
-                      icon: Icons.draw,
-                      label: 'Trazos',
-                      value: '${totals.totalStrokes}',
-                    ),
-                    _SummaryItem(
-                      icon: Icons.description_outlined,
-                      label: 'Páginas',
-                      value: '${totals.totalPagesCreated}',
-                    ),
-                    _SummaryItem(
-                      icon: Icons.timer_outlined,
-                      label: 'Minutos',
-                      value: '${totals.totalMinutesActive}',
-                    ),
-                    _SummaryItem(
-                      icon: Icons.event_available,
-                      label: 'Días activos',
-                      value: '${totals.totalDaysActive}',
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                // --- Rachas ---
-                _SectionTitle(title: 'Rachas'),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _StreakCard(
+    return InklusPage(
+      title: 'Estadísticas',
+      subtitle: 'Tu actividad de escritura en este dispositivo',
+      icon: Icons.insights_outlined,
+      maxWidth: 820,
+      slivers: [
+        if (totals == null)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (totals.totalStrokes == 0 && totals.totalMinutesActive == 0)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: EmptyState(
+              icon: Icons.analytics_outlined,
+              title: 'Sin datos todavía',
+              message: 'Empieza a escribir en tus cuadernos y tus estadísticas '
+                  'aparecerán aquí.',
+            ),
+          )
+        else
+          SliverList.list(
+            children: [
+              _SummaryGrid(items: [
+                (Icons.draw_outlined, 'Trazos', totals.totalStrokes),
+                (Icons.description_outlined, 'Páginas', totals.totalPagesCreated),
+                (Icons.timer_outlined, 'Minutos', totals.totalMinutesActive),
+                (Icons.event_available_outlined, 'Días activos', totals.totalDaysActive),
+              ]),
+              const SectionLabel('Rachas'),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StreakCard(
                       label: 'Racha actual',
                       days: totals.currentStreak,
-                      color: const Color(0xFF10B981),
-                      isFire: true,
+                      color: context.inklus.success,
+                      icon: Icons.local_fire_department_outlined,
                     ),
-                    const SizedBox(width: 12),
-                    _StreakCard(
+                  ),
+                  const SizedBox(width: Spacing.md),
+                  Expanded(
+                    child: _StreakCard(
                       label: 'Récord',
                       days: totals.longestStreak,
-                      color: const Color(0xFFF59E0B),
-                      isFire: false,
+                      color: context.inklus.warning,
+                      icon: Icons.emoji_events_outlined,
                     ),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                // --- Actividad últimos 30 días ---
-                _SectionTitle(title: 'Actividad — últimos 30 días'),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 140,
-                  child: _ActivityChart(
-                    data: _last30,
-                    maxValue: maxStrokes > 0 ? maxStrokes : 1,
+                  ),
+                ],
+              ),
+              const SectionLabel('Actividad — últimos 30 días'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(Spacing.lg),
+                  child: Column(
+                    children: [
+                      SizedBox(height: 160, child: _ActivityChart(data: _last30)),
+                      const SizedBox(height: Spacing.md),
+                      Wrap(
+                        spacing: Spacing.lg,
+                        children: [
+                          _LegendDot(color: context.colors.primary, label: 'Trazos'),
+                          _LegendDot(
+                              color: context.inklus.success,
+                              label: 'Días con páginas nuevas'),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-
-                // Leyenda.
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _LegendDot(color: kAccentColor, label: 'Trazos'),
-                    const SizedBox(width: 16),
-                    _LegendDot(
-                      color: const Color(0xFF10B981),
-                      label: 'Páginas',
-                    ),
-                  ],
-                ),
-              ],
-            ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: kAccentColor.withAlpha(20),
-                shape: BoxShape.circle,
               ),
-              child: Icon(
-                Icons.analytics_outlined,
-                size: 40,
-                color: kAccentColor.withAlpha(150),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Sin datos todavía',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Empieza a escribir en tus cuadernos y tus estadísticas\naparecerán aquí.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: isDark ? Colors.white54 : ThemeColors.of(context).textSecondary,
-                height: 1.4,
-              ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+      ],
     );
   }
 }
 
-/// Fila de resumen con totales.
-class _SummaryRow extends StatelessWidget {
-  final List<_SummaryItem> items;
-  const _SummaryRow({required this.items});
+/// Totales en una rejilla (4 columnas en tablet, 2 en teléfono).
+class _SummaryGrid extends StatelessWidget {
+  final List<(IconData, String, int)> items;
+  const _SummaryGrid({required this.items});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: items.map((item) {
-        return Expanded(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-            decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .colorScheme
-                  .surfaceContainerHighest
-                  .withAlpha(60),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              children: [
-                Icon(item.icon, size: 22, color: kAccentColor),
-                const SizedBox(height: 6),
-                Text(
-                  item.value,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+    return LayoutBuilder(builder: (context, c) {
+      final columns = c.maxWidth < Breakpoints.compact ? 2 : 4;
+      final width = (c.maxWidth - Spacing.md * (columns - 1)) / columns;
+      return Wrap(
+        spacing: Spacing.md,
+        runSpacing: Spacing.md,
+        children: [
+          for (final (icon, label, value) in items)
+            SizedBox(
+              width: width,
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(Spacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      IconBadge(icon: icon, size: 40),
+                      const SizedBox(height: Spacing.md),
+                      Text('$value', style: context.text.headlineSmall),
+                      Text(
+                        label,
+                        style: context.text.bodyMedium
+                            ?.copyWith(color: context.colors.onSurfaceVariant),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  item.label,
-                  style: TextStyle(fontSize: 11, color: ThemeColors.of(context).textSecondary),
-                ),
-              ],
+              ),
             ),
-          ),
-        );
-      }).toList(),
-    );
+        ],
+      );
+    });
   }
-}
-
-class _SummaryItem {
-  final IconData icon;
-  final String label;
-  final String value;
-  const _SummaryItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
 }
 
 /// Tarjeta de racha.
@@ -242,72 +167,38 @@ class _StreakCard extends StatelessWidget {
   final String label;
   final int days;
   final Color color;
-  final bool isFire;
+  final IconData icon;
 
   const _StreakCard({
     required this.label,
     required this.days,
     required this.color,
-    required this.isFire,
+    required this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withAlpha(15),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withAlpha(40)),
-        ),
+    return Card(
+      color: color.withValues(alpha: context.isDark ? 0.16 : 0.1),
+      child: Padding(
+        padding: const EdgeInsets.all(Spacing.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                if (isFire && days > 0) const Text('🔥', style: TextStyle(fontSize: 18)),
-                if (isFire && days > 0) const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: color.withAlpha(180),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                Icon(icon, color: color, size: 20),
+                const SizedBox(width: Spacing.xs),
+                Text(label, style: context.text.labelLarge?.copyWith(color: color)),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: Spacing.sm),
             Text(
-              '$days días',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
+              days == 1 ? '1 día' : '$days días',
+              style: context.text.headlineMedium?.copyWith(color: color),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Título de sección.
-class _SectionTitle extends StatelessWidget {
-  final String title;
-  const _SectionTitle({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title.toUpperCase(),
-      style: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        color: Colors.grey.shade500,
-        letterSpacing: 0.8,
       ),
     );
   }
@@ -325,102 +216,97 @@ class _LegendDot extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 8,
-          height: 8,
+          width: 10,
+          height: 10,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 4),
-        Text(label, style: TextStyle(fontSize: 11, color: ThemeColors.of(context).textSecondary)),
+        const SizedBox(width: Spacing.xs),
+        Text(
+          label,
+          style: context.text.bodySmall
+              ?.copyWith(color: context.colors.onSurfaceVariant),
+        ),
       ],
     );
   }
 }
 
-/// Gráfico de barras simple de actividad.
+/// Barras de trazos por día (altura relativa al día con más trazos) y un
+/// punto verde encima de los días en que se crearon páginas.
 class _ActivityChart extends StatelessWidget {
   final List<DayStats> data;
-  final int maxValue;
 
-  const _ActivityChart({required this.data, required this.maxValue});
+  const _ActivityChart({required this.data});
 
   @override
   Widget build(BuildContext context) {
-    final barWidth = (MediaQuery.of(context).size.width - 80) /
-        (data.isEmpty ? 1 : data.length);
-
+    final maxStrokes =
+        data.fold<int>(1, (m, d) => d.strokeCount > m ? d.strokeCount : m);
+    final muted = context.colors.outlineVariant;
+    final dateStyle = context.text.bodySmall
+        ?.copyWith(color: context.colors.onSurfaceVariant);
     return Column(
       children: [
-        // Barras.
         Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: data.map((day) {
-              final strokesHeight = maxValue > 0
-                  ? (day.strokeCount / maxValue)
-                  : 0.0;
-              final pagesHeight = maxValue > 0
-                  ? (day.pagesCreated / maxValue)
-                  : 0.0;
-              return Container(
-                width: barWidth.clamp(2.0, 12.0),
-                margin: const EdgeInsets.symmetric(horizontal: 1),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (day.pagesCreated > 0)
-                      Container(
-                        height: (pagesHeight * 100).clamp(2.0, 100.0),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981),
-                          borderRadius:
-                              const BorderRadius.vertical(top: Radius.circular(3)),
+          child: LayoutBuilder(builder: (context, c) {
+            const dot = 8.0;
+            final barMax = c.maxHeight - dot - Spacing.xs;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (final day in data)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                      child: Tooltip(
+                        message: '${_formatDate(day.date)}: ${day.strokeCount} '
+                            'trazos, ${day.pagesCreated} páginas',
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (day.pagesCreated > 0)
+                              Container(
+                                width: dot,
+                                height: dot,
+                                margin: const EdgeInsets.only(bottom: Spacing.xs),
+                                decoration: BoxDecoration(
+                                  color: context.inklus.success,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            Container(
+                              height: day.strokeCount == 0
+                                  ? 2
+                                  : (day.strokeCount / maxStrokes * barMax)
+                                      .clamp(3.0, barMax),
+                              decoration: BoxDecoration(
+                                color: day.strokeCount == 0
+                                    ? muted
+                                    : context.colors.primary,
+                                borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(3)),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    if (day.strokeCount > 0)
-                      Container(
-                        height: (strokesHeight * 100).clamp(2.0, 100.0),
-                        decoration: BoxDecoration(
-                          color: kAccentColor,
-                          borderRadius:
-                              const BorderRadius.vertical(top: Radius.circular(3)),
-                        ),
-                      ),
-                    if (day.strokeCount == 0 && day.pagesCreated == 0)
-                      Container(
-                        height: 2,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(1),
-                        ),
-                      ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
+                    ),
+                  ),
+              ],
+            );
+          }),
         ),
-        const SizedBox(height: 4),
-        // Etiquetas de fechas.
+        const SizedBox(height: Spacing.xs),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            if (data.isNotEmpty)
-              Text(
-                _formatDate(data.first.date),
-                style: TextStyle(fontSize: 10, color: ThemeColors.of(context).iconTertiary),
-              ),
-            if (data.length > 1)
-              Text(
-                _formatDate(data.last.date),
-                style: TextStyle(fontSize: 10, color: ThemeColors.of(context).iconTertiary),
-              ),
+            if (data.isNotEmpty) Text(_formatDate(data.first.date), style: dateStyle),
+            if (data.length > 1) Text(_formatDate(data.last.date), style: dateStyle),
           ],
         ),
       ],
     );
   }
 
-  String _formatDate(DateTime d) {
-    return '${d.day}/${d.month}';
-  }
+  static String _formatDate(DateTime d) => '${d.day}/${d.month}';
 }

@@ -13,7 +13,7 @@
 
 ## ✅ Lo que la app ofrece hoy
 
-> Verificado contra el código fuente (~25,400 líneas Dart en `lib/`, 178 tests pasando).
+> Verificado contra el código fuente (~25,678 líneas Dart en `lib/`, 216 tests pasando).
 
 ### ✨ UX y Onboarding
 - **Onboarding tutorial**: 4 páginas ilustradas skippable al primer inicio; persiste con `SharedPreferences`.
@@ -180,31 +180,35 @@
 | 0.3 | ✅ `writeJsonAtomic(background:)`: `toJson()` en el hilo principal (instantánea) y `jsonEncode` + escritura en `Isolate.run`, como `decodeJsonAsync`. | `file_utils.dart`, `saveNote` | Sin tirones al guardar una nota de 100 páginas (perfilado). |
 | 0.4 | Keystore de release + secretos `ANDROID_KEYSTORE_BASE64/…PASSWORD/KEY_ALIAS/KEY_PASSWORD` (**manual**). Fijar la clave antes de repartir APKs: cambiarla obliga a desinstalar. | GitHub → Settings → Secrets | `git tag v1.4.3 && git push --tags` publica APKs firmados. |
 
-#### Fase 1 — v1.5 "Fluido con notas grandes"
+#### Fase 1 — v1.5 "Fluido con notas grandes" (✅ hecha salvo la medición en dispositivo)
 | # | Cambio | Dónde |
 |---|---|---|
-| 1.1 | **Pan/zoom por composición**: durante el gesto, reproducir la capa confirmada grabada una vez como `ui.Picture` (por `contentVersion`) aplicando solo la transformación; rasterizar a la escala final al soltar. | `drawing_canvas.dart` (`CanvasPainter`, `_onScaleUpdate/End`) |
-| 1.2 | **Trazo activo incremental**: congelar el contorno de los tramos estables (cada N puntos) y recalcular solo la cola. | `stroke_engine.dart` |
-| 1.3 | **Imágenes a resolución de pantalla** (`instantiateImageCodec(targetWidth: ~2048)`) en el lienzo; la exportación usa el original. | `image_service.dart`, `export_service.dart` |
-| 1.4 | **Pan acotado** en hoja fija. | `canvas_controller.dart` |
-| 1.5 | Medir antes/después con `flutter run --profile` en la tablet (nota de prueba: 5.000 trazos + 10 fotos). | — |
+| 1.1 | ✅ **Pan/zoom por composición** (`ViewSnapshot`, `toImageSync`; se vuelve a tomar si el zoom varía ×1,6): durante el gesto, reproducir la capa confirmada grabada una vez como `ui.Picture` (por `contentVersion`) aplicando solo la transformación; rasterizar a la escala final al soltar. | `drawing_canvas.dart` (`CanvasPainter`, `_onScaleUpdate/End`) |
+| 1.2 | ⏸️ **Trazo activo incremental — descartado tras medir**: `getStroke` cuesta ~0,5 ms con 3.000 puntos (≈25 s de trazo continuo) frente a 8–16 ms por frame; trocearlo metería saltos en uniones y puntas con presión simulada. Reabrir solo si 1.5 lo muestra en el dispositivo. | `stroke_engine.dart` |
+| 1.3 | ✅ **Imágenes a resolución de pantalla** (`kCanvasImageMaxSide` = 2560) en el lienzo; `imagesForExport` decodifica a la resolución de la exportación, página a página. | `image_service.dart`, `export_service.dart` |
+| 1.4 | ✅ **Pan acotado** en hoja fija (`clampSheetTranslate`, margen 48 px). | `canvas_controller.dart` |
+| 1.5 | 🔧 Medir en la tablet con `flutter run --profile`: cuaderno de prueba generado por `flutter test tool/stress/stress_note_test.dart` → `build/inklus_stress.inklus`. | — |
 
-#### Fase 2 — v1.6 "Todo con el mismo diseño"
-- **P1**: migrar las 15 pantallas/hojas que usan `ThemeColors`/`kAccentColor` a `ui/widgets/page_scaffold.dart` + tokens. Primero papelera, recordatorios y estadísticas; luego lista de notas, crear cuaderno, onboarding y las hojas de `ui/widgets/`. Revisar con `tool/screenshots` en claro y oscuro.
-- **P7**: el lazo escala/rota/copia también imágenes y textos (una `CanvasAction` con los tres tipos + tests de deshacer).
-- **P8**: revisiones de Drive dentro del historial de versiones (`DriveSyncService.downloadVersion` ya existe).
+#### Fase 2 — v1.6 "Todo con el mismo diseño" (✅ hecha)
+- ✅ **P1**: todas las pantallas y hojas migradas a `ui/widgets/page_scaffold.dart` + tokens (`InklusPage` aplica el margen lateral; `showConfirmDialog` para confirmaciones destructivas). Quedan colores literales solo donde son **contenido** (paletas de portada/etiquetas/plantillas, selector de color, lienzo).
+- ✅ **P7**: el lazo escala/rota/copia/pega/duplica imágenes y textos (`transformSelectedStrokes`, portapapeles de tres tipos, `selectionHandles` como única fuente de las asas).
+- ✅ **P8**: revisiones de Drive en el historial (`DriveSyncService.listRevisions/downloadRevision`, `ui/editor/version_history_sheet.dart`).
+- ✅ Extra: papelera reescrita (`TrashEntry`, notas sueltas, purga de 30 días).
 
-#### Fase 3 — v1.7 "Base sana" (deuda que frena lo siguiente)
-- Dividir `CanvasController` (~1.900 líneas) en `ViewTransform`, `SelectionController` y `LayerManager`.
-- `AppPaths` único (cinco servicios reconstruyen `appSupport/inklus`).
-- Quitar el camino legacy `Document` de Drive y búsqueda (dejarlo solo para migración).
-- **Páginas en archivos separados** (`notes/<id>/pages/<pageId>.json`) cargadas bajo demanda: requisito de P3 y de notas con cientos de páginas.
+#### Fase 3 — v1.7 "Base sana" (✅ hecha salvo páginas en archivos)
+- ✅ `CanvasController` dividido con `part` + mixins sobre `_CanvasCore`: `canvas_view.dart` (zoom/pan, desplazamiento continuo), `canvas_selection.dart` (lazo, portapapeles, transformar), `canvas_layers.dart`. API pública intacta.
+- ✅ `AppPaths` único (`lib/services/app_paths.dart`): ningún servicio construye `appSupport/inklus` a mano.
+- ✅ Legacy fuera: `backupDocument/restoreDocument/RestoreResult`, `listVersions/downloadVersion`, `BacklinkService` y el adaptador `controller.document` (exportación y recordatorios usan `Note`).
+- ⏸️ **Páginas en archivos separados**: aplazado a propósito. Cambia el formato en disco y toca papelera, respaldo completo (re-mapeo de rutas de imágenes), limpieza de imágenes huérfanas, migración e importación: un fallo pierde notas. El guardado de notas grandes ya va en segundo plano (1.4.3) y P3 no lo necesita (las páginas están en memoria). Reabrir solo si la medición con el cuaderno de estrés muestra carga lenta o memoria alta con notas de cientos de páginas; entonces: `notes/<id>.json` (metadatos + `pageIds`) + `notes/<id>/pages/<pageId>.json`, carga perezosa, y adaptar esos cinco puntos con tests de ida y vuelta.
 
 #### Fase 4 — v2.0 "Release pública"
-- **R2** política de privacidad (GitHub Pages) → **R3** OAuth en producción (manual en Google Cloud).
-- **R5** guion de pruebas en dispositivo + `integration_test` de los flujos críticos de `AGENTS.md`.
-- **P2** i18n (ES/EN) y **P3** scroll vertical continuo (depende de la Fase 3).
-- **R6** crash reporting opt-in.
+- ✅ **R2** política de privacidad (`docs/privacy.md`, enlazada en Configuración). **R3** (manual): en Google Cloud → pantalla de consentimiento → URL de la política + *Publish app*.
+- ✅ **R4** releases en GitHub: notas desde el CHANGELOG, comprobación tag = versión, instrucciones de instalación en README y en cada release.
+- ✅ **R5** `integration_test/app_test.dart` (también en CI con Xvfb) + guion manual `docs/testing.md`.
+- ✅ **R6** sustituido por un **registro de errores local** (`ErrorLog`) que el usuario comparte a mano: coherente con "sin analítica ni terceros".
+- ✅ **P3** desplazamiento continuo entre hojas fijas (+ deshacer por página).
+- 🔧 **P2** i18n: `gen-l10n` (ES fuente, EN), localización de Material en español, Configuración migrada, test de paridad (`test/l10n_test.dart`). Falta pasar el resto de textos (~450) a `lib/l10n/app_*.arb` pantalla a pantalla; al terminar, quitar `locale: kAppLocale` de `MaterialApp` para seguir el idioma del sistema.
+- **v2.0** = P2 terminado + R3 hecho + guion de `docs/testing.md` superado en una tablet.
 
 #### Aparcado (poco valor ahora o coste alto)
 P4 audio sincronizado, P5 ventana de zoom, R7 plugin nativo de latencia (solo si la medición de 1.5 lo justifica), R8 otras plataformas.
@@ -212,14 +216,14 @@ P4 audio sincronizado, P5 ventana de zoom, R7 plugin nativo de latencia (solo si
 ### 🟡 Pendiente (siguiente ronda)
 | # | Tarea | Detalle |
 |---|---|---|
-| P1 | **Migrar pantallas restantes al sistema de diseño** | ✅ Configuración (con `ui/widgets/page_scaffold.dart`). Faltan lista de notas, papelera, recordatorios, estadísticas, selector de plantillas y capas, que aún usan colores sueltos (`ThemeColors`/`kAccentColor`): reutilizar `InklusPage`/`SectionCard`/`SettingsTile`/`EmptyState`. |
-| P2 | **i18n** | `flutter_localizations` + ARB (ES fuente, EN); arregla selectores de fecha en inglés. |
-| P3 | **Desplazamiento vertical continuo** entre páginas (como GoodNotes/Notability) y vista doble en apaisado. |
+| P1 | ✅ **Migrar pantallas restantes al sistema de diseño** | Hecho en 1.4.2 (Configuración) y 1.6.0 (resto). |
+| P2 | 🔧 **i18n** (infraestructura + Configuración en 1.7.0) | Ver Fase 4: falta migrar ~450 textos a los ARB. |
+| P3 | ✅ **Desplazamiento vertical continuo** entre páginas (1.7.0). Vista doble en apaisado: pendiente. |
 | P4 | **Audio sincronizado** (`record`) con reproducción que resalta lo escrito. |
 | P5 | **Ventana de zoom** tipo Samsung Notes (recuadro de escritura ampliada que avanza solo). |
 | P6 | **Portadas desde el marketplace** y plantillas con imagen/PDF en el catálogo real (hoy el catálogo incluido solo trae plantillas paramétricas y paletas). |
-| P7 | **Escalar/rotar y copiar/pegar** también imágenes y textos del lazo (hoy solo trazos). |
-| P8 | **UI de revisiones de Drive** en el historial de versiones. |
+| P7 | ✅ **Escalar/rotar y copiar/pegar** también imágenes y textos del lazo (1.6.0). |
+| P8 | ✅ **UI de revisiones de Drive** en el historial de versiones (1.6.0). |
 
 ### 🔵 v2.0 — Release pública (sin Google Play)
 > Decisión: **no se publica en Google Play**. Distribución por **GitHub Releases** (APK firmados por la CI en cada tag `v*`) y, opcionalmente, IzzyOnDroid. (F-Droid principal no admite dependencias propietarias como ML Kit / Google Sign-In.)
@@ -227,11 +231,11 @@ P4 audio sincronizado, P5 ventana de zoom, R7 plugin nativo de latencia (solo si
 | # | Tarea | Detalle |
 |---|---|---|
 | R1 | ✅ **LICENSE GPL-3.0-or-later** | `LICENSE` + cabecera SPDX en cada `.dart` + sección en README. |
-| R2 | **Política de privacidad** | Página pública (GitHub Pages): todo local; Drive con `drive.file` (solo archivos creados por la app); sin analítica. Necesaria para verificar la pantalla de consentimiento OAuth. |
+| R2 | ✅ **Política de privacidad** | `docs/privacy.md` (1.7.0), enlazada en Configuración: todo local, Drive con `drive.file`, ML Kit en el dispositivo, sin analítica. Es la URL para la pantalla de consentimiento OAuth. |
 | R3 | **OAuth en producción** | Pasar la pantalla de consentimiento de Google Cloud de *Testing* a *In production* (si no: máx. 100 usuarios de prueba y tokens que caducan a los 7 días). |
-| R4 | 🔧 **Releases en GitHub** | El job de `ci.yml` ya firma y adjunta APK por ABI + AAB en tags `v*`. Falta: keystore y secretos (Fase 0.4), notas desde `CHANGELOG.md` e instrucciones de instalación (orígenes desconocidos) en README. |
-| R5 | **Pruebas en dispositivo** | Galaxy Tab S (S-Pen), tablet con lápiz USI, teléfono. Guion manual + `integration_test` de flujos críticos. |
-| R6 | **Crash reporting opt-in** | Sentry (free) solo con consentimiento explícito; sin datos de contenido. |
+| R4 | ✅ **Releases en GitHub** | Tags `v*` → la CI firma, adjunta APK por ABI + AAB, comprueba tag = versión y usa la sección del CHANGELOG como notas. Instalación explicada en README y en cada release. |
+| R5 | ✅ **Pruebas en dispositivo** | `integration_test` (CI con Xvfb) + guion manual `docs/testing.md` para Galaxy Tab S, tablet USI y teléfono. |
+| R6 | ✅ **Registro de errores** | Local y compartido a mano por el usuario (en lugar de Sentry). |
 | R7 | **Latencia del lápiz** | Medir; si es alta, plugin nativo Android con *front-buffered rendering* + predicción de movimiento. |
 | R8 | **Otras plataformas** | iPadOS / Windows (revisar `google_sign_in`, ML Kit y `printing`). |
 | R9 | **Versionado** | SemVer + `CHANGELOG.md`. |
@@ -255,21 +259,21 @@ Contenido inicial sugerido: agenda semanal/mensual real (con días y cabeceras, 
 ### 🛠️ Deuda técnica pendiente
 | Tarea | Descripción |
 |---|---|
-| **Dividir `CanvasController` (estado)** | Ya se extrajo la geometría pura (`lasso.dart`, `bucket_fill.dart`, `ruler.dart`, `palm_rejection.dart`). Falta separar `ViewTransform`, `SelectionController` y `LayerManager`. |
-| **Consolidar Drive legacy** | Caminos paralelos Document vs Note en `drive_sync_service`; `SearchService` aún indexa `Document`. |
-| **`AppPaths` único** | Cinco servicios reconstruyen `getApplicationSupportDirectory()/inklus` (usar `StorageService.baseDirectory()`). |
-| **Papelera de Notes sueltas** | Una Note borrada individualmente se trata como `Document` legacy al restaurar. |
+| ✅ **Dividir `CanvasController` (estado)** | Hecho en 1.7.0: `canvas_view.dart`, `canvas_selection.dart`, `canvas_layers.dart` (`part` + mixins). |
+| ✅ **Consolidar Drive legacy** | Hecho en 1.7.0: Drive y exportación solo trabajan con `Note`; `Document` queda para migración e importar `.inklus` v1. |
+| ✅ **`AppPaths` único** | Hecho en 1.7.0: `lib/services/app_paths.dart`. |
+| ✅ **Papelera de Notes sueltas** | Resuelto en 1.6.0 (`TrashEntry`, vuelve a su cuaderno). |
 | ✅ **Timeouts de Drive** | Resuelto en 1.4.2: `_BearerClient` corta a los 60 s (todas las llamadas pasan por él). |
-| **Pan sin límites** | En hoja fija se puede desplazar la vista indefinidamente → Fase 1.4. |
-| **Trazo activo incremental** | `getStroke` recorre todo el trazo en curso en cada evento → Fase 1.2. |
+| ✅ **Pan sin límites** | Resuelto en 1.5.0 (Fase 1.4). |
+| **Trazo activo incremental** | Medido en 1.5.0: no compensa (ver Fase 1.2). |
 
 ## 📊 Métricas del proyecto
 
 | Métrica | Valor |
 |---|---|
-| Archivos Dart (lib/) | ~85 |
-| Líneas de código | ~25,400 |
-| Tests | 178 (todos pasando) |
+| Archivos Dart (lib/) | ~94 |
+| Líneas de código | ~25,678 |
+| Tests | 216 unitarios + 1 de integración + 23 capturas (todos pasando) |
 | Modelos | 9 (`document`, `note`, `notebook`, `page`, `stroke`, `template`, `image_item`, `text_item`, `id`) |
 | Servicios | 17 (+ `file_utils`) |
 | Herramientas de escritura | 10 (pen, pencil, highlighter, calligraphy, brush, eraser, select, lasso, bucket, text) |

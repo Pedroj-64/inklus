@@ -9,7 +9,9 @@ App de escritura a mano para tablets con stylus (tipo GoodNotes), **Flutter 3.47
 ```bash
 flutter pub get
 flutter analyze            # debe quedar en 0 issues
-flutter test               # test/*.dart: modelos, storage, backup, cifrado, lienzo, historial
+flutter test               # test/*.dart: modelos, storage, backup, cifrado, lienzo, historial, l10n
+flutter test integration_test -d linux   # flujos de punta a punta (también en CI con xvfb)
+flutter gen-l10n           # tras editar lib/l10n/*.arb (también lo hace pub get/build)
 flutter run -d linux       # desarrollo en escritorio
 flutter run                # tablet Android conectada
 flutter build apk --debug  # APK → build/app/outputs/flutter-apk/
@@ -25,7 +27,10 @@ models/      Notebook → Note → Page → Stroke/ImageItem/TextItem; PageTempl
              cachea pointBounds/paintBounds y guarda thinning/smoothing/streamline (null = defaults)
              Page.bookmarked; TextItem con formato (bold/italic/underline/align/fontFamily)
 logic/
-  canvas_controller.dart   ★ Estado central ChangeNotifier: herramienta/color/tamaño, vista,
+  canvas_controller.dart   ★ Estado central ChangeNotifier (+ `part`: canvas_view = zoom/pan y
+                             desplazamiento continuo, canvas_selection = lazo/portapapeles/transformar,
+                             canvas_layers = capas; mixins sobre `_CanvasCore`, que declara lo compartido):
+                             herramienta/color/tamaño, vista,
                              trazo activo, deshacer, páginas (+marcadores), guardado, capas,
                              selección del lazo (trazos + imágenes + textos), figuras
                              (ShapeMode: off/hold/always), láser, regla, borrador (EraserMode)
@@ -39,6 +44,8 @@ logic/
 services/
   storage_service.dart     ★ índice v2 + notebooks/ + notes/; escrituras atómicas, cola del
                              índice, recuperación de índice corrupto, backup completo, favoritos
+  app_paths.dart           ★ ÚNICA fuente de `<appSupport>/inklus` y subcarpetas (rootOverride en tests)
+  error_log.dart           registro LOCAL de errores (main.dart lo alimenta; Configuración lo comparte)
   file_utils.dart          writeAtomic, writeJsonAtomic (isolate para notas grandes), safeJoin/
                              safeFileName, decodeJsonAsync, SerialQueue
   backup_crypto.dart       AES-256-GCM + PBKDF2 en isolate
@@ -48,7 +55,8 @@ services/
   marketplace/             ★ marketplace_models.dart + marketplace_service.dart: catálogo por CDN
                              (caché y catálogo incluido sin red), instalación con sha256,
                              plantillas/paletas/stickers instalados
-  image_service.dart       copia archivos a la app + BoundedImageCache (LRU)
+  image_service.dart       copia archivos a la app + BoundedImageCache (LRU); el lienzo decodifica
+                             a ≤ kCanvasImageMaxSide (2560 px); exportar usa imagesForExport
   export_service.dart      PNG/PDF/PPTX/SVG fuera de pantalla (reusa paintWorld)
   inklus_format.dart       ★ formato .inklus (ZIP autocontenido)
   drive_sync_service.dart  ★ Google Drive offline-first (drive.file)
@@ -61,6 +69,7 @@ ui/
                              (ThemeExtension + context.inklus/colors/text/isDark), tokens.dart
                              (Spacing, Radii, Motion, Sizes, Breakpoints)
   editor/                  editor_toolbar (barra única), tool_popovers (pluma/borrador/color),
+                             version_history_sheet (copias locales + revisiones de Drive),
                              anchored_popover, selection_bar, pages_panel, editor_shortcuts,
                              tool_visuals (icono+nombre por herramienta)
   notebook_library.dart    inicio: navegación lateral (Todos/Recientes/Favoritos/Carpetas/
@@ -69,18 +78,28 @@ ui/
   home_screen.dart         editor: EditorToolbar + lienzo + SelectionBar + PagesPanel + zoom/páginas
   canvas/                  drawing_canvas (entrada), world_painter (pintado compartido con export),
                              canvas_overlays (regla, lupa)
-  widgets/                 controller_selector, dialogs (showTextPrompt, runWithLoading),
+  widgets/                 controller_selector, dialogs (showTextPrompt, showConfirmDialog, runWithLoading),
                              search_sheet, custom_color_dialog, text_edit_overlay, inklus_logo,
                              page_scaffold (InklusPage, PageHeader, SectionCard, SettingsTile,
                              EmptyState, SheetHeader: base de las pantallas secundarias)…
+l10n/ (lib/l10n)           ARB (app_es = fuente, app_en) → AppLocalizations; `context.l10n.clave`.
+                             Texto nuevo → a los ARB (test/l10n_test.dart exige paridad). App fija
+                             en español (`kAppLocale`) hasta migrar todos los textos.
+integration_test/          flujos de punta a punta (`flutter test integration_test -d linux|tablet`)
+docs/                      privacy.md (política, enlazada en la app), testing.md (guion en dispositivo)
 tool/screenshots/          capturas de la UI real sin dispositivo (fuera de la suite de tests)
+tool/stress/               genera build/inklus_stress.inklus (5.100 trazos + 10 fotos) para perfilar
 marketplace/               plantilla del repo inklus-marketplace (validador + CI + ejemplos)
 ```
 
 ## 🎨 Reglas de interfaz (lavado de cara)
 
 - **Colores**: solo desde `context.colors` (ColorScheme) o `context.inklus` (InklusColors). Nada de
-  `Colors.white`/`Color(0x…)` sueltos en widgets nuevos. `ThemeColors` existe por compatibilidad.
+  `Colors.white`/`Color(0x…)` sueltos en widgets. Excepción: colores que son **contenido** (paletas de
+  portada `kCoverColors`, etiquetas, líneas de plantilla, selector de color, lienzo). `ThemeColors` ya
+  no se usa en ninguna pantalla.
+- **Pantallas secundarias**: `InklusPage` + `SectionCard`/`SettingsTile`/`EmptyState`; hojas inferiores con
+  `SheetHeader` (el asa la pone el tema: no dibujar otra). Confirmaciones: `showConfirmDialog`.
 - **Medidas**: `Spacing`, `Radii`, `Sizes`, `Motion` de `ui/theme/tokens.dart`; objetivo táctil ≥ 48 dp.
 - **Texto**: roles de `context.text` (la escala está ajustada para tablet); nada por debajo de 12 pt.
 - **Rebuilds**: widgets que dependen del controlador usan `ControllerSelector` con el valor mínimo
@@ -97,10 +116,18 @@ marketplace/               plantilla del repo inklus-marketplace (validador + CI
 - `invertedStylus` o `kSecondaryStylusButton` (botón del S-Pen) = borrador para ese trazo. **No** hay atajos destructivos con el lápiz.
 - `controller.onStylusDetected()`: la primera vez pasa a *solo lápiz* (`fingerDrawingEnabled=false`, persistido); entonces **un dedo desplaza** la página (`_oneFingerPans`) y dos dedos hacen zoom. El zoom es incremental (sin saltos al entrar/salir dedos).
 - Regla (`logic/ruler.dart`): tamaño fijo en pantalla; un dedo sobre ella la arrastra y un segundo dedo la rota (`_rulerPointers`); el trazo se engancha a un borde solo si **empieza** a <26 px de él (`RulerGeometry.snapFor/project`).
+- Hoja fija: `_setView` acota el pan con `clampToWorldRect` (la hoja —y sus vecinas apiladas— no se
+  pierden de vista); lienzo infinito sin límite.
+- **Desplazamiento continuo** (`continuousScroll`, pref persistente): las hojas fijas se apilan
+  (`_neighbor(±1)`, separación `pageGap`); `CanvasPainter.neighbors` las pinta (solo la primera hoja
+  pinta el escritorio: `paintWorld(paintDesk:)`). Cuando el centro de la vista entra en una vecina,
+  `_enterNeighborPage` la hace actual desplazando `translate` lo mismo (sin salto); `beginStroke`
+  adopta la vecina si el trazo empieza en ella. El deshacer es **por página** (`_undoStacks[page.id]`).
 - Conversión: `world = (local - translate) / scale` (métodos `viewportToWorld`/`worldToViewport` del controlador). La hoja fija está **centrada en el origen** del mundo (`fitView`, `paintWorld`, exportación y regla lo asumen).
 
 ### 2. Capas de pintado — `drawing_canvas.dart` (CanvasPainter / ActiveLayerPainter)
 - **Capa confirmada** (plantilla+imágenes+trazos) dentro de `RepaintBoundary`. Su `shouldRepaint` compara `contentVersion` (se incrementa en `_touch()`) + `scale`/`translate`/`sheetSize`/`imageCache`: si solo cambia el trazo activo, NO repinta (ahí está la optimización).
+- **Pan/zoom por composición**: mientras `_viewGesture` (pan/zoom) está activo, `CanvasPainter` dibuja una `ViewSnapshot` (`toImageSync` de la vista al empezar) transformada y pinta en vivo solo las franjas destapadas (`uncoveredStrips`); la vuelve a tomar si cambia el contenido o el zoom varía ×1,6, y la libera al soltar (repintado nítido). Cualquier otro gesto que mueva la vista de forma continua debe activar `_transforming`.
 - **Capa activa** (trazo en curso, cursor borrador, selección) encima, `shouldRepaint => true` siempre. El trazo en curso usa una lista de puntos mutable (añadir = O(1)); al soltar se congela (`List.unmodifiable`).
 - `page` se muta en sitio (nunca se reemplaza la instancia), por eso el versionado es por contador, no por identidad. `_touch()` = cambio real (repinta + agenda guardado); `_touchLive()` = arrastre en vivo (solo repinta; se guarda en el commit).
 - `paintWorld` hace **culling** con `stroke.paintBounds` y aplica opacidad de capa con un `saveLayer` por tramo de capa (`_LayerPainter`). La caché de imágenes expone `version` para que `CanvasPainter` repinte al terminar de decodificar.
@@ -119,8 +146,13 @@ marketplace/               plantilla del repo inklus-marketplace (validador + CI
 - `EditorToolbar`: tocar una herramienta la activa; tocarla **otra vez** abre su popover.
 - `PenPresetsController.activate()` aplica pluma (con guarda `_applying` para no copiar el color de la
   anterior); `HomeScreen` escucha `bottomBarContextNotifier` y llama a `syncFrom` para guardar cambios.
-- Lazo: trazos por instancia, imágenes y textos **por id**; mover guarda instantánea al primer frame y
-  `commitMoveStrokes` empuja una única acción. Escalar/rotar, copiar/pegar y color: solo trazos.
+- Lazo: trazos por instancia, imágenes y textos **por id**; mover/escalar/rotar guardan instantánea al
+  primer frame y `commitMoveStrokes`/`commitTransformSelection` empujan una única acción con los tres
+  tipos (los textos no rotan: solo se mueven). Copiar/pegar/duplicar: los tres tipos. Color y grosor:
+  solo trazos. Las asas salen de `selectionHandles` (misma fuente para pintar y detectar).
+- Papelera (`StorageService.loadTrash` → `TrashEntry`): cuadernos (sus notas van en `noteIds`, no
+  sueltas), notas sueltas (marca `_trash.notebookId` → vuelven a su cuaderno) y legacy; `_trash.deletedAt`
+  (o la fecha del archivo) y purga automática a los 30 días.
 
 ### 6. Marketplace y búsqueda
 - `MarketplaceService.validatePack` = reglas de `marketplace/bin/build_catalog.dart` (mantener iguales).

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import '../../constants.dart';
 import 'package:flutter/material.dart';
-import '../../utils/theme_colors.dart';
+
+import '../../constants.dart';
+import '../theme/inklus_colors.dart';
+import '../theme/tokens.dart';
+import 'page_scaffold.dart';
 
 /// Bottom sheet para gestionar las etiquetas de un cuaderno.
 ///
@@ -100,159 +103,100 @@ class _TagEditorSheetState extends State<_TagEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final labelStyle = context.text.titleSmall
+        ?.copyWith(color: context.colors.onSurfaceVariant);
     return DraggableScrollableSheet(
       initialChildSize: 0.5,
       minChildSize: 0.3,
       maxChildSize: 0.8,
       expand: false,
-      builder: (context, scrollController) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      builder: (context, scrollController) => ListView(
+        controller: scrollController,
+        padding: EdgeInsets.fromLTRB(
+          Spacing.xl,
+          0,
+          Spacing.xl,
+          Spacing.xl + MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Text(
-              'Etiquetas del cuaderno',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
+        children: [
+          const SheetHeader(
+            icon: Icons.sell_outlined,
+            title: 'Etiquetas del cuaderno',
+            subtitle: 'Para encontrarlo y agruparlo en carpetas inteligentes',
+          ),
 
-            // Tags seleccionadas.
-            if (_selected.isNotEmpty) ...[
-              Text(
-                'Etiquetas activas',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: ThemeColors.of(context).textSecondary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _selected.map((tag) {
-                  final color = _tagColor(tag);
-                  return Chip(
-                    label: Text(tag),
-                    backgroundColor: color.withAlpha(30),
-                    labelStyle: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                    deleteIcon: Icon(Icons.close, size: 18, color: color),
-                    onDeleted: () => _removeTag(tag),
-                    side: BorderSide(color: color.withAlpha(80)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // Tags disponibles.
-            if (_available.isNotEmpty) ...[
-              Text(
-                'Otras etiquetas',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: ThemeColors.of(context).textSecondary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _available.map((tag) {
-                  final color = _tagColor(tag);
-                  return ActionChip(
-                    label: Text(tag),
-                    onPressed: () => _toggleTag(tag),
-                    backgroundColor: color.withAlpha(15),
-                    labelStyle: TextStyle(
-                      color: color.withAlpha(180),
-                      fontSize: 13,
-                    ),
-                    side: BorderSide(color: color.withAlpha(40)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // Crear nueva etiqueta.
-            Row(
+          // Tags seleccionadas.
+          if (_selected.isNotEmpty) ...[
+            Text('Etiquetas activas', style: labelStyle),
+            const SizedBox(height: Spacing.sm),
+            Wrap(
+              spacing: Spacing.sm,
+              runSpacing: Spacing.sm,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _newTagController,
-                    decoration: InputDecoration(
-                      hintText: 'Nueva etiqueta...',
-                      isDense: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Theme.of(context)
-                          .colorScheme
-                          .surfaceContainerHighest
-                          .withAlpha(80),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                    ),
-                    onSubmitted: _addTag,
+                for (final tag in _selected)
+                  Chip(
+                    label: Text(tag),
+                    backgroundColor: _tagColor(tag).withAlpha(30),
+                    labelStyle: context.text.labelLarge
+                        ?.copyWith(color: _tagColor(tag)),
+                    deleteIcon: Icon(Icons.close, size: 18, color: _tagColor(tag)),
+                    onDeleted: () => _removeTag(tag),
+                    side: BorderSide(color: _tagColor(tag).withAlpha(80)),
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  onPressed: () => _addTag(_newTagController.text),
-                  icon: const Icon(Icons.add, size: 20),
-                  style: IconButton.styleFrom(
-                    backgroundColor: kAccentColor,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
               ],
             ),
-
-            const SizedBox(height: 16),
-
-            // Botón guardar.
-            FilledButton(
-              onPressed: () => Navigator.pop(context, _selected),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-                backgroundColor: kAccentColor,
-              ),
-              child: const Text('Guardar etiquetas'),
-            ),
+            const SizedBox(height: Spacing.lg),
           ],
-        ),
+
+          // Tags disponibles.
+          if (_available.isNotEmpty) ...[
+            Text('Otras etiquetas', style: labelStyle),
+            const SizedBox(height: Spacing.sm),
+            Wrap(
+              spacing: Spacing.sm,
+              runSpacing: Spacing.sm,
+              children: [
+                for (final tag in _available)
+                  ActionChip(
+                    label: Text(tag),
+                    onPressed: () => _toggleTag(tag),
+                    avatar: Icon(Icons.add, size: 18, color: _tagColor(tag)),
+                    labelStyle: context.text.labelLarge
+                        ?.copyWith(color: context.colors.onSurface),
+                    side: BorderSide(color: _tagColor(tag).withAlpha(60)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: Spacing.lg),
+          ],
+
+          // Crear nueva etiqueta.
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _newTagController,
+                  decoration: const InputDecoration(hintText: 'Nueva etiqueta…'),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: _addTag,
+                ),
+              ),
+              const SizedBox(width: Spacing.sm),
+              IconButton.filled(
+                tooltip: 'Añadir etiqueta',
+                onPressed: () => _addTag(_newTagController.text),
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+          const SizedBox(height: Spacing.xl),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, _selected),
+            style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(Sizes.minTouch)),
+            child: const Text('Guardar etiquetas'),
+          ),
+        ],
       ),
     );
   }

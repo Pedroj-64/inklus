@@ -9,13 +9,19 @@
 // test/ a propósito: no forma parte de la suite ni de la CI.
 // Nota: el texto pintado directamente en un Canvas (números de la regla) sale
 // como cajas porque el entorno de test no tiene fuente por defecto.
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart' hide Page;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:inklus/models/page.dart';
+import 'package:inklus/models/note.dart';
+import 'package:flutter/gestures.dart';
 import 'package:inklus/app.dart';
+import 'package:inklus/constants.dart';
+import 'package:inklus/l10n/l10n.dart';
 import 'package:inklus/models/stroke.dart';
 import 'package:inklus/models/template.dart';
 import 'package:inklus/services/storage_service.dart';
@@ -128,6 +134,9 @@ void main() {
         ));
       }
       await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: kAppLocale,
         debugShowCheckedModeBanner: false,
         theme: dark ? AppTheme.dark() : AppTheme.light(),
         home: HomeScreen(note: note, notebookId: nb.id),
@@ -150,6 +159,9 @@ void main() {
       final c = CanvasController(StorageService.instance)..setHapticEnabled(false);
       c.setTemplate(const PageTemplate(type: TemplateType.sheet));
       await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: kAppLocale,
         debugShowCheckedModeBanner: false,
         home: Scaffold(body: DrawingCanvas(controller: c, imageService: ImageService())),
       ));
@@ -172,6 +184,9 @@ void main() {
       storage: StorageService.instance,
     );
     await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: kAppLocale,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       home: MarketplaceScreen(service: offline),
@@ -185,6 +200,9 @@ void main() {
     tester.view.physicalSize = const Size(2560, 1600);
     tester.view.devicePixelRatio = 2;
     await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: kAppLocale,
       debugShowCheckedModeBanner: false,
       theme: dark ? AppTheme.dark() : AppTheme.light(),
       home: home,
@@ -229,6 +247,56 @@ void main() {
     });
   }
 
+  testWidgets('editor hojas apiladas', (tester) async {
+    tester.view.physicalSize = const Size(2560, 1600);
+    tester.view.devicePixelRatio = 2;
+    // Solo lápiz: un dedo desplaza la página.
+    SharedPreferences.setMockInitialValues({
+      'onboarding_seen': false,
+      'finger_drawing': false,
+      'finger_drawing_user_set': true,
+    });
+    Page sheet(String name, double y0) {
+      final p = Page.blank(name: name, template: const PageTemplate(type: TemplateType.sheet));
+      for (var i = 0; i < 8; i++) {
+        p.strokes.add(Stroke(
+          id: '$name$i',
+          points: [for (var x = 0; x < 60; x++) StrokePoint(-400.0 + x * 10, y0 + i * 60 + 8 * (x % 5 == 0 ? 1 : 0), 0.5)],
+          tool: ToolType.pen,
+          colorValue: 0xFF1A237E,
+          size: 4,
+        ));
+      }
+      return p;
+    }
+    final note = Note(
+      id: 'note_stack',
+      title: 'Apuntes',
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+      pages: [sheet('A', 300), sheet('B', -780)],
+    );
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: kAppLocale,
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light(),
+      home: HomeScreen(note: note, notebookId: 'nb_stack'),
+    ));
+    await settle(tester);
+    final canvas = find.byType(DrawingCanvas);
+    final g = await tester.startGesture(tester.getCenter(canvas), kind: PointerDeviceKind.touch);
+    for (var i = 1; i <= 20; i++) {
+      await g.moveBy(const Offset(0, -22));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await g.up();
+    await settle(tester);
+    await shot(tester, 'editor_stacked');
+    SharedPreferences.setMockInitialValues({'onboarding_seen': false});
+  });
+
   testWidgets('trash', (tester) async {
     await app(tester, TrashScreen(storage: StorageService.instance));
     await shot(tester, 'trash');
@@ -242,6 +310,42 @@ void main() {
   testWidgets('stats', (tester) async {
     await app(tester, const WritingStatsScreen());
     await shot(tester, 'stats');
+  });
+
+  testWidgets('stats con datos', (tester) async {
+    await tester.runAsync(() async {
+      final now = DateTime.now();
+      final days = <String, dynamic>{};
+      for (var i = 0; i < 30; i++) {
+        final d = now.subtract(Duration(days: i));
+        if (i % 7 == 5) continue; // algún día sin escribir
+        final key = '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+            '${d.day.toString().padLeft(2, '0')}';
+        days[key] = {
+          'date': d.toIso8601String(),
+          'strokes': 40 + (i * 37) % 260,
+          'pages': i % 4 == 0 ? 2 : 0,
+          'minutes': 10 + i % 25,
+          'docs': 1 + i % 3,
+        };
+      }
+      File('${tmp.path}/inklus/stats.json')
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync(jsonEncode(days));
+    });
+    await app(tester, const WritingStatsScreen());
+    await shot(tester, 'stats_data');
+    File('${tmp.path}/inklus/stats.json').deleteSync();
+  });
+
+  testWidgets('trash con cuadernos', (tester) async {
+    await tester.runAsync(() async {
+      final nb = await StorageService.instance
+          .createNotebook(title: 'Apuntes viejos', colorValue: 0xFF8E24AA);
+      await StorageService.instance.deleteNotebook(nb.id);
+    });
+    await app(tester, TrashScreen(storage: StorageService.instance));
+    await shot(tester, 'trash_items');
   });
 
   testWidgets('create notebook', (tester) async {

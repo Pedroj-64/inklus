@@ -57,6 +57,7 @@ class ImageItem {
   }
 
   ImageItem copyWith({
+    String? id,
     String? localPath,
     double? x,
     double? y,
@@ -66,7 +67,7 @@ class ImageItem {
     int? layerIndex,
   }) =>
       ImageItem(
-        id: id,
+        id: id ?? this.id,
         localPath: localPath ?? this.localPath,
         x: x ?? this.x,
         y: y ?? this.y,

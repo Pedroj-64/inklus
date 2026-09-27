@@ -2,11 +2,11 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:path_provider/path_provider.dart';
 
 import '../models/template.dart';
 import 'file_utils.dart';
 import '../models/id.dart';
+import 'app_paths.dart';
 
 /// Entrada de la biblioteca de plantillas propias.
 class CustomTemplateEntry {
@@ -67,8 +67,7 @@ class TemplateLibraryService {
 
   /// Inicializa el servicio y carga las plantillas existentes.
   Future<void> init() async {
-    final appDir = await getApplicationSupportDirectory();
-    _dir = Directory('${appDir.path}/inklus/templates');
+    _dir = await AppPaths.templates();
     if (!await _dir!.exists()) {
       await _dir!.create(recursive: true);
     }

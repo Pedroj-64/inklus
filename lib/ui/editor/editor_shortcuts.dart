@@ -60,7 +60,7 @@ abstract final class EditorShortcuts {
       LogicalKeyboardKey.pageDown => done(c.nextPage),
       LogicalKeyboardKey.pageUp => done(c.previousPage),
       LogicalKeyboardKey.delete || LogicalKeyboardKey.backspace
-          when c.selectedStrokes.isNotEmpty =>
+          when c.hasLassoSelection =>
         done(c.deleteSelectedStrokes),
       LogicalKeyboardKey.escape => done(c.clearLassoSelection),
       _ when !ctrl && !_typingText() => _toolKey(key, c),

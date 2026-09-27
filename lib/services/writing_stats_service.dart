@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'file_utils.dart';
+import 'app_paths.dart';
 
 /// Estadísticas de escritura de un día.
 class DayStats {
@@ -93,8 +93,7 @@ class WritingStatsService {
   Map<String, DayStats> _days = {};
 
   Future<File> _file() async {
-    final dir = await getApplicationSupportDirectory();
-    return File('${dir.path}/inklus/$_fileName');
+    return AppPaths.file(_fileName);
   }
 
   /// Carga las estadísticas desde disco.

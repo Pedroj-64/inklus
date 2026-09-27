@@ -15,7 +15,17 @@ import 'models/stroke.dart';
 
 /// Versión visible de la app (debe coincidir con `version:` de pubspec.yaml;
 /// lo comprueba `test/app_version_test.dart`).
-const String kAppVersion = '1.4.3';
+const String kAppVersion = '1.7.0';
+
+/// Idioma de la interfaz. Cuando todos los textos estén en los ARB
+/// (lib/l10n), quitar `locale:` de MaterialApp para seguir al sistema.
+const Locale kAppLocale = Locale('es');
+
+/// Repositorio del proyecto y política de privacidad (enlazada desde
+/// Configuración y necesaria para la pantalla de consentimiento de Google).
+const String kSourceCodeUrl = 'https://github.com/Pedroj-64/inklus';
+const String kPrivacyPolicyUrl =
+    'https://github.com/Pedroj-64/inklus/blob/main/docs/privacy.md';
 
 // ---------------------------------------------------------------------------
 // Tema / Colores de acento

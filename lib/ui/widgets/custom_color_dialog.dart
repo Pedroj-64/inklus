@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
-import '../../constants.dart';
+import '../theme/inklus_colors.dart';
 import '../../logic/canvas_controller.dart';
-import '../../utils/theme_colors.dart';
 import 'color_wheel_picker.dart';
 
 /// Diálogo de color personalizado (rueda HSV + hex), compartido por los
@@ -58,7 +57,7 @@ Future<void> showCustomColorDialog(
                   Column(
                     children: [
                       Text('Actual',
-                          style: TextStyle(fontSize: 11, color: ThemeColors.of(context).textSecondary)),
+                          style: TextStyle(fontSize: 11, color: context.colors.onSurfaceVariant)),
                       const SizedBox(height: 4),
                       Container(
                         width: 40,
@@ -66,20 +65,20 @@ Future<void> showCustomColorDialog(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: previousColor,
-                          border: Border.all(color: ThemeColors.of(context).border, width: 1.5),
+                          border: Border.all(color: context.colors.outline, width: 1.5),
                         ),
                       ),
                     ],
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Icon(Icons.arrow_forward, size: 16, color: ThemeColors.of(context).iconTertiary),
+                    child: Icon(Icons.arrow_forward, size: 16, color: context.colors.onSurfaceVariant),
                   ),
                   // Color nuevo
                   Column(
                     children: [
                       Text('Nuevo',
-                          style: TextStyle(fontSize: 11, color: ThemeColors.of(context).textSecondary)),
+                          style: TextStyle(fontSize: 11, color: context.colors.onSurfaceVariant)),
                       const SizedBox(height: 4),
                       Container(
                         width: 40,
@@ -87,7 +86,7 @@ Future<void> showCustomColorDialog(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: hsv.toColor(),
-                          border: Border.all(color: ThemeColors.of(context).border, width: 1.5),
+                          border: Border.all(color: context.colors.outline, width: 1.5),
                         ),
                       ),
                     ],
@@ -123,7 +122,7 @@ Future<void> showCustomColorDialog(
               // ---- Toggle: Rueda / Sliders ----
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey.withAlpha(25),
+                  color: context.colors.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -275,13 +274,13 @@ class _ModeButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, size: 16,
-                color: selected ? kAccentColor : ThemeColors.of(context).iconSecondary),
+                color: selected ? context.colors.primary : context.colors.onSurfaceVariant),
             const SizedBox(width: 4),
             Text(label,
                 style: TextStyle(
                     fontSize: 13,
                     fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                    color: selected ? kAccentColor : ThemeColors.of(context).textSecondary)),
+                    color: selected ? context.colors.primary : context.colors.onSurfaceVariant)),
           ],
         ),
       ),
@@ -316,10 +315,10 @@ class _HsvSliderWithGradient extends StatelessWidget {
         Row(
           children: [
             Text(label,
-                style: TextStyle(fontSize: 12, color: ThemeColors.of(context).textSecondary)),
+                style: TextStyle(fontSize: 12, color: context.colors.onSurfaceVariant)),
             const Spacer(),
             Text(valueLabel,
-                style: TextStyle(fontSize: 12, color: ThemeColors.of(context).textSecondary)),
+                style: TextStyle(fontSize: 12, color: context.colors.onSurfaceVariant)),
           ],
         ),
         const SizedBox(height: 2),

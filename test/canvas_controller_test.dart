@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart' show VoidCallback;
 import 'package:flutter_test/flutter_test.dart';
@@ -393,6 +394,173 @@ void main() {
       expect(c.page.strokes.length, 1);
       expect(c.page.images.single.id, 'img');
       expect(c.page.textItems.single.id, 'txt');
+    });
+
+    test('escalar ×2 agranda imagen y texto y deshacer lo revierte en un paso', () {
+      final before = List.of(c.selectedStrokes);
+      const pivot = Offset(50, 60); // centro de la imagen
+      c.transformSelectedStrokes(scaleFactor: 2, rotationAngle: 0, pivotPoint: pivot);
+      c.commitTransformSelection(before);
+
+      final img = c.page.images.single;
+      expect((img.x, img.y, img.width, img.height), (50.0, 60.0, 80.0, 80.0));
+      final txt = c.page.textItems.single;
+      expect(txt.y, 60 + (120 - 60) * 2);
+      expect(txt.width, 160);
+      expect(txt.fontSize, greaterThan(TextItem(id: 'x', x: 0, y: 0, width: 1, text: '').fontSize));
+
+      c.undo();
+      expect(c.page.images.single.width, 40);
+      expect(c.page.textItems.single.width, 80);
+      expect(c.page.textItems.single.y, 120);
+    });
+
+    test('rotar 90° gira la imagen y mueve el texto sin inclinarlo', () {
+      final before = List.of(c.selectedStrokes);
+      c.transformSelectedStrokes(
+          scaleFactor: 1, rotationAngle: pi / 2, pivotPoint: const Offset(50, 60));
+      c.commitTransformSelection(before);
+      expect(c.page.images.single.rotation, closeTo(pi / 2, 1e-9));
+      final txt = c.page.textItems.single;
+      // (50,120) gira 90° alrededor de (50,60) → (-10, 60).
+      expect(txt.x, closeTo(-10, 1e-9));
+      expect(txt.y, closeTo(60, 1e-9));
+    });
+
+    test('copiar y pegar incluye imágenes y textos (ids nuevos, seleccionados)', () {
+      c.copySelectedStrokes();
+      c.pasteStrokes();
+      expect(c.page.strokes.length, 2);
+      expect(c.page.images.length, 2);
+      expect(c.page.textItems.length, 2);
+      expect(c.page.images.map((i) => i.id).toSet().length, 2);
+      expect(c.selectedImages.single.id, isNot('img'));
+      expect(c.selectedTexts.single.x, 50 + kPasteOffset);
+      c.undo();
+      expect(c.page.images.single.id, 'img');
+      expect(c.page.textItems.single.id, 'txt');
+    });
+
+    test('duplicar no pisa el portapapeles', () {
+      c.clearLassoSelection();
+      expect(c.hasClipboard, isFalse);
+      lassoAround(const Rect.fromLTRB(-20, -20, 200, 160));
+      c.duplicateSelectedStrokes();
+      expect(c.page.images.length, 2);
+      expect(c.hasClipboard, isFalse);
+    });
+  });
+
+  group('Pan acotado en hoja fija', () {
+    const viewport = Size(800, 1000);
+    const sheet = Size(600, 800);
+
+    test('una hoja más grande que la pantalla no deja ver más que el margen', () {
+      // Escala 2: la hoja ocupa 1200×1600 px.
+      final t = CanvasController.clampSheetTranslate(
+          const Offset(5000, -5000), 2, sheet, viewport);
+      // Borde izquierdo a 48 px como mucho; borde inferior a 48 px del final.
+      expect(t.dx - 600, 48);
+      expect(t.dy + 800, 1000 - 48);
+    });
+
+    test('una hoja más pequeña se mueve pero no sale de la pantalla', () {
+      // Escala 0.5: la hoja ocupa 300×400 px.
+      final inside = CanvasController.clampSheetTranslate(
+          const Offset(400, 500), 0.5, sheet, viewport);
+      expect(inside, const Offset(400, 500));
+      final out = CanvasController.clampSheetTranslate(
+          const Offset(-900, 3000), 0.5, sheet, viewport);
+      expect(out.dx - 150, 48);
+      expect(out.dy + 200, 1000 - 48);
+    });
+
+    test('el controlador acota el pan solo en hojas finitas', () {
+      c.viewportSize = viewport;
+      c.setTemplate(const PageTemplate(type: TemplateType.sheet));
+      c.fitView(viewport);
+      c.panBy(const Offset(100000, 100000));
+      final sheetRight = c.worldToViewport(
+          Offset(-c.sheetSize.width / 2, 0), viewport);
+      expect(sheetRight.dx, lessThanOrEqualTo(viewport.width));
+
+      c.setTemplate(const PageTemplate(type: TemplateType.blank));
+      c.setView(1, Offset.zero);
+      c.panBy(const Offset(100000, 0));
+      expect(c.translate.dx, 100000);
+    });
+  });
+
+  group('Desplazamiento continuo entre hojas', () {
+    const viewport = Size(800, 1000);
+
+    /// Dos hojas A4 apiladas; vista encuadrada en la primera.
+    void twoSheets() {
+      c.viewportSize = viewport;
+      c.setTemplate(const PageTemplate(type: TemplateType.sheet));
+      c.addPage(); // hereda la hoja
+      c.goToPage(0);
+      c.fitView(viewport);
+    }
+
+    /// Punto del mundo (de la página actual) que está en el centro.
+    Offset centerWorld() => c.viewportToWorld(
+        Offset(viewport.width / 2, viewport.height / 2), viewport);
+
+    test('al bajar se pasa a la hoja siguiente sin saltos', () {
+      twoSheets();
+      final sheetH = c.sheetSize.height;
+      final dy = sheetH + CanvasController.pageGap; // centro a centro
+      final before = centerWorld();
+      // Desplaza la vista hasta el centro de la hoja 2.
+      c.panBy(Offset(0, -dy * c.scale));
+      expect(c.pageIndex, 1);
+      // Lo que hay en el centro es el mismo punto: y - dy en la hoja nueva.
+      expect(centerWorld().dy, closeTo(before.dy + dy - dy, 1e-6));
+      // Y se puede volver.
+      c.panBy(Offset(0, dy * c.scale));
+      expect(c.pageIndex, 0);
+    });
+
+    test('la vista no pasa más allá de la última hoja', () {
+      twoSheets();
+      c.panBy(const Offset(0, -1e6));
+      expect(c.pageIndex, 1);
+      final bottomOfLast = c.worldToViewport(Offset(0, c.sheetSize.height / 2), viewport);
+      expect(bottomOfLast.dy, greaterThanOrEqualTo(viewport.height - 48 - 1e-6));
+    });
+
+    test('empezar a escribir en la hoja de abajo la hace la actual', () {
+      twoSheets();
+      final sheetH = c.sheetSize.height;
+      // Punto dentro de la hoja 2, en coordenadas de la hoja 1.
+      c.beginStroke(Offset(0, sheetH + CanvasController.pageGap), 0.5,
+          tool: ToolType.pen);
+      c.addStrokePoint(Offset(40, sheetH + CanvasController.pageGap), 0.5);
+      c.endStroke();
+      expect(c.pageIndex, 1);
+      expect(c.pages[1].strokes, hasLength(1));
+      expect(c.pages[1].strokes.single.points.first.y, closeTo(0, 1e-6));
+      expect(c.pages[0].strokes, isEmpty);
+    });
+
+    test('cambiar de página conserva el deshacer de cada una', () {
+      twoSheets();
+      draw(-100, 100, 0);
+      c.goToPage(1);
+      expect(c.canUndo, isFalse, reason: 'la hoja 2 no tiene historial');
+      c.goToPage(0);
+      expect(c.canUndo, isTrue);
+      c.undo();
+      expect(c.page.strokes, isEmpty);
+    });
+
+    test('desactivado: la hoja se comporta como antes (sin vecinas)', () {
+      twoSheets();
+      c.setContinuousScroll(false);
+      expect(c.stackedNeighbors, isEmpty);
+      c.panBy(const Offset(0, -1e6));
+      expect(c.pageIndex, 0);
     });
   });
 }

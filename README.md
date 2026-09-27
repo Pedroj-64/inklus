@@ -1,66 +1,100 @@
 # ✒️ Inklus
 
-App de escritura a mano para tablets con **stylus**, estilo GoodNotes/Samsung Notes, construida con **Flutter**. Todo en uno: escritura con presión, resaltador, borrador, plantillas infinitas o de hoja, plantillas propias con relleno y exportación a imagen/PDF.
+App de escritura a mano para tablets con **stylus**, al estilo de GoodNotes o Samsung Notes, construida con **Flutter**. Presión real, rechazo de palma, cuadernos con plantillas, lazo, reconocimiento de escritura, importación de PDF y respaldo opcional en Google Drive.
 
-**Target principal:** Android (tablets físicas) · **Plataforma secundaria:** Linux desktop (desarrollo/pruebas).
+**Gratis, sin anuncios, sin cuentas y sin analítica.** Todo vive en tu dispositivo.
 
-> 📚 Documentación: [`ROADMAP.md`](ROADMAP.md) (próximos pasos) · [`AGENTS.md`](AGENTS.md) (guía técnica para continuar el desarrollo con IA).
+**Plataforma principal:** Android (tablets) · **Secundaria:** Linux desktop.
+
+> 📚 [`CHANGELOG.md`](CHANGELOG.md) · [Privacidad](docs/privacy.md) · [Pruebas en dispositivo](docs/testing.md) · [Marketplace](marketplace/README.md)
+
+---
+
+## 📲 Instalar (Android)
+
+Inklus se distribuye como APK en [**GitHub Releases**](https://github.com/Pedroj-64/inklus/releases) (no está en Google Play).
+
+1. En la última release, descarga el APK de tu tablet. Casi todas las tablets actuales usan **`app-arm64-v8a-release.apk`**; si no se instala, prueba `app-armeabi-v7a-release.apk`.
+2. Ábrelo. Android pedirá permiso para **instalar apps de origen desconocido** para tu navegador o gestor de archivos: concédelo solo para esta instalación.
+3. Las actualizaciones se instalan igual, encima de la versión anterior, sin perder tus notas.
+
+> Antes de cambiar de dispositivo, exporta un respaldo: **Configuración → Exportar respaldo completo** (o activa la copia en Google Drive).
 
 ---
 
 ## 🎨 Funcionalidades
 
-### Escritura (optimizada para stylus)
-- **Detección de puntero** (`PointerDeviceKind`): stylus, `invertedStylus` (punta trasera = **borrador automático**), touch y mouse.
-- **Rechazo de palma**: mientras el stylus está en contacto, *todos* los eventos `touch` simultáneos se ignoran por completo (no dibujan, no panean, no seleccionan).
-- **Presión real** del stylus modulando el grosor del trazo en tiempo real.
-- **Trazo suavizado** con `perfect_freehand` (grosor variable, puntas afiladas en el lápiz).
-- **Zoom/pan SOLO con dos dedos** (táctil). El stylus nunca panea: escribir y navegar no interfieren.
+### ✍️ Escritura con stylus
+- **Presión real** que modula el grosor del trazo, suavizado con `perfect_freehand`.
+- **Rechazo de palma completo**: detecta el lápiz apoyado o cerca (hover), con ventana de gracia y tamaño de contacto. Modo *solo lápiz* automático.
+- **Borrador automático** con la punta trasera del lápiz o el botón lateral del S-Pen.
+- **Zoom y desplazamiento con los dedos**: escribir y navegar nunca interfieren.
+- **Plumas favoritas** (3 + resaltador) con color y grosor propios, y colores recientes.
 
-### Herramientas (all-in-one)
-- **Lapicero**: trazo uniforme, filo definido.
-- **Lápiz**: grosor variable según presión, puntas afiladas.
-- **Resaltador**: trazo ancho y translúcido.
-- **Borrador** (manual + automático con `invertedStylus`): borrado fino que *parte* el trazo en fragmentos, tipo goma real.
-- **Color y tamaño muy personalizables**: paleta + color personalizado (Matiz/Saturación/Brillo) y slider de tamaño por herramienta.
-- Deshacer/rehacer por acciones (trazos e imágenes).
+### 🧰 Herramientas
+| Herramienta | Qué hace |
+|---|---|
+| Lapicero / Lápiz | Trazo uniforme o con grosor variable según la presión |
+| Resaltador | Trazo ancho y translúcido |
+| Borrador | Parcial (parte el trazo como una goma real), trazo completo o solo resaltador |
+| Lazo | Mover, escalar, rotar, copiar, pegar, duplicar, recolorear y convertir a texto (trazos, imágenes y textos) |
+| Figuras | Mantén al terminar el trazo para enderezarlo: líneas, rectángulos, triángulos, elipses |
+| Regla y transportador | Medidas en cm/mm de la hoja, ángulo en vivo, el trazo se pega al borde |
+| Texto enriquecido | Negrita, cursiva, subrayado, alineación, familia y tamaño |
+| Puntero láser y lupa | Para presentar o escribir con detalle |
+| Imágenes | Insertar del dispositivo, mover y redimensionar |
 
-### Plantillas
+### 📄 Plantillas
 | Plantilla | Comportamiento |
 |---|---|
-| Lienzo infinito | En blanco, se alarga al escribir |
-| Hoja normal | Tamaño fijo tipo A4 (el mercado actual) |
-| Rayas | Tipo cuaderno, infinitas, con margen |
-| Cuadrícula | Tipo cuaderno, infinita |
-| Plantilla propia | Subes una imagen: **hoja fija** o **relleno infinito** (se repite al escribir) |
+| Lienzo infinito | En blanco, crece al escribir |
+| Hoja | Tamaño fijo tipo A4, con desplazamiento continuo entre hojas |
+| Rayas / Cuadrícula | Tipo cuaderno |
+| Plantilla propia | Subes una imagen: **hoja fija** o **relleno infinito** |
 
-### Contenido y exportación
-- **Insertar imágenes del dispositivo** sobre el lienzo: moverlas y redimensionarlas (asa en la esquina).
-- **Exportar** en varios formatos (render fuera de pantalla, independiente del zoom): página a **PNG/PDF**, **cuaderno completo a PDF** (todas las páginas) y **copia .inklus**.
-- **Formato propio .inklus**: un único archivo autocontenido por cuaderno (como `.goodnotes`/`.sdoc`) que empaqueta el documento y sus imágenes — exportable, compartible y reimportable.
-- **Guardado local automático** (JSON con debounce) — los trazos nunca se pierden ante cierres inesperados.
+### 📚 Organización
+- **Biblioteca** con cuadernos, portadas, favoritos, recientes y vista cuadrícula/lista.
+- **Etiquetas** y **carpetas inteligentes**.
+- **Búsqueda** en todas las notas, incluida la **escritura a mano reconocida** (ML Kit, en el dispositivo).
+- **Marcadores de página**, ir a página y atajos de teclado.
+- **Papelera** con restauración y purga automática a los 30 días.
+- **Recordatorios** vinculados a cuadernos y **estadísticas de escritura** (totales y rachas).
+
+### 💾 Importar, exportar y respaldar
+- **Importar PDF** para anotarlo (una página de la nota por página del PDF).
+- **Exportar** página o cuaderno completo a **PNG, PDF, SVG o PPTX** (render fuera de pantalla, independiente del zoom).
+- **Formato propio `.inklus`**: un único archivo por cuaderno con el documento y sus imágenes: compartible y reimportable.
+- **Guardado instantáneo** de cada cambio e **historial de versiones** local.
+- **Respaldo completo** en `.zip`, con **cifrado opcional AES-256-GCM** (clave derivada con PBKDF2).
+- **Marketplace** de paquetes gratuitos (plantillas, paletas, stickers) con verificación sha256.
+
+### ☁️ Google Drive (opcional)
+La app es **offline-first**: funciona al 100 % sin cuenta ni red. Si inicias sesión con Google:
+- Cada cuaderno se replica a una carpeta **Inklus** de tu Drive como `.inklus`, siempre en el mismo archivo.
+- Usa el permiso **`drive.file`**: la app solo ve los archivos que ella misma crea.
+- **Restaurar desde Drive** trae la versión más reciente de cada nota, y el historial de versiones muestra también las revisiones guardadas en Drive.
 
 ---
 
-## 🧠 Decisiones clave (stylus / rendimiento)
+## 🔒 Privacidad
+
+No hay servidores de Inklus, analítica ni anuncios. Los errores se registran **solo en el dispositivo** y tú decides si compartirlos (Configuración → Registro de errores). Detalles en [`docs/privacy.md`](docs/privacy.md).
+
+---
+
+## 🧠 Decisiones técnicas
 
 ### Rechazo de palma
-Un `Listener` crudo recibe **todos** los eventos de puntero. La lógica:
+Un `Listener` crudo recibe **todos** los eventos de puntero antes que la *gesture arena*. Mientras el lápiz está en contacto o cerca de la pantalla, los toques simultáneos se descartan: no dibujan, no desplazan y no seleccionan. Como `Listener` no compite en la arena de gestos, no hay conflicto con el `GestureDetector` de zoom/pan.
 
-```
-stylus down → _stylusDown = true
-cualquier touch mientras _stylusDown → se descarta (return)
-stylus up → _stylusDown = false
-```
+### Capas de pintado
+- **Capa confirmada** (plantilla + trazos + imágenes) dentro de un `RepaintBoundary`: la GPU la reutiliza mientras solo cambia el trazo en curso.
+- **Capa activa** (trazo en curso, cursor del borrador, selección) encima; se repinta cada frame sin invalidar la confirmada. Añadir un punto es O(1).
+- **Durante el zoom/desplazamiento** el lienzo se dibuja desde una instantánea y solo se pintan en vivo las franjas que el gesto destapa; al soltar se repinta nítido.
+- Culling, cachés por trazo, nivel de detalle en plantillas y codificación de notas grandes en otro isolate.
 
-Como `Listener` no participa en la *gesture arena*, no hay conflicto con el `GestureDetector` de zoom/pan.
-
-### Capas de pintado (rendimiento)
-- **Capa confirmada** (plantilla + trazos + imágenes) dentro de un `RepaintBoundary`. Su `shouldRepaint` devuelve `false` cuando solo cambió el trazo en progreso → la GPU reutiliza la capa cacheada.
-- **Capa activa** (trazo en curso, cursor del borrador, selección) encima, se repinta cada frame sin invalidar la confirmada.
-
-### Coordenadas
-Los trazos se guardan en **coordenadas de mundo** (independientes del zoom). La transformación (escala + traslación) solo afecta a la vista: exportar a cualquier zoom da el mismo resultado.
+### Coordenadas de mundo
+Los trazos se guardan en coordenadas independientes del zoom. La transformación (escala + traslación) solo afecta a la vista, así que exportar da el mismo resultado a cualquier zoom.
 
 ---
 
@@ -68,76 +102,77 @@ Los trazos se guardan en **coordenadas de mundo** (independientes del zoom). La 
 
 ```
 lib/
-├── main.dart / app.dart          # Entrada y tema
-├── models/                       # Stroke, Page, Document, PageTemplate, ImageItem (JSON)
+├── main.dart · app.dart           # Entrada, tema e idiomas
+├── models/                        # Notebook, Note, Page, Stroke, ImageItem, TextItem, Template
 ├── logic/
-│   ├── canvas_controller.dart    # Estado central (ChangeNotifier): herramienta, zoom, deshacer
-│   ├── stroke_engine.dart        # Suavizado perfect_freehand por herramienta
-│   ├── eraser.dart               # Borrado fino que parte trazos en fragmentos
-│   └── undo_stack.dart           # Deshacer/rehacer por acciones
+│   ├── canvas_controller.dart     # Estado central (+ canvas_view / canvas_selection / canvas_layers)
+│   ├── stroke_engine.dart         # Suavizado por herramienta
+│   ├── palm_rejection.dart        # Rechazo de palma
+│   ├── eraser.dart · lasso.dart   # Borrado fino y selección
+│   ├── shape_detector.dart        # Reconocimiento de figuras
+│   ├── ruler.dart · snap_guides.dart
+│   └── undo_stack.dart            # Deshacer/rehacer por página
 ├── services/
-│   ├── storage_service.dart      # Persistencia local JSON (buffer principal)
-│   ├── image_service.dart        # Copia/decodificación de imágenes del dispositivo
-│   ├── export_service.dart       # PNG/PDF (render fuera de pantalla)
-│    └── drive_sync_service.dart   # Sincronización Google: auth + Firestore + Storage
-└── ui/
-    ├── home_screen.dart          # Pantalla principal (barras + lienzo + zoom)
-    ├── canvas/
-    │   ├── drawing_canvas.dart   # Listener (stylus/palma) + GestureDetector (2 dedos)
-    │   └── world_painter.dart    # Pintado de plantillas/trazos/imágenes (compartido con export)
-    └── widgets/                  # Riel de herramientas, paleta, selector de plantillas
+│   ├── storage_service.dart       # Persistencia local (escrituras atómicas)
+│   ├── inklus_format.dart         # Formato .inklus
+│   ├── export_service.dart        # PNG / PDF / SVG (+ pptx_builder.dart)
+│   ├── import_service.dart        # .inklus y respaldos
+│   ├── pdf_import_service.dart    # PDF → páginas anotables
+│   ├── drive_sync_service.dart    # Respaldo en Google Drive
+│   ├── backup_crypto.dart         # AES-256-GCM + PBKDF2
+│   ├── ocr_service.dart           # Reconocimiento de escritura (ML Kit)
+│   ├── search_service.dart · version_history_service.dart
+│   ├── reminder_service.dart · writing_stats_service.dart
+│   └── marketplace/               # Catálogo de paquetes
+├── ui/
+│   ├── canvas/                    # Lienzo, overlays y pintor (compartido con la exportación)
+│   ├── editor/                    # Barra, popovers, panel de páginas, historial
+│   ├── theme/                     # Sistema de diseño (tema, tokens, colores)
+│   ├── widgets/                   # Componentes compartidos
+│   └── *_screen.dart              # Biblioteca, ajustes, papelera, recordatorios…
+└── l10n/                          # Traducciones (español / inglés)
 ```
 
 ---
 
-## 🚀 Ejecutar
+## 🚀 Desarrollo
+
+Requiere **Flutter 3.47** (stable).
 
 ```bash
 flutter pub get
-flutter run -d linux        # escritorio (desarrollo)
-flutter run -d <tablet>     # Android (requiere modo desarrollador/USB)
+flutter run -d linux        # escritorio
+flutter run -d <tablet>     # Android (modo desarrollador / USB)
 ```
 
-Exportar a imagen/PDF usa el selector de archivos nativo de cada plataforma.
+### Tests
 
----
+```bash
+flutter analyze
+flutter test                                          # modelos, storage, lienzo, historial, traducciones…
+flutter test tool/screenshots/screenshots_test.dart   # capturas de la UI (build/screenshots)
+flutter test integration_test -d <dispositivo>        # flujos críticos en tablet/emulador
+```
 
-## ☁️ Sincronización con Google Drive (respaldo opcional)
+La CI de GitHub Actions ejecuta análisis, tests y pruebas de integración en cada PR, y publica los APK firmados al crear un tag `v*` (las notas de la release salen del CHANGELOG).
 
-La app es **offline-first**: todo el contenido (trazos, páginas, plantillas e **imágenes**) vive en el dispositivo y funciona 100% sin cuenta ni red. La sincronización es un **respaldo opcional** a Google Drive, implementada en `lib/services/drive_sync_service.dart`:
+### Google Drive en tu propia compilación
 
-- **Google Sign-In** (`google_sign_in`) con el scope `drive.file`: la app solo ve/crea sus propios archivos en tu Drive (15 GB gratis) — nada se sube a servidores de terceros.
-- Con sesión iniciada, cada guardado local **replica el cuaderno** a una carpeta **Inklus** en tu Drive como `<id>.inklus` en el **formato propio de la app**: un único archivo autocontenido con el documento y sus **imágenes embebidas** (igual que hacen las apps del mercado). Se actualiza siempre en el mismo archivo (no se duplica).
-- **Sesión persistente**: al abrir la app se restaura la sesión silenciosamente (One Tap); el botón ☁️ de la barra superior muestra el estado.
-- **Subir ahora / Restaurar** desde el menú ☁️. Restaurar trae la copia más reciente (por fecha del documento) y extrae sus imágenes a la app automáticamente.
+Si compilas un fork, necesitas tu propio proyecto de Google Cloud (no hace falta Firebase ni `google-services.json`):
 
-### Configuración (solo una vez)
-
-El proyecto **Google Cloud** (`inklus`) ya existe (es el mismo de Firebase) y el APK ya incluye los clientes OAuth — **no hace falta Firebase, ni `google-services.json`, ni `flutterfire`**. Solo:
-
-1. En [console.cloud.google.com](https://console.cloud.google.com) → proyecto `inklus` → **APIs y servicios → Biblioteca**: habilita **Google Drive API**.
-2. En **APIs y servicios → Pantalla de consentimiento de OAuth**: configura la app (usuario externo), añade el scope `https://www.googleapis.com/auth/drive.file` y publícala.
-3. Registra la **huella SHA-1** del keystore de firma en **APIs y servicios → Credenciales** (app Android `com.inklus.inklus`):
+1. En [console.cloud.google.com](https://console.cloud.google.com), crea un proyecto y habilita **Google Drive API**.
+2. Configura la **pantalla de consentimiento OAuth** con el scope `https://www.googleapis.com/auth/drive.file`.
+3. En **Credenciales**, crea un cliente OAuth **Android** (paquete + huella SHA-1 de tu keystore) y un cliente **Web**; pon el ID del cliente web en `android/app/src/main/res/values/strings.xml` (`default_web_client_id`).
    ```bash
    keytool -list -v -alias androiddebugkey -keystore ~/.android/debug.keystore -storepass android -keypass android
    ```
-   (Sin el SHA-1, Google Sign-In devuelve error `10` en Android. Si ya lo registraste para Firebase, es el mismo.)
-
-Y listo: pulsa el ☁️ en la barra superior → **Conectarse con Google**.
-
-> Sin sesión o sin Drive API habilitada, la app funciona igual: todo sigue siendo local (offline-first) y el guardado automático nunca se pierde.
+   Sin la huella SHA-1 registrada, Google Sign-In devuelve el error `10`.
 
 ---
 
-## 🧪 Tests
-
-```bash
-flutter test   # serialización JSON de los modelos
-```
-
 ## 🛠️ Stack
 
-Flutter 3.47 (stable) · `perfect_freehand` (suavizado) · `path_provider` · `file_picker` · `pdf`/`printing` · `archive` (formato `.inklus`) · `google_sign_in` + `googleapis` (Drive, sin Firebase) · `cryptography` (AES-GCM) · ML Kit (OCR) · `share_plus` · `shared_preferences` · Material 3
+Flutter · Dart · Material 3 · `perfect_freehand` · `pdf` / `printing` · `archive` · `google_sign_in` + `googleapis` · `cryptography` · Google ML Kit (texto y tinta digital) · `share_plus` · `file_picker` · `shared_preferences` · `intl`
 
 ## 📜 Licencia
 
@@ -149,4 +184,3 @@ Copyright © 2026 Pedro ([@Pedroj-64](https://github.com/Pedroj-64)) y contribui
 
 Cada archivo fuente lleva la cabecera `// SPDX-License-Identifier: GPL-3.0-or-later`.
 Cualquier versión modificada que se distribuya debe publicarse también bajo GPL-3.0 con su código fuente.
-

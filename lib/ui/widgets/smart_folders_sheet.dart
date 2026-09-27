@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import '../../constants.dart';
 import 'package:flutter/material.dart';
 
+import '../../constants.dart';
 import '../../services/storage_service.dart';
-import '../../utils/theme_colors.dart';
+import '../theme/inklus_colors.dart';
+import '../theme/tokens.dart';
+import 'page_scaffold.dart';
 
 /// Tipo de carpeta dinámica.
 enum SmartFolderType {
@@ -48,19 +50,9 @@ class SmartFolder {
     }
   }
 
-  String _colorName(int color) {
-    switch (color) {
-      case 0xFF3B82F6: return 'Azul'; // kAccentColor.toARGB32()
-      case 0xFF4CAF50: return 'Verde';
-      case 0xFFE53935: return 'Rojo';
-      case 0xFFFF9800: return 'Naranja';
-      case 0xFF9C27B0: return 'Morado';
-      case 0xFFEC407A: return 'Rosa';
-      case 0xFF26C6DA: return 'Turquesa';
-      case 0xFF78909C: return 'Gris';
-      default: return 'Otro';
-    }
-  }
+  static String _colorName(int color) => kCoverColors
+      .firstWhere((c) => c.$2 == color, orElse: () => ('Otro', null))
+      .$1;
 
   /// Filtra la lista de metas según el criterio de esta carpeta.
   List<NotebookMeta> apply(List<NotebookMeta> metas) {
@@ -142,218 +134,105 @@ class _SmartFoldersSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
+    final labelStyle = context.text.titleSmall
+        ?.copyWith(color: context.colors.onSurfaceVariant);
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
       minChildSize: 0.3,
       maxChildSize: 0.85,
       expand: false,
-      builder: (context, scrollController) => Container(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const Text(
-              'Carpetas inteligentes',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Organiza tus cuadernos automáticamente',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-            ),
-            const SizedBox(height: 16),
+      builder: (context, scrollController) => ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(Spacing.lg, 0, Spacing.lg, Spacing.xl),
+        children: [
+          const SheetHeader(
+            icon: Icons.auto_awesome_outlined,
+            title: 'Carpetas inteligentes',
+            subtitle: 'Organiza tus cuadernos automáticamente',
+          ),
+          for (final type in const [
+            SmartFolderType.all,
+            SmartFolderType.recent,
+            SmartFolderType.thisWeek,
+            SmartFolderType.noTags,
+          ])
+            _buildFolderItem(context, SmartFolder(type: type)),
 
-            // Carpetas principales.
-            _buildFolderItem(
-              context,
-              SmartFolder(type: SmartFolderType.all),
-              metas.length,
+          if (allColors.isNotEmpty) ...[
+            const SizedBox(height: Spacing.md),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Spacing.sm),
+              child: Text('Por color', style: labelStyle),
             ),
-            _buildFolderItem(
-              context,
-              SmartFolder(type: SmartFolderType.recent),
-              SmartFolder(type: SmartFolderType.recent).apply(metas).length,
-            ),
-            _buildFolderItem(
-              context,
-              SmartFolder(type: SmartFolderType.thisWeek),
-              SmartFolder(type: SmartFolderType.thisWeek).apply(metas).length,
-            ),
-            _buildFolderItem(
-              context,
-              SmartFolder(type: SmartFolderType.noTags),
-              SmartFolder(type: SmartFolderType.noTags).apply(metas).length,
-            ),
-
-            // Por color.
-            if (allColors.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  'POR COLOR',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: ThemeColors.of(context).textHint,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: allColors.map((color) {
-                  final folder = SmartFolder(
-                    type: SmartFolderType.byColor,
-                    colorFilter: color,
-                  );
-                  final count = folder.apply(metas).length;
-                  final selected = _isSelected(folder);
-                  return ChoiceChip(
-                    label: Text('$count'),
+            const SizedBox(height: Spacing.sm),
+            Wrap(
+              spacing: Spacing.sm,
+              runSpacing: Spacing.sm,
+              children: [
+                for (final color in allColors)
+                  _chip(
+                    context,
+                    SmartFolder(type: SmartFolderType.byColor, colorFilter: color),
                     avatar: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: Color(color),
-                        shape: BoxShape.circle,
-                      ),
+                      width: 14,
+                      height: 14,
+                      decoration:
+                          BoxDecoration(color: Color(color), shape: BoxShape.circle),
                     ),
-                    selected: selected,
-                    onSelected: (_) => Navigator.pop(context, folder),
-                    selectedColor: Color(color).withAlpha(30),
-                    side: BorderSide(
-                      color: selected ? Color(color) : Colors.grey.shade300,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-
-            // Por etiqueta.
-            if (allTags.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  'POR ETIQUETA',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: ThemeColors.of(context).textHint,
-                    letterSpacing: 0.8,
                   ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: allTags.map((tag) {
-                  final folder = SmartFolder(
-                    type: SmartFolderType.byTag,
-                    tagFilter: tag,
-                  );
-                  final count = folder.apply(metas).length;
-                  final selected = _isSelected(folder);
-                  return FilterChip(
-                    avatar: Icon(
-                      Icons.label,
-                      size: 16,
-                      color: selected ? kAccentColor : Colors.grey,
-                    ),
-                    label: Text('$tag ($count)'),
-                    selected: selected,
-                    onSelected: (_) => Navigator.pop(context, folder),
-                    backgroundColor: selected
-                        ? kAccentColor.withAlpha(20)
-                        : null,
-                    side: BorderSide(
-                      color: selected
-                          ? kAccentColor
-                          : Colors.grey.shade300,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
+              ],
+            ),
           ],
-        ),
+
+          if (allTags.isNotEmpty) ...[
+            const SizedBox(height: Spacing.lg),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Spacing.sm),
+              child: Text('Por etiqueta', style: labelStyle),
+            ),
+            const SizedBox(height: Spacing.sm),
+            Wrap(
+              spacing: Spacing.sm,
+              runSpacing: Spacing.sm,
+              children: [
+                for (final tag in allTags)
+                  _chip(
+                    context,
+                    SmartFolder(type: SmartFolderType.byTag, tagFilter: tag),
+                    avatar: const Icon(Icons.label_outline, size: 18),
+                  ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
 
-  Widget _buildFolderItem(
-    BuildContext context,
-    SmartFolder folder,
-    int count,
-  ) {
+  Widget _chip(BuildContext context, SmartFolder folder, {required Widget avatar}) {
+    return FilterChip(
+      avatar: avatar,
+      label: Text('${folder.displayName} · ${folder.apply(metas).length}'),
+      selected: _isSelected(folder),
+      showCheckmark: false,
+      onSelected: (_) => Navigator.pop(context, folder),
+    );
+  }
+
+  Widget _buildFolderItem(BuildContext context, SmartFolder folder) {
     final selected = _isSelected(folder);
+    final count = folder.apply(metas).length;
+    final accent = selected ? context.colors.primary : context.colors.onSurfaceVariant;
     return ListTile(
-      leading: Icon(
-        folder.type.icon,
-        color: selected ? kAccentColor : Colors.grey.shade600,
+      selected: selected,
+      selectedTileColor: context.colors.secondaryContainer,
+      leading: Icon(folder.type.icon, color: accent),
+      title: Text(folder.displayName, style: context.text.titleMedium),
+      trailing: Text(
+        '$count',
+        style: context.text.labelLarge?.copyWith(color: accent),
       ),
-      title: Text(
-        folder.displayName,
-        style: TextStyle(
-          fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-          color: selected ? kAccentColor : null,
-        ),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: selected
-                  ? kAccentColor.withAlpha(20)
-                  : Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '$count',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: selected ? kAccentColor : Colors.grey,
-              ),
-            ),
-          ),
-          if (selected) ...[
-            const SizedBox(width: 8),
-            const Icon(Icons.check, color: kAccentColor, size: 20),
-          ],
-        ],
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      shape: const RoundedRectangleBorder(borderRadius: Radii.mdAll),
       onTap: () => Navigator.pop(context, folder),
     );
   }

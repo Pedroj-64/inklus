@@ -2,6 +2,7 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide Page;
 import 'package:flutter/services.dart';
@@ -15,7 +16,6 @@ import '../../models/image_item.dart';
 import '../../models/page.dart';
 import '../../models/stroke.dart';
 import '../../services/image_service.dart';
-import '../../utils/geometry_utils.dart';
 import '../editor/editor_shortcuts.dart';
 import '../widgets/text_edit_overlay.dart';
 import 'canvas_overlays.dart';
@@ -52,6 +52,13 @@ const Color _strokeSelectionColor = Color(0xFF009688);
 /// [RepaintBoundary] y su `shouldRepaint` devuelve false cuando solo cambió
 /// el trazo en progreso, de modo que la GPU reutiliza la capa cacheada y no
 /// se repinta el lienzo completo en cada frame del trazo activo.
+///
+/// **Pan/zoom por composición**: con [viewGesture] activo no se vuelve a
+/// dibujar todo en cada frame (con miles de trazos eso tiraba los fps). Se
+/// toma una instantánea rasterizada ([ViewSnapshot]) al empezar el gesto y se
+/// dibuja transformada; solo se pintan en vivo las franjas que el gesto deja
+/// al descubierto. Si el zoom se aleja mucho de la instantánea se vuelve a
+/// tomar, y al soltar se repinta nítido.
 /// ---------------------------------------------------------------------------
 class CanvasPainter extends CustomPainter {
   final Page page;
@@ -63,6 +70,17 @@ class CanvasPainter extends CustomPainter {
   final Offset translate;
   final bool isDark;
 
+  /// Hay un gesto de desplazamiento/zoom en curso.
+  final bool viewGesture;
+
+  /// Instantánea compartida entre frames (vive en el State del lienzo).
+  final ViewSnapshot? snapshot;
+  final double devicePixelRatio;
+
+  /// Hojas vecinas apiladas (desplazamiento continuo): se pintan arriba y
+  /// abajo de la actual, desplazadas `dy` en el mundo.
+  final List<({Page page, double dy})> neighbors;
+
   CanvasPainter({
     required this.page,
     required this.contentVersion,
@@ -72,29 +90,140 @@ class CanvasPainter extends CustomPainter {
     required this.scale,
     required this.translate,
     this.isDark = false,
+    this.viewGesture = false,
+    this.snapshot,
+    this.devicePixelRatio = 1,
+    this.neighbors = const [],
   });
+
+  /// Relación de zoom respecto a la instantánea a partir de la cual se
+  /// vuelve a tomar (más allá se nota borrosa o destapa demasiado).
+  static const double _maxSnapshotZoomDrift = 1.6;
+
+  static final Paint _snapshotPaint = Paint()..filterQuality = FilterQuality.low;
 
   @override
   void paint(Canvas canvas, Size size) {
+    final snap = snapshot;
+    if (!viewGesture || snap == null || size.isEmpty) {
+      snap?.clear();
+      _paintLive(canvas, Offset.zero & size, scale, translate);
+      return;
+    }
+
+    final key = Object.hash(page, contentVersion, imageCacheVersion, isDark,
+        sheetSize, size, devicePixelRatio, Object.hashAll(neighbors.map((n) => n.page)));
+    final drift = snap.image == null ? 1.0 : scale / snap.scale;
+    if (snap.image == null ||
+        snap.key != key ||
+        drift > _maxSnapshotZoomDrift ||
+        drift < 1 / _maxSnapshotZoomDrift) {
+      _capture(snap, key, size);
+    }
+
+    final image = snap.image!;
+    final k = scale / snap.scale;
+    final cover = Rect.fromLTWH(
+      translate.dx - snap.translate.dx * k,
+      translate.dy - snap.translate.dy * k,
+      size.width * k,
+      size.height * k,
+    );
+    final view = Offset.zero & size;
+    for (final strip in uncoveredStrips(view, cover)) {
+      canvas.save();
+      canvas.clipRect(strip);
+      _paintLive(canvas, strip, scale, translate);
+      canvas.restore();
+    }
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      cover,
+      _snapshotPaint,
+    );
+  }
+
+  /// Rasteriza la vista actual en [snap] (a la densidad de la pantalla).
+  void _capture(ViewSnapshot snap, int key, Size size) {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.scale(devicePixelRatio);
+    _paintLive(canvas, Offset.zero & size, scale, translate);
+    final picture = recorder.endRecording();
+    snap.replace(
+      picture.toImageSync(
+        (size.width * devicePixelRatio).ceil(),
+        (size.height * devicePixelRatio).ceil(),
+      ),
+      key: key,
+      scale: scale,
+      translate: translate,
+    );
+    picture.dispose();
+  }
+
+  /// Pinta el mundo en la zona [screenRect] de la pantalla (culling incluido).
+  void _paintLive(Canvas canvas, Rect screenRect, double scale, Offset translate) {
     canvas.save();
     canvas.translate(translate.dx, translate.dy);
     canvas.scale(scale);
-    final visibleWorld = Rect.fromLTWH(
-      -translate.dx / scale,
-      -translate.dy / scale,
-      size.width / scale,
-      size.height / scale,
+    final visible = Rect.fromLTRB(
+      (screenRect.left - translate.dx) / scale,
+      (screenRect.top - translate.dy) / scale,
+      (screenRect.right - translate.dx) / scale,
+      (screenRect.bottom - translate.dy) / scale,
     );
+    // Vecinas primero (solo si asoman), la actual encima. El escritorio lo
+    // pinta solo la primera hoja dibujada.
+    var desk = true;
+    for (final n in neighbors) {
+      final nSize = n.page.template.sheetSize;
+      final shifted = visible.shift(Offset(0, -n.dy));
+      if (!shifted.overlaps(Rect.fromCenter(
+          center: Offset.zero, width: nSize.width, height: nSize.height).inflate(24))) {
+        continue;
+      }
+      canvas.save();
+      canvas.translate(0, n.dy);
+      paintWorld(
+        canvas,
+        visibleWorldRect: shifted,
+        page: n.page,
+        sheetSize: nSize,
+        imageCache: imageCache,
+        isDark: isDark,
+        viewScale: scale,
+        paintDesk: desk,
+      );
+      desk = false;
+      canvas.restore();
+    }
     paintWorld(
       canvas,
-      visibleWorldRect: visibleWorld,
+      visibleWorldRect: visible,
       page: page,
       sheetSize: sheetSize,
       imageCache: imageCache,
       isDark: isDark,
       viewScale: scale,
+      paintDesk: desk,
     );
     canvas.restore();
+  }
+
+  /// Partes de [view] que no cubre [cover] (hasta 4 franjas sin solaparse).
+  @visibleForTesting
+  static List<Rect> uncoveredStrips(Rect view, Rect cover) {
+    final c = view.intersect(cover);
+    if (c.width <= 0 || c.height <= 0) return [view];
+    return [
+      if (c.top > view.top) Rect.fromLTRB(view.left, view.top, view.right, c.top),
+      if (c.bottom < view.bottom)
+        Rect.fromLTRB(view.left, c.bottom, view.right, view.bottom),
+      if (c.left > view.left) Rect.fromLTRB(view.left, c.top, c.left, c.bottom),
+      if (c.right < view.right) Rect.fromLTRB(c.right, c.top, view.right, c.bottom),
+    ];
   }
 
   @override
@@ -106,7 +235,44 @@ class CanvasPainter extends CustomPainter {
       oldDelegate.translate != translate ||
       oldDelegate.imageCache != imageCache ||
       oldDelegate.imageCacheVersion != imageCacheVersion ||
-      oldDelegate.isDark != isDark;
+      oldDelegate.isDark != isDark ||
+      oldDelegate.viewGesture != viewGesture ||
+      oldDelegate.devicePixelRatio != devicePixelRatio ||
+      !listEquals(oldDelegate.neighbors.map((n) => n.page).toList(),
+          neighbors.map((n) => n.page).toList());
+}
+
+/// Instantánea rasterizada de la capa confirmada usada durante un gesto de
+/// pan/zoom (ver [CanvasPainter]). La conserva el State del lienzo entre
+/// frames y se libera al terminar el gesto.
+class ViewSnapshot {
+  ui.Image? image;
+
+  /// Hash del contenido con que se tomó (página, versión, tema, tamaño…).
+  int? key;
+
+  /// Vista con que se tomó.
+  double scale = 1;
+  Offset translate = Offset.zero;
+
+  void replace(
+    ui.Image newImage, {
+    required int key,
+    required double scale,
+    required Offset translate,
+  }) {
+    image?.dispose();
+    image = newImage;
+    this.key = key;
+    this.scale = scale;
+    this.translate = translate;
+  }
+
+  void clear() {
+    image?.dispose();
+    image = null;
+    key = null;
+  }
 }
 
 /// ---------------------------------------------------------------------------
@@ -171,29 +337,22 @@ class ActiveLayerPainter extends CustomPainter {
         if (StrokeEngine.outlineFor(stroke).length < 3) continue;
         canvas.drawPath(StrokeEngine.pathFor(stroke), _selectionFillPaint);
       }
-      // Recuadro punteado (marching ants) + asas de escala/rotación, que
-      // solo afectan a los trazos.
-      {
-        final bounds = controller.selectionBoundsAll;
-        if (!bounds.isEmpty && selectedStrokes.isEmpty) {
-          drawMarchingAnts(canvas, bounds.inflate(8 / scale), scale);
-        } else if (!bounds.isEmpty) {
-          final inflated = bounds.inflate(8 / scale);
-          drawMarchingAnts(canvas, inflated, scale);
-          // Handle de escala (esquina inferior derecha).
-          final r = 11 / scale;
-          canvas.drawCircle(inflated.bottomRight, r,
-            Paint()..color = _strokeSelectionColor);
-          canvas.drawCircle(inflated.bottomRight, r, Paint()
-            ..style = PaintingStyle.stroke..strokeWidth = 2 / scale..color = Colors.white);
-          // Handle de rotación (centro superior).
-          final rotH = Offset(inflated.center.dx, inflated.top - r * 3);
-          canvas.drawLine(inflated.topCenter, rotH,
+      // Recuadro punteado (marching ants) + asas de escala/rotación (para
+      // toda la selección: trazos, imágenes y textos).
+      if (!controller.selectionBoundsAll.isEmpty) {
+        final h = controller.selectionHandles;
+        drawMarchingAnts(canvas, h.frame, scale);
+        final fill = Paint()..color = _strokeSelectionColor;
+        final ring = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2 / scale
+          ..color = Colors.white;
+        canvas.drawCircle(h.scale, h.radius, fill);
+        canvas.drawCircle(h.scale, h.radius, ring);
+        canvas.drawLine(h.frame.topCenter, h.rotate,
             Paint()..color = _strokeSelectionColor..strokeWidth = 2 / scale);
-          canvas.drawCircle(rotH, r, Paint()..color = _strokeSelectionColor);
-          canvas.drawCircle(rotH, r, Paint()
-            ..style = PaintingStyle.stroke..strokeWidth = 2 / scale..color = Colors.white);
-        }
+        canvas.drawCircle(h.rotate, h.radius, fill);
+        canvas.drawCircle(h.rotate, h.radius, ring);
       }
     }
 
@@ -374,7 +533,23 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
 
   // Estado de punteros.
   int? _drawingPointer;
-  bool _transforming = false;
+
+  /// Gesto de pan/zoom en curso. Es un notificador para que la capa
+  /// confirmada cambie a la instantánea (y vuelva a nítido al soltar) sin
+  /// reconstruir toda la pantalla.
+  final ValueNotifier<bool> _viewGesture = ValueNotifier(false);
+  bool get _transforming => _viewGesture.value;
+  set _transforming(bool value) => _viewGesture.value = value;
+
+  /// Instantánea de la capa confirmada durante el pan/zoom.
+  final ViewSnapshot _viewSnapshot = ViewSnapshot();
+
+  @override
+  void dispose() {
+    _viewGesture.dispose();
+    _viewSnapshot.clear();
+    super.dispose();
+  }
 
   /// Rechazo de palma (lápiz apoyado/cerca, contacto grande).
   final PalmRejection _palm = PalmRejection();
@@ -466,11 +641,15 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                   // Capa confirmada, cacheada por RepaintBoundary.
                   _nightFilter(RepaintBoundary(
                     child: ListenableBuilder(
-                      listenable: widget.controller,
+                      listenable: Listenable.merge([widget.controller, _viewGesture]),
                       builder: (context, _) {
                         return CustomPaint(
                           size: Size.infinite,
                           painter: CanvasPainter(
+                            viewGesture: _viewGesture.value,
+                            snapshot: _viewSnapshot,
+                            devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                            neighbors: widget.controller.stackedNeighbors,
                             page: widget.controller.page,
                             contentVersion: widget.controller.contentVersion,
                             sheetSize: widget.controller.sheetSize,
@@ -523,16 +702,17 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   /// Decodifica (una sola vez) las imágenes de la página y de la plantilla
   /// para poder pintarlas. Al terminar, repinta.
   void _ensureImagesDecoded() {
-    for (final item in widget.controller.page.images) {
-      widget.imageService.ensureCached(item.localPath).then((_) {
-        if (mounted) setState(() {});
-      });
-    }
-    final templatePath = widget.controller.page.template.imagePath;
-    if (templatePath != null) {
-      widget.imageService.ensureCached(templatePath).then((_) {
-        if (mounted) setState(() {});
-      });
+    final c = widget.controller;
+    for (final page in [c.page, for (final n in c.stackedNeighbors) n.page]) {
+      for (final path in [
+        for (final item in page.images) item.localPath,
+        ?page.template.imagePath,
+      ]) {
+        if (widget.imageService.cache.containsKey(path)) continue;
+        widget.imageService.ensureCached(path).then((_) {
+          if (mounted) setState(() {});
+        });
+      }
     }
   }
 
@@ -842,19 +1022,17 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       final bounds = controller.selectionBoundsAll;
       _transformSelectionBounds = bounds;
       final handleSize = handleWorld * 1.5;
-      final hasStrokes = selectedStrokes.isNotEmpty;
+      final handles = controller.selectionHandles;
 
-      // ¿Toca el asa de rotación (centro superior)? Solo trazos.
-      final rotHandle = Offset(bounds.center.dx, bounds.top - handleSize * 2);
-      if (hasStrokes && (world - rotHandle).distance <= handleSize) {
+      // ¿Toca el asa de rotación (sobre el centro superior)?
+      if ((world - handles.rotate).distance <= handleSize) {
         _rotatingSelection = true;
         _transformStartAngle = (world - bounds.center).direction;
         _transformStrokesBefore = List<Stroke>.from(selectedStrokes);
         return;
       }
-      // ¿Toca el handle de escala (esquina inferior derecha)?
-      final scaleHandle = bounds.bottomRight;
-      if (hasStrokes && (world - scaleHandle).distance <= handleSize) {
+      // ¿Toca el asa de escala (esquina inferior derecha)?
+      if ((world - handles.scale).distance <= handleSize) {
         _scalingSelection = true;
         _transformStartDist = (world - bounds.center).distance;
         _transformStrokesBefore = List<Stroke>.from(selectedStrokes);
@@ -954,10 +1132,6 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
             pivotPoint: pivot,
           );
           _transformStartDist = currentDist;
-          // Actualizar bounds para que el handle se mantenga sincronizado.
-          _transformSelectionBounds = _computeSelectionBounds(
-            widget.controller.selectedStrokes,
-          );
         }
       } else if (_rotatingSelection) {
         final currentAngle = (world - pivot).direction;
@@ -967,10 +1141,9 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
           rotationAngle: delta,
           pivotPoint: pivot,
         );
+        // El pivote (centro al empezar) queda fijo: si se recalculara en
+        // cada frame, la selección rotada "derivaría".
         _transformStartAngle = currentAngle;
-        _transformSelectionBounds = _computeSelectionBounds(
-          widget.controller.selectedStrokes,
-        );
       }
       return;
     }
@@ -1089,5 +1262,4 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
 
-  Rect _computeSelectionBounds(List<Stroke> strokes) => selectionBounds(strokes);
 }

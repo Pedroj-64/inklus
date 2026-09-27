@@ -78,8 +78,8 @@ class SelectionBar extends StatelessWidget {
     );
   }
 
-  /// [hasStrokes]: color, grosor, copiar/duplicar y convertir a texto solo
-  /// aplican a trazos; mover y eliminar aplican a toda la selección.
+  /// [hasStrokes]: color, grosor y convertir a texto solo aplican a trazos;
+  /// copiar, duplicar, mover, escalar/rotar y eliminar, a toda la selección.
   List<Widget> _selectionActions(
     BuildContext context,
     int count,
@@ -89,20 +89,20 @@ class SelectionBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: Spacing.sm),
       child: Text('$count', style: context.text.labelLarge),
     ),
+    _Action(
+      icon: Icons.copy,
+      label: 'Copiar',
+      onTap: () {
+        canvas.copySelectedStrokes();
+        onMessage('Copiado');
+      },
+    ),
+    _Action(
+      icon: Icons.copy_all_outlined,
+      label: 'Duplicar',
+      onTap: canvas.duplicateSelectedStrokes,
+    ),
     if (hasStrokes) ...[
-      _Action(
-        icon: Icons.copy,
-        label: 'Copiar',
-        onTap: () {
-          canvas.copySelectedStrokes();
-          onMessage('Copiado');
-        },
-      ),
-      _Action(
-        icon: Icons.copy_all_outlined,
-        label: 'Duplicar',
-        onTap: canvas.duplicateSelectedStrokes,
-      ),
       Builder(
         builder: (anchor) => _Action(
           icon: Icons.palette_outlined,

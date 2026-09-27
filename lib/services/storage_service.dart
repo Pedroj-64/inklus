@@ -6,7 +6,6 @@ import 'dart:isolate';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../models/document.dart';
 import '../models/note.dart';
@@ -14,6 +13,7 @@ import '../models/notebook.dart';
 import '../models/template.dart';
 import '../models/id.dart';
 import 'file_utils.dart';
+import 'app_paths.dart';
 
 /// Metadatos de un cuaderno para el índice (sin páginas/trazos).
 class NotebookMeta {
@@ -140,10 +140,7 @@ class StorageService {
 
   Future<Directory> _baseDir() async {
     if (_baseDirOverride != null) return _baseDirOverride;
-    final dir = await getApplicationSupportDirectory();
-    final folder = Directory('${dir.path}/inklus');
-    if (!await folder.exists()) await folder.create(recursive: true);
-    return folder;
+    return AppPaths.root();
   }
 
   /// Carpeta raíz de datos (`<appSupport>/inklus`, o la de tests).
@@ -862,22 +859,12 @@ class StorageService {
       }
     }
 
-    // Mover notebook a papelera
-    final trashDir = Directory('${base.path}/trash');
-    if (!await trashDir.exists()) await trashDir.create(recursive: true);
-    if (await nbFile.exists()) {
-      await nbFile.copy('${trashDir.path}/$id.json');
-      await nbFile.delete();
-    }
-
-    // Mover cada Note a papelera
+    // Mover cada Note y luego el notebook (con la fecha de borrado) a la
+    // papelera. Las notas no llevan marca: pertenecen al cuaderno.
     for (final nid in noteIds) {
-      final noteFile = await _noteFile(base, nid);
-      if (await noteFile.exists()) {
-        await noteFile.copy('${trashDir.path}/$nid.json');
-        await noteFile.delete();
-      }
+      await _moveToTrash(base, await _noteFile(base, nid), nid);
     }
+    await _moveToTrash(base, nbFile, id, marker: const {});
 
     // Quitar del índice
     await _updateIndex(base, (metas) => metas.removeWhere((m) => m.id == id));
@@ -965,22 +952,21 @@ class StorageService {
   Future<void> deleteNote(String notebookId, String noteId) async {
     final base = await _baseDir();
     // Quitar de la lista (nunca el último note).
+    String? notebookTitle;
     final removed = await _editNotebook(notebookId, (json) {
       final ids = _noteIdsOf(json);
       if (ids.length <= 1 || !ids.remove(noteId)) return false;
       json['noteIds'] = ids;
+      notebookTitle = json['title'] as String?;
       return true;
     }, touch: true);
     if (!removed) return;
 
-    // Mover archivo a papelera
-    final trashDir = Directory('${base.path}/trash');
-    if (!await trashDir.exists()) await trashDir.create(recursive: true);
-    final noteFile = await _noteFile(base, noteId);
-    if (await noteFile.exists()) {
-      await noteFile.copy('${trashDir.path}/$noteId.json');
-      await noteFile.delete();
-    }
+    // A la papelera recordando de qué cuaderno venía (para devolverla).
+    await _moveToTrash(base, await _noteFile(base, noteId), noteId, marker: {
+      'notebookId': notebookId,
+      'notebookTitle': ?notebookTitle,
+    });
 
     // Limpiar imágenes huérfanas en background.
     unawaited(collectOrphanedImages());
@@ -1033,73 +1019,143 @@ class StorageService {
   // Papelera
   // -------------------------------------------------------------------------
 
-  /// Lista los cuadernos en la papelera, ordenados por fecha de eliminación
-  /// (el más reciente primero). Soporta formato legacy (Document) y
-  /// formato actual (Notebook + Note).
-  Future<List<NotebookMeta>> loadTrash() async {
-    final base = await _baseDir();
-    final trashDir = Directory('${base.path}/trash');
-    if (!await trashDir.exists()) return [];
-    final metas = <NotebookMeta>[];
-    await for (final entity in trashDir.list()) {
+  /// Clave con los metadatos de borrado dentro de un JSON de la papelera
+  /// (`deletedAt` y, en notas sueltas, `notebookId`/`notebookTitle`).
+  static const _trashKey = '_trash';
+
+  /// Días que un elemento pasa en la papelera antes de borrarse solo.
+  static const trashRetention = Duration(days: 30);
+
+  Directory _trashDir(Directory base) => Directory('${base.path}/trash');
+
+  /// Mueve [src] a `trash/<id>.json`. Con [marker] se añaden los metadatos
+  /// de borrado (+ `deletedAt`) al JSON; sin él se mueve tal cual.
+  Future<void> _moveToTrash(
+    Directory base,
+    File src,
+    String id, {
+    Map<String, dynamic>? marker,
+  }) async {
+    if (!await src.exists()) return;
+    final dest = File('${_trashDir(base).path}/$id.json');
+    if (marker == null) {
+      await dest.parent.create(recursive: true);
+      await src.copy(dest.path);
+    } else {
+      final json = jsonDecode(await src.readAsString()) as Map<String, dynamic>;
+      json[_trashKey] = {
+        ...marker,
+        'deletedAt': DateTime.now().toIso8601String(),
+      };
+      await writeAtomic(dest, jsonEncode(json));
+    }
+    await src.delete();
+  }
+
+  /// JSON de cada archivo de la papelera (id → contenido). Los ilegibles se
+  /// omiten.
+  Future<Map<String, (File, Map<String, dynamic>)>> _readTrash(Directory base) async {
+    final dir = _trashDir(base);
+    final result = <String, (File, Map<String, dynamic>)>{};
+    if (!await dir.exists()) return result;
+    await for (final entity in dir.list()) {
       if (entity is! File || !entity.path.endsWith('.json')) continue;
       try {
         final raw = await entity.readAsString();
         if (raw.trim().isEmpty) continue;
-        final json = jsonDecode(raw) as Map<String, dynamic>;
-        // Detectar formato: si tiene 'noteIds' es Notebook; si tiene 'pages' es Document.
-        if (json.containsKey('noteIds')) {
-          // Formato Notebook (v2)
-          metas.add(NotebookMeta.fromJson(json));
-        } else {
-          // Formato Document legacy
-          final doc = Document.fromJson(json);
-          metas.add(NotebookMeta(
-            id: doc.id,
-            title: doc.title,
-            updatedAt: doc.updatedAt,
-            colorValue: doc.colorValue,
-          ));
-        }
+        final id = entity.uri.pathSegments.last.replaceAll('.json', '');
+        result[id] = (entity, jsonDecode(raw) as Map<String, dynamic>);
       } catch (e) {
-        // Archivo corrupto: se ignora pero queda registrado.
-        debugPrint('StorageService.loadTrash: ${entity.path}: $e');
+        debugPrint('StorageService._readTrash: ${entity.path}: $e');
       }
     }
-    metas.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    return metas;
+    return result;
   }
 
-  /// Restaura un cuaderno desde la papelera al índice.
-  /// Soporta formato legacy (Document) y formato actual (Notebook + Note).
+  /// Lista la papelera (lo borrado más reciente primero): cuadernos, notas
+  /// sueltas y documentos legacy. Las notas de un cuaderno borrado van
+  /// dentro de su entrada, no sueltas. Lo que lleva más de
+  /// [trashRetention] se borra definitivamente al listar.
+  Future<List<TrashEntry>> loadTrash() async {
+    final base = await _baseDir();
+    final files = await _readTrash(base);
+    final owned = <String>{
+      for (final (_, json) in files.values)
+        if (json.containsKey('noteIds')) ..._noteIdsOf(json),
+    };
+    final entries = <TrashEntry>[];
+    final expired = <String>[];
+    final now = DateTime.now();
+    for (final MapEntry(key: id, value: (file, json)) in files.entries) {
+      if (owned.contains(id)) continue;
+      final marker = json[_trashKey] as Map<String, dynamic>?;
+      final deletedAt =
+          DateTime.tryParse(marker?['deletedAt'] as String? ?? '') ??
+              await file.lastModified();
+      if (now.difference(deletedAt) > trashRetention) {
+        expired.add(id);
+        continue;
+      }
+      if (json.containsKey('noteIds')) {
+        entries.add(TrashEntry(
+          id: id,
+          kind: TrashKind.notebook,
+          title: json['title'] as String? ?? 'Cuaderno',
+          deletedAt: deletedAt,
+          colorValue: (json['color'] as num?)?.toInt(),
+          noteCount: _noteIdsOf(json).length,
+        ));
+      } else if (marker?['notebookId'] != null || id.startsWith('note')) {
+        entries.add(TrashEntry(
+          id: id,
+          kind: TrashKind.note,
+          title: json['title'] as String? ?? 'Nota',
+          deletedAt: deletedAt,
+          notebookId: marker?['notebookId'] as String?,
+          notebookTitle: marker?['notebookTitle'] as String?,
+        ));
+      } else {
+        final doc = Document.fromJson(json);
+        entries.add(TrashEntry(
+          id: id,
+          kind: TrashKind.legacyDocument,
+          title: doc.title,
+          deletedAt: deletedAt,
+          colorValue: doc.colorValue,
+        ));
+      }
+    }
+    for (final id in expired) {
+      await _purgeTrashFiles(base, files, id);
+    }
+    if (expired.isNotEmpty) unawaited(collectOrphanedImages());
+    entries.sort((a, b) => b.deletedAt.compareTo(a.deletedAt));
+    return entries;
+  }
+
+  /// Restaura un elemento de la papelera:
+  /// - **cuaderno**: vuelve con todas sus notas;
+  /// - **nota suelta**: vuelve a su cuaderno si aún existe; si no, a un
+  ///   cuaderno nuevo con el nombre del original;
+  /// - **documento legacy**: como antes (formato antiguo).
   Future<void> restoreFromTrash(String id) async {
     final base = await _baseDir();
-    final trashFile = File('${base.path}/trash/$id.json');
-    if (!await trashFile.exists()) return;
-
-    final raw = await trashFile.readAsString();
-    if (raw.trim().isEmpty) return;
-    final json = jsonDecode(raw) as Map<String, dynamic>;
+    final files = await _readTrash(base);
+    final hit = files[id];
+    if (hit == null) return;
+    final (trashFile, json) = hit;
+    final marker = json.remove(_trashKey) as Map<String, dynamic>?;
 
     if (json.containsKey('noteIds')) {
-      // ---- Formato Notebook (v2) ----
-      // Restaurar el notebook y cada note asociado.
-      final noteIds = (json['noteIds'] as List? ?? [])
-          .map((e) => e as String)
-          .toList();
-      for (final nid in noteIds) {
-        final noteTrash = File('${base.path}/trash/$nid.json');
-        if (await noteTrash.exists()) {
-          final notesDir = await _notesDir(base);
-          await noteTrash.copy('${notesDir.path}/$nid.json');
-          await noteTrash.delete();
-        }
+      final notesDir = await _notesDir(base);
+      for (final nid in _noteIdsOf(json)) {
+        final noteTrash = files[nid]?.$1;
+        if (noteTrash == null) continue;
+        await noteTrash.copy('${notesDir.path}/$nid.json');
+        await noteTrash.delete();
       }
-      // Mover el notebook a su carpeta.
-      final notebooksDir = await _notebooksDir(base);
-      await trashFile.copy('${notebooksDir.path}/$id.json');
+      await writeAtomic(await _notebookFile(base, id), jsonEncode(json));
       await trashFile.delete();
-      // Reconstruir el índice.
       final nb = await loadNotebook(id);
       if (nb != null) {
         await _updateIndex(base, (metas) {
@@ -1115,61 +1171,63 @@ class StorageService {
           ));
         });
       }
+    } else if (marker?['notebookId'] != null || id.startsWith('note')) {
+      final note = Note.fromJson(json);
+      final notebookId = marker?['notebookId'] as String?;
+      var restored = false;
+      if (notebookId != null) {
+        await _saveNoteRaw(base, note);
+        restored = await _editNotebook(notebookId, (nb) {
+          nb['noteIds'] = [..._noteIdsOf(nb), note.id];
+          return true;
+        }, touch: true);
+        if (!restored) await _deleteNoteFile(note.id);
+      }
+      if (!restored) {
+        await saveNotebook(Notebook(
+          id: newId('nb'),
+          title: marker?['notebookTitle'] as String? ?? 'Notas recuperadas',
+          notes: [note],
+        ));
+      }
+      await trashFile.delete();
     } else {
       // ---- Formato Document legacy ----
       final docs = await _docsDir(base);
-      final docFile = File('${docs.path}/$id.json');
-      await trashFile.copy(docFile.path);
+      await writeAtomic(File('${docs.path}/$id.json'), jsonEncode(json));
       await trashFile.delete();
-      // Reconstruir el índice leyendo el documento restaurado.
       final doc = await load(id);
       if (doc != null) await save(doc);
     }
   }
 
-  /// Carga un documento completo desde la papelera.
-  Future<Document?> loadFromTrash(String id) async {
-    final base = await _baseDir();
-    final trashFile = File('${base.path}/trash/$id.json');
-    try {
-      if (!await trashFile.exists()) return null;
-      final raw = await trashFile.readAsString();
-      if (raw.trim().isEmpty) return null;
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      if (json.containsKey('noteIds')) {
-        // Notebook format: reconstruct a Document for backward compatibility.
-        final nb = await loadNotebook(id);
-        if (nb == null) return null;
-        return Document(
-          id: nb.id,
-          title: nb.title,
-          createdAt: nb.createdAt,
-          updatedAt: nb.updatedAt,
-          pages: nb.notes.expand((n) => n.pages).toList(),
-          colorValue: nb.colorValue,
-          tags: nb.tags,
-        );
-      }
-      return Document.fromJson(json);
-    } catch (e) {
-      debugPrint('StorageService.loadFromTrash: $e');
-      return null;
-    }
-  }
-
-  /// Elimina definitivamente un cuaderno de la papelera.
+  /// Elimina definitivamente un elemento de la papelera (un cuaderno, con
+  /// sus notas).
   Future<void> purgeFromTrash(String id) async {
     final base = await _baseDir();
-    final trashFile = File('${base.path}/trash/$id.json');
-    if (await trashFile.exists()) await trashFile.delete();
-    // Limpiar imágenes huérfanas.
+    await _purgeTrashFiles(base, await _readTrash(base), id);
     unawaited(collectOrphanedImages());
+  }
+
+  Future<void> _purgeTrashFiles(
+    Directory base,
+    Map<String, (File, Map<String, dynamic>)> files,
+    String id,
+  ) async {
+    final hit = files[id];
+    if (hit == null) return;
+    final (file, json) = hit;
+    for (final nid in _noteIdsOf(json)) {
+      final noteFile = files[nid]?.$1;
+      if (noteFile != null && await noteFile.exists()) await noteFile.delete();
+    }
+    if (await file.exists()) await file.delete();
   }
 
   /// Vacía toda la papelera (elimina definitivamente todo).
   Future<void> emptyTrash() async {
     final base = await _baseDir();
-    final trashDir = Directory('${base.path}/trash');
+    final trashDir = _trashDir(base);
     if (await trashDir.exists()) await trashDir.delete(recursive: true);
     // Limpiar imágenes huérfanas.
     unawaited(collectOrphanedImages());
@@ -1480,5 +1538,51 @@ class StorageService {
     } finally {
       _collectingOrphans = false;
     }
+  }
+}
+
+/// Tipo de elemento de la papelera.
+enum TrashKind {
+  /// Cuaderno completo (con sus notas).
+  notebook,
+
+  /// Nota borrada de un cuaderno que sigue existiendo.
+  note,
+
+  /// Documento del formato antiguo.
+  legacyDocument,
+}
+
+/// Elemento de la papelera, listo para mostrarse.
+class TrashEntry {
+  const TrashEntry({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.deletedAt,
+    this.colorValue,
+    this.noteCount = 0,
+    this.notebookId,
+    this.notebookTitle,
+  });
+
+  final String id;
+  final TrashKind kind;
+  final String title;
+  final DateTime deletedAt;
+  final int? colorValue;
+
+  /// Notas del cuaderno ([TrashKind.notebook]).
+  final int noteCount;
+
+  /// Cuaderno del que venía una nota ([TrashKind.note]).
+  final String? notebookId;
+  final String? notebookTitle;
+
+  /// Días que le quedan antes del borrado automático.
+  int get daysLeft {
+    final left = StorageService.trashRetention -
+        DateTime.now().difference(deletedAt);
+    return left.isNegative ? 0 : (left.inMinutes / Duration.minutesPerDay).ceil();
   }
 }

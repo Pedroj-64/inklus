@@ -4,12 +4,12 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import '../theme/inklus_colors.dart';
 
 import '../../logic/canvas_controller.dart';
 import '../../models/template.dart';
 import '../../services/image_service.dart';
 import '../../services/template_library_service.dart';
-import '../../utils/theme_colors.dart';
 import 'dialogs.dart';
 import '../../services/marketplace/marketplace_service.dart';
 
@@ -104,13 +104,13 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: kAccentColor.withAlpha(20),
+                    color: context.colors.primary.withAlpha(20),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.dashboard_customize_outlined,
                     size: 20,
-                    color: kAccentColor,
+                    color: context.colors.primary,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -124,7 +124,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                       ),
                       Text(
                         'Infinitas se alargan al escribir',
-                        style: TextStyle(fontSize: 12, color: ThemeColors.of(context).textSecondary),
+                        style: TextStyle(fontSize: 12, color: context.colors.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -315,7 +315,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                       decoration: BoxDecoration(
                         color: _lineColor,
                         shape: BoxShape.circle,
-                        border: Border.all(color: ThemeColors.of(context).border),
+                        border: Border.all(color: context.colors.outline),
                       ),
                     ),
                   ),
@@ -712,16 +712,16 @@ class _TemplateTile extends StatelessWidget {
         width: 108,
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEBF0FF) : Colors.grey.shade50,
+          color: selected ? context.colors.secondaryContainer : context.colors.surfaceContainerLow,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? kAccentColor : Colors.grey.shade200,
+            color: selected ? context.colors.primary : context.colors.outlineVariant,
             width: selected ? 2 : 1,
           ),
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: kAccentColor.withAlpha(30),
+                    color: context.colors.primary.withAlpha(30),
                     blurRadius: 8,
                     spreadRadius: 1,
                   ),
@@ -736,14 +736,14 @@ class _TemplateTile extends StatelessWidget {
               height: 44,
               decoration: BoxDecoration(
                 color: selected
-                    ? kAccentColor.withAlpha(20)
-                    : Colors.grey.withAlpha(15),
+                    ? context.colors.primary.withAlpha(20)
+                    : context.colors.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 icon,
                 size: 26,
-                color: selected ? kAccentColor : ThemeColors.of(context).textHint,
+                color: selected ? context.colors.primary : context.colors.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 8),
@@ -753,7 +753,7 @@ class _TemplateTile extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                color: selected ? kAccentColor : ThemeColors.of(context).textSecondary,
+                color: selected ? context.colors.primary : context.colors.onSurfaceVariant,
               ),
             ),
           ],
@@ -788,7 +788,7 @@ class _ColorDot extends StatelessWidget {
           color: color,
           shape: BoxShape.circle,
           border: Border.all(
-            color: showBorder || selected ? ThemeColors.of(context).border : Colors.transparent,
+            color: showBorder || selected ? context.colors.outline : Colors.transparent,
             width: selected ? 3 : 1,
           ),
           boxShadow: selected
@@ -833,10 +833,10 @@ class _SizePreset extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? kAccentSelectionLight : kSurfaceLight,
+          color: isActive ? context.colors.secondaryContainer : context.colors.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isActive ? kAccentColor : Colors.transparent,
+            color: isActive ? context.colors.primary : Colors.transparent,
             width: 1.5,
           ),
         ),
@@ -845,7 +845,7 @@ class _SizePreset extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-            color: isActive ? kAccentColor : ThemeColors.of(context).textSecondary,
+            color: isActive ? context.colors.primary : context.colors.onSurfaceVariant,
           ),
         ),
       ),
@@ -875,10 +875,10 @@ class _SavedTemplateTile extends StatelessWidget {
       child: Container(
         width: 80,
         decoration: BoxDecoration(
-          color: selected ? kAccentSelectionLight : kSurfaceLight,
+          color: selected ? context.colors.secondaryContainer : context.colors.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? kAccentColor : Colors.transparent,
+            color: selected ? context.colors.primary : Colors.transparent,
             width: 2,
           ),
         ),
@@ -893,7 +893,7 @@ class _SavedTemplateTile extends StatelessWidget {
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stack) => Icon(
                     Icons.broken_image,
-                    color: ThemeColors.of(context).border,
+                    color: context.colors.outline,
                   ),
                 ),
               ),
@@ -905,7 +905,7 @@ class _SavedTemplateTile extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-                  color: selected ? kAccentColor : ThemeColors.of(context).textSecondary,
+                  color: selected ? context.colors.primary : context.colors.onSurfaceVariant,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -931,7 +931,7 @@ class _SectionLabel extends StatelessWidget {
       style: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w600,
-        color: Colors.grey.shade600,
+        color: context.colors.onSurfaceVariant,
       ),
     );
   }

@@ -2,10 +2,10 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 
 import 'file_utils.dart';
+import 'app_paths.dart';
 
 /// Servicio de importación de PDF.
 ///
@@ -94,8 +94,7 @@ class PdfImportService {
   }) async* {
     if (!isSupported) return;
     final bytes = await File(pdfPath).readAsBytes();
-    final dir = await getApplicationSupportDirectory();
-    final out = Directory('${dir.path}/inklus/pdf_imports');
+    final out = await AppPaths.pdfImports();
     await out.create(recursive: true);
     final stamp = DateTime.now().microsecondsSinceEpoch;
     var i = 0;
@@ -116,8 +115,7 @@ class PdfImportService {
     String? name,
   }) async {
     try {
-      final dir = await getApplicationSupportDirectory();
-      final imagesDir = Directory('${dir.path}/inklus/pdf_imports');
+      final imagesDir = await AppPaths.pdfImports();
       await imagesDir.create(recursive: true);
       final fileName = name ?? 'pdf_${DateTime.now().millisecondsSinceEpoch}.png';
       final file = File('${imagesDir.path}/$fileName');

@@ -1,0 +1,120 @@
+{
+  "@@locale": "es",
+  "commonCancel": "Cancelar",
+  "commonOk": "Aceptar",
+  "commonRestore": "Restaurar",
+  "commonShare": "Compartir",
+  "commonGotIt": "Entendido",
+  "commonError": "Error: {error}",
+  "@commonError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsTitle": "Configuración",
+  "settingsSubtitle": "Inklus {version} · tus notas se guardan en este dispositivo",
+  "@settingsSubtitle": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsSectionDrive": "Google Drive",
+  "settingsSectionAppearance": "Apariencia",
+  "settingsSectionFiles": "Copias y archivos",
+  "settingsSectionTools": "Herramientas",
+  "settingsSectionAbout": "Acerca de",
+  "settingsImportTitle": "Importar .inklus o respaldo",
+  "settingsImportSubtitle": "Un cuaderno (.inklus) o un respaldo completo (.zip); se reconoce solo",
+  "settingsExportTitle": "Exportar respaldo completo",
+  "settingsExportSubtitle": "Todos los cuadernos, imágenes y papelera en un .zip",
+  "settingsAutosaveTitle": "Guardado automático",
+  "settingsAutosaveSubtitle": "Cada cambio se guarda al instante en este dispositivo. Al abrir y cerrar una nota se guarda una versión (menú ⋮ → Historial de versiones).",
+  "settingsStatsTitle": "Estadísticas de escritura",
+  "settingsStatsSubtitle": "Trazos, páginas, rachas y actividad",
+  "settingsRemindersTitle": "Recordatorios",
+  "settingsRemindersSubtitle": "Avisos vinculados a tus cuadernos",
+  "settingsTrashTitle": "Papelera",
+  "settingsTrashSubtitle": "Recupera cuadernos y notas eliminados",
+  "settingsAppTagline": "Escritura a mano para tablets con lápiz",
+  "settingsFreeTitle": "Libre y gratuito",
+  "settingsFreeSubtitle": "Código abierto (GPL-3.0). Sin funciones de pago, sin anuncios y sin analítica.",
+  "settingsPrivacyTitle": "Política de privacidad",
+  "settingsPrivacySubtitle": "Qué datos maneja la app y adónde van",
+  "settingsSourceTitle": "Código fuente",
+  "settingsSourceSubtitle": "Informa de un fallo o sugiere mejoras en GitHub",
+  "settingsErrorLogTitle": "Registro de errores",
+  "settingsErrorLogSubtitle": "Se guarda solo en este dispositivo; puedes compartirlo para ayudar a corregir un fallo",
+  "settingsErrorLogEmpty": "No hay errores registrados",
+  "settingsErrorLogCount": "{count, plural, =1{1 error registrado} other{{count} errores registrados}}",
+  "@settingsErrorLogCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsErrorLogShareSubtitle": "Por correo o en un issue de GitHub",
+  "settingsErrorLogClear": "Borrar registro",
+  "settingsErrorLogCleared": "Registro borrado",
+  "settingsErrorLogSubject": "Registro de errores de Inklus {version}",
+  "@settingsErrorLogSubject": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsOpenFailed": "No se pudo abrir {url}",
+  "@settingsOpenFailed": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsTheme": "Tema",
+  "settingsThemeLight": "Claro",
+  "settingsThemeDark": "Oscuro",
+  "settingsThemeSystem": "Sistema",
+  "driveConnected": "Conectado",
+  "driveCloudCopy": "Copia en la nube",
+  "driveGoogleAccount": "Cuenta de Google",
+  "driveOptionalPitch": "Opcional: guarda una copia de tus notas en tu Google Drive",
+  "driveConnect": "Conectar",
+  "driveUploadNow": "Subir ahora",
+  "driveUploadNowSubtitle": "Sube las notas de los cuadernos con sincronización activa",
+  "driveRestore": "Restaurar desde Drive",
+  "driveRestoreSubtitle": "Trae las versiones más recientes y recupera las notas que no estén en este dispositivo",
+  "driveNoteVersions": "Versiones de una nota",
+  "driveNoteVersionsSubtitle": "En el editor: ⋮ → Historial de versiones",
+  "driveSwitchAccount": "Cambiar de cuenta",
+  "driveSignOut": "Cerrar sesión",
+  "driveAccount": "Cuenta",
+  "driveConnectedAs": "Conectado como {email}",
+  "@driveConnectedAs": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "driveNotConfigured": "Google no está configurado",
+  "driveSignOutQuestion": "¿Cerrar sesión?",
+  "driveSignOutBody": "Dejarán de subirse copias a Google Drive. Las copias que ya están en Drive no se borran.",
+  "driveSignedOut": "Sesión cerrada",
+  "driveUploaded": "{count, plural, =0{No hay cuadernos con sincronización activa} =1{1 nota subida a Drive} other{{count} notas subidas a Drive}}",
+  "@driveUploaded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "driveRestoreBody": "Las notas de este dispositivo se reemplazan solo si la copia de Drive es más reciente. Las que no existan aquí se guardan en un cuaderno nuevo \"Recuperado de Drive\".",
+  "backupSaveTitle": "Guardar respaldo de Inklus",
+  "backupSaved": "Respaldo guardado"
+}

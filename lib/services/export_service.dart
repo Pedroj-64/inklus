@@ -8,10 +8,11 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../logic/stroke_engine.dart';
-import '../models/document.dart';
+import '../models/note.dart';
 import '../models/page.dart';
 import '../models/stroke.dart';
 import '../ui/canvas/world_painter.dart';
+import 'image_service.dart' show ExportImageResolver;
 import 'pptx_builder.dart';
 
 /// Opciones de exportación configurables por el usuario.
@@ -158,18 +159,22 @@ class ExportService {
 
   /// Genera un PDF con **todas las páginas** del cuaderno (una hoja PDF por
   /// página de nota). Cada página se renderiza con su propia plantilla/tamaño.
+  ///
+  /// Con [imagesFor] las imágenes se resuelven página a página (solo las de
+  /// esa página en memoria, a la resolución de la exportación).
   static Future<Uint8List> renderNotebookPdf(
-    Document document, {
+    Note note, {
     required Map<String, ui.Image> imageCache,
+    ExportImageResolver? imagesFor,
     ExportOptions options = ExportOptions.defaults,
   }) async {
     final doc = pw.Document();
-    for (final page in document.pages) {
+    for (final page in note.pages) {
       final sheetSize = page.template.sheetSize;
       final png = await renderPagePng(
         page,
         sheetSize: sheetSize,
-        imageCache: imageCache,
+        imageCache: imagesFor == null ? imageCache : await imagesFor(page),
         options: options,
       );
 
@@ -279,23 +284,24 @@ class ExportService {
   /// diapositiva. El resultado es un archivo PPTX válido que se puede
   /// abrir en PowerPoint, Google Slides o Keynote.
   static Future<Uint8List> renderNotebookPptx(
-    Document document, {
+    Note note, {
     required Map<String, ui.Image> imageCache,
+    ExportImageResolver? imagesFor,
     ExportOptions options = ExportOptions.defaults,
   }) async {
     // Renderizar cada página como PNG.
     final slideImages = <Uint8List>[];
-    for (final page in document.pages) {
+    for (final page in note.pages) {
       final png = await renderPagePng(
         page,
         sheetSize: page.template.sheetSize,
-        imageCache: imageCache,
+        imageCache: imagesFor == null ? imageCache : await imagesFor(page),
         options: options,
       );
       slideImages.add(png);
     }
 
     // Delega al builder externo (pptx_builder.dart).
-    return buildPptx(slideImages, document.title);
+    return buildPptx(slideImages, note.title);
   }
 }

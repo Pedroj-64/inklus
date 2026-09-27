@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'theme/inklus_colors.dart';
 
 import '../constants.dart';
 import '../models/template.dart';
-import '../utils/theme_colors.dart';
 import 'widgets/notebook_covers.dart';
 
 /// Resultado de la pantalla de creación de cuaderno.
@@ -52,16 +52,8 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
   final double _spacing = 52;
 
   // Colores de portada disponibles
-  static const _coverColors = <(String, int?)>[
-    ('Azul', 0xFF3B82F6),
-    ('Verde', 0xFF4CAF50),
-    ('Rojo', 0xFFE53935),
-    ('Naranja', 0xFFFF9800),
-    ('Morado', 0xFF9C27B0),
-    ('Rosa', 0xFFEC407A),
-    ('Turquesa', 0xFF26C6DA),
-    ('Gris', 0xFF78909C),
-  ];
+  // (la misma paleta que el resto de la app, sin "Sin color")
+  static final _coverColors = kCoverColors.skip(1).toList();
 
   /// Plantillas favoritas (las más usadas, se muestran primero).
   static const _favoriteTemplates = <(TemplateType, IconData, String)>[
@@ -98,7 +90,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
   }
 
   Color get _effectiveCoverColor =>
-      _coverColorValue != null ? Color(_coverColorValue!) : kAccentColor;
+      _coverColorValue != null ? Color(_coverColorValue!) : context.colors.primary;
 
   PageTemplate get _selectedTemplate => PageTemplate(
         type: _templateType,
@@ -142,7 +134,6 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tc = ThemeColors.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -181,8 +172,8 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
           );
         },
         child: _currentStep == 0
-            ? _buildStep1(tc, isDark)
-            : _buildStep2(tc, isDark),
+            ? _buildStep1(isDark)
+            : _buildStep2(isDark),
       ),
     );
   }
@@ -191,7 +182,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
   // PASO 1: Nombre + Portada
   // ------------------------------------------------------------------------
 
-  Widget _buildStep1(ThemeColors tc, bool isDark) {
+  Widget _buildStep1(bool isDark) {
     return SingleChildScrollView(
       key: const ValueKey(0),
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -204,7 +195,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: tc.textSecondary,
+              color: context.colors.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 8),
@@ -232,7 +223,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: tc.textSecondary,
+              color: context.colors.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 8),
@@ -246,7 +237,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withAlpha(isDark ? 60 : 25),
+                    color: context.inklus.shadow,
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -313,7 +304,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: isSelected ? kAccentColor : tc.border,
+                        color: isSelected ? context.colors.primary : context.colors.outline,
                         width: isSelected ? 2 : 1,
                       ),
                     ),
@@ -369,7 +360,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
                         shape: BoxShape.circle,
                         color: Color(colorValue!),
                         border: Border.all(
-                          color: isSelected ? Colors.white : tc.border,
+                          color: isSelected ? Colors.white : context.colors.outline,
                           width: isSelected ? 3 : 1,
                         ),
                         boxShadow: isSelected
@@ -427,7 +418,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
   // PASO 2: Plantilla
   // ------------------------------------------------------------------------
 
-  Widget _buildStep2(ThemeColors tc, bool isDark) {
+  Widget _buildStep2(bool isDark) {
     return SingleChildScrollView(
       key: const ValueKey(1),
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -438,9 +429,9 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: kAccentColor.withAlpha(15),
+              color: context.colors.primary.withAlpha(15),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: kAccentColor.withAlpha(40)),
+              border: Border.all(color: context.colors.primary.withAlpha(40)),
             ),
             child: Row(
               children: [
@@ -481,7 +472,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
                         'Paso 2: Elige una plantilla',
                         style: TextStyle(
                           fontSize: 12,
-                          color: tc.textSecondary,
+                          color: context.colors.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -505,7 +496,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: tc.textSecondary,
+              color: context.colors.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 12),
@@ -552,7 +543,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
                 _infinite
                     ? 'El lienzo se alarga al escribir'
                     : 'Hoja de tamaño fijo (A4)',
-                style: TextStyle(fontSize: 12, color: tc.textSecondary),
+                style: TextStyle(fontSize: 12, color: context.colors.onSurfaceVariant),
               ),
               value: _infinite,
               onChanged: (v) => setState(() => _infinite = v),
@@ -588,17 +579,16 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
 
   Widget _templateTile(TemplateType type, IconData icon, String label) {
     final isSelected = _templateType == type;
-    final tc = ThemeColors.of(context);
     return GestureDetector(
       onTap: () => setState(() => _templateType = type),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? kAccentColor.withAlpha(20) : Colors.transparent,
+          color: isSelected ? context.colors.primary.withAlpha(20) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? kAccentColor : tc.border,
+            color: isSelected ? context.colors.primary : context.colors.outline,
             width: isSelected ? 1.5 : 1,
           ),
         ),
@@ -608,7 +598,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
             Icon(
               icon,
               size: 18,
-              color: isSelected ? kAccentColor : tc.iconSecondary,
+              color: isSelected ? context.colors.primary : context.colors.onSurfaceVariant,
             ),
             const SizedBox(width: 6),
             Text(
@@ -616,7 +606,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected ? kAccentColor : tc.textSecondary,
+                color: isSelected ? context.colors.primary : context.colors.onSurfaceVariant,
               ),
             ),
           ],
@@ -638,14 +628,14 @@ class _StepIndicator extends StatelessWidget {
         Expanded(
           child: Container(
             height: 3,
-            color: kAccentColor,
+            color: context.colors.primary,
           ),
         ),
         const SizedBox(width: 4),
         Expanded(
           child: Container(
             height: 3,
-            color: currentStep >= 1 ? kAccentColor : Colors.grey.shade300,
+            color: currentStep >= 1 ? context.colors.primary : context.colors.outlineVariant,
           ),
         ),
       ],

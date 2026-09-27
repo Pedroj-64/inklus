@@ -13,7 +13,6 @@ import 'note_list_screen.dart';
 import 'trash_screen.dart';
 import 'widgets/smart_folders_sheet.dart';
 import 'widgets/tag_editor_sheet.dart';
-import '../utils/theme_colors.dart';
 import 'create_notebook_screen.dart';
 import 'settings_screen.dart';
 import 'widgets/notebook_covers.dart';
@@ -231,17 +230,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
 
   /// Asigna un color de portada al cuaderno.
   Future<void> _setNotebookColor(NotebookMeta meta) async {
-    final colors = <(String, int?)>[
-      ('Sin color', null),
-      ('Azul', kAccentColor.toARGB32()),
-      ('Verde', const Color(0xFF4CAF50).toARGB32()),
-      ('Rojo', const Color(0xFFE53935).toARGB32()),
-      ('Naranja', const Color(0xFFFF9800).toARGB32()),
-      ('Morado', const Color(0xFF9C27B0).toARGB32()),
-      ('Rosa', const Color(0xFFEC407A).toARGB32()),
-      ('Turquesa', const Color(0xFF26C6DA).toARGB32()),
-      ('Gris', const Color(0xFF78909C).toARGB32()),
-    ];
+    const colors = kCoverColors;
     final selected = await showModalBottomSheet<int?>(
       context: context,
       builder: (context) => SafeArea(
@@ -267,21 +256,17 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: c.$2 != null ? Color(c.$2!) : (Theme.of(context).brightness == Brightness.dark ? kSurfaceDark : kSurfaceLight),
+                      color: c.$2 != null ? Color(c.$2!) : context.colors.surfaceContainerHighest,
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: isSelected
-                            ? (Theme.of(context).brightness == Brightness.dark
-                                ? Colors.white
-                                : Colors.black)
-                            : (Theme.of(context).brightness == Brightness.dark
-                                ? Colors.white24
-                                : ThemeColors.of(context).border),
+                            ? context.colors.onSurface
+                            : context.colors.outline,
                         width: isSelected ? 3 : 1,
                       ),
                     ),
                     child: c.$2 == null
-                        ? Icon(Icons.close, size: 20, color: Theme.of(context).brightness == Brightness.dark ? Colors.white38 : ThemeColors.of(context).iconTertiary)
+                        ? Icon(Icons.close, size: 20, color: context.colors.onSurfaceVariant)
                         : isSelected
                             ? const Icon(Icons.check, size: 20, color: Colors.white)
                             : null,
@@ -703,7 +688,6 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
 
   Widget _buildEmptyState() {
     final hasSearch = _searchQuery.isNotEmpty;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -715,13 +699,13 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                color: kAccentColor.withAlpha(20),
+                color: context.colors.primary.withAlpha(20),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 hasSearch ? Icons.search_off : Icons.menu_book_outlined,
                 size: 48,
-                color: kAccentColor.withAlpha(150),
+                color: context.colors.primary.withAlpha(150),
               ),
             ),
             const SizedBox(height: 20),
@@ -738,7 +722,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
                   : 'Crea un cuaderno nuevo o importa uno existente\npara comenzar.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: isDark ? Colors.white54 : ThemeColors.of(context).textSecondary,
+                color: context.colors.onSurfaceVariant,
                 height: 1.4,
               ),
             ),
@@ -764,7 +748,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(200, 48),
                   side: BorderSide(
-                    color: isDark ? Colors.white24 : ThemeColors.of(context).border,
+                    color: context.colors.outline,
                   ),
                 ),
               ),
@@ -966,7 +950,7 @@ class _SyncIcon extends StatelessWidget {
       return Icon(
         Icons.cloud_off,
         size: 16,
-        color: Theme.of(context).brightness == Brightness.dark ? Colors.white24 : ThemeColors.of(context).border,
+        color: context.colors.outline,
       );
     }
     return ListenableBuilder(
@@ -981,10 +965,10 @@ class _SyncIcon extends StatelessWidget {
   Widget _buildIcon(BuildContext context, SyncStatus status) {
     switch (status) {
       case SyncStatus.synced:
-        return const Icon(
+        return Icon(
           Icons.cloud_done,
           size: 16,
-          color: kAccentColor,
+          color: context.colors.primary,
         );
       case SyncStatus.syncing:
         return const SizedBox(
@@ -993,22 +977,22 @@ class _SyncIcon extends StatelessWidget {
           child: CircularProgressIndicator(strokeWidth: 1.5),
         );
       case SyncStatus.error:
-        return const Icon(
+        return Icon(
           Icons.sync_problem,
           size: 16,
-          color: Color(0xFFE53935),
+          color: context.inklus.danger,
         );
       case SyncStatus.disabled:
         return Icon(
           Icons.cloud_off,
           size: 16,
-          color: Theme.of(context).brightness == Brightness.dark ? Colors.white24 : ThemeColors.of(context).border,
+          color: context.colors.outline,
         );
       case SyncStatus.pending:
         return Icon(
           Icons.cloud_upload_outlined,
           size: 16,
-          color: Theme.of(context).brightness == Brightness.dark ? Colors.white38 : ThemeColors.of(context).iconTertiary,
+          color: context.colors.onSurfaceVariant,
         );
     }
   }
@@ -1033,17 +1017,17 @@ class _SortOption extends StatelessWidget {
     return ListTile(
       leading: Icon(
         icon,
-        color: selected ? kAccentColor : (Theme.of(context).brightness == Brightness.dark ? Colors.white54 : ThemeColors.of(context).textSecondary),
+        color: selected ? context.colors.primary : context.colors.onSurfaceVariant,
       ),
       title: Text(
         label,
         style: TextStyle(
           fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-          color: selected ? kAccentColor : null,
+          color: selected ? context.colors.primary : null,
         ),
       ),
       trailing: selected
-          ? const Icon(Icons.check, color: kAccentColor, size: 20)
+          ? Icon(Icons.check, color: context.colors.primary, size: 20)
           : null,
       onTap: onTap,
     );
@@ -1071,7 +1055,7 @@ class _NotebookCover extends StatelessWidget {
   Widget build(BuildContext context) {
     final baseColor = color ?? (isDark
         ? kAccentDark
-        : kAccentColor);
+        : context.colors.primary);
 
     // Convierte el string coverStyle a CoverStyle enum.
     final style = CoverStyle.values.firstWhere(
@@ -1103,7 +1087,7 @@ class _NotebookCover extends StatelessWidget {
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
-                  shadows: [Shadow(blurRadius: 4, color: ThemeColors.of(context).border)],
+                  shadows: [Shadow(blurRadius: 4, color: context.colors.outline)],
                 ),
               ),
             ),
@@ -1131,7 +1115,7 @@ class _NotebookCover extends StatelessWidget {
               fontWeight: FontWeight.w600,
               color: Colors.white,
               shadows: [
-                Shadow(blurRadius: 4, color: ThemeColors.of(context).border),
+                Shadow(blurRadius: 4, color: context.colors.outline),
               ],
             ),
           ),

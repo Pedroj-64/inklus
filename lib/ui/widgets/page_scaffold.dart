@@ -65,7 +65,13 @@ class InklusPage extends StatelessWidget {
                 ),
               ),
             ),
-            for (final s in slivers) _constrained(s),
+            // Mismo margen lateral que el título: tarjetas y título alineados
+            // (y sin tocar el borde en teléfono).
+            for (final s in slivers)
+              _constrained(SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
+                sliver: s,
+              )),
             const SliverToBoxAdapter(child: SizedBox(height: 96)),
           ],
         ),

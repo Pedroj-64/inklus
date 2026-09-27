@@ -2,6 +2,55 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versiones [SemVer](https://semver.org/lang/es/).
 
+## [1.7.0] — 2026-09-27
+
+### Añadido
+- **Desplazamiento continuo entre hojas**: las hojas fijas se apilan en vertical; al desplazarte pasas de una a otra sin saltos, y empezar a escribir en la de abajo la activa. Se puede desactivar en ⋮ → Ver.
+- **Deshacer por página**: cambiar de página ya no borra lo que se podía deshacer.
+- **Política de privacidad** (`docs/privacy.md`), enlazada desde Configuración junto al código fuente.
+- **Registro de errores local**: los fallos se guardan solo en el dispositivo; Configuración → "Registro de errores" permite compartirlos o borrarlos. Sin analítica ni servicios de terceros.
+- **Idiomas**: infraestructura de traducción (español/inglés). Los selectores de fecha y hora y los textos del sistema salen en español; Configuración ya está traducida (el resto de pantallas, en curso).
+- **Pruebas de integración** (bienvenida → cuaderno → lápiz → guardado), también en la CI; guion de pruebas en dispositivo (`docs/testing.md`).
+- **Releases**: las notas de cada release de GitHub salen del CHANGELOG y la CI comprueba que el tag coincide con la versión.
+
+### Cambiado
+- `CanvasController` dividido en partes (vista, selección, capas) sin cambiar su API.
+- Rutas de datos en un único `AppPaths`; se quita el código de Drive y exportación del formato antiguo que ya no se usaba.
+- Los recordatorios creados desde el editor se vinculan al cuaderno, igual que los de la pantalla de recordatorios.
+
+## [1.6.0] — 2026-09-27
+
+### Añadido
+- **Lazo completo**: escalar, rotar, copiar, pegar y duplicar también imágenes y cajas de texto (antes solo trazos), con una sola acción de deshacer.
+- **Revisiones de Google Drive en el historial de versiones**: la hoja "Historial de versiones" muestra las copias locales y las revisiones que Drive guarda de cada subida; se restauran igual (el estado actual se guarda antes). Las copias cifradas piden la contraseña.
+- **Papelera de notas**: una nota borrada vuelve a su cuaderno al restaurarla (o a uno nuevo con el mismo nombre si el cuaderno ya no existe). Cada elemento muestra qué es, de dónde viene y cuántos días le quedan.
+
+### Cambiado
+- **Todas las pantallas con el mismo diseño**: papelera, recordatorios, estadísticas, lista de notas, bienvenida, etiquetas, carpetas inteligentes, opciones de trazo, capas y selector de plantillas usan los colores y medidas del tema (bien en claro y oscuro).
+- Estadísticas rediseñadas: totales en tarjetas, rachas y un gráfico que se adapta al ancho.
+- Bienvenida actualizada (un dedo desplaza en modo solo lápiz, herramientas arriba, notas locales).
+
+### Corregido
+- **Papelera**: borrar un cuaderno creaba entradas fantasma "Sin título" (sus notas) con fecha 31/12/1969; borrarlo definitivamente dejaba sus notas en la papelera; la purga automática de 30 días que anunciaba la pantalla no existía.
+- **Recordatorios**: deslizar para borrar no borraba (y lanzaba un error de Flutter).
+- Las hojas inferiores mostraban dos asas de arrastre.
+- La rotación de una selección "derivaba" (el pivote se recalculaba en cada frame); asas de selección dibujadas y detectadas en el mismo sitio.
+- Carpetas inteligentes: nombres de color erróneos ("Otro"); la paleta de portadas es única en toda la app.
+
+## [1.5.0] — 2026-09-27
+
+### Rendimiento
+- **Desplazar y hacer zoom con páginas llenas**: durante el gesto el lienzo se dibuja desde una instantánea (un solo quad por frame) y solo se pintan en vivo las franjas que el gesto destapa; al soltar se repinta nítido. Antes se volvían a dibujar todos los trazos en cada frame.
+- **Fotos en el lienzo a resolución de pantalla** (máx. 2560 px por lado): una foto de 12 MP pasa de ~48 MB a ~20 MB en memoria. Las exportaciones de alta resolución decodifican las imágenes a su resolución, página a página.
+
+### Corregido
+- **Pan infinito en hoja fija**: la hoja ya no se puede perder de vista (sus bordes se detienen a 48 px del borde de la pantalla).
+- La exportación del cuaderno completo (PDF/PPTX) podía omitir imágenes de páginas no abiertas o desalojadas de la caché.
+- Carpetas inteligentes: el efecto de toque de las opciones no se veía (quedaba tapado por el fondo de la hoja).
+
+### Herramientas
+- `tool/stress/stress_note_test.dart` genera un cuaderno de estrés (5.100 trazos + 10 fotos de 12 MP) para medir en un dispositivo.
+
 ## [1.4.3] — 2026-09-27
 
 ### Corregido

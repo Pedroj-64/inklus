@@ -25,6 +25,10 @@ import 'shape_detector.dart';
 import 'stroke_engine.dart';
 import 'undo_stack.dart';
 
+part 'canvas_layers.dart';
+part 'canvas_selection.dart';
+part 'canvas_view.dart';
+
 /// Controlador central del lienzo.
 ///
 /// Gestiona: documento actual, herramienta/color/grosor, transformación
@@ -32,7 +36,42 @@ import 'undo_stack.dart';
 /// Todo el estado mutable vive aquí y las vistas se suscriben con
 /// `ListenableBuilder`. Las coordenadas de los trazos son de "mundo"
 /// (independientes del zoom); la transformación solo afecta a la vista.
-class CanvasController extends ChangeNotifier {
+/// Estado y utilidades que comparten las partes del controlador
+/// ([_CanvasLayers], [_CanvasView], [_CanvasSelection]); lo implementa
+/// [CanvasController].
+abstract class _CanvasCore extends ChangeNotifier {
+  Page get page;
+  Size get sheetSize;
+  UndoStack get _undoStack;
+  set _tool(ToolType value);
+  set _selectedImageId(String? value);
+  VoidCallback? get _onLayerBlocked;
+
+  // De [_CanvasLayers].
+  int get _activeLayerIndex;
+  bool _isLayerLocked(int layerIndex);
+  bool _isLayerVisible(int layerIndex);
+
+  // De [_CanvasView].
+  double get _scale;
+
+  // Desplazamiento continuo entre hojas fijas (implementado en
+  // [CanvasController]).
+  ({Page page, double dy})? _neighbor(int delta);
+  void _enterNeighborPage(int delta);
+  bool get continuousScroll;
+
+  /// Cambio real del contenido: repinta y agenda guardado.
+  void _touch();
+
+  /// Cambio en vivo (arrastre): solo repinta; se guarda al confirmar.
+  void _touchLive();
+  void _notifyToolContext();
+  void _notifyBottomBarContext();
+}
+
+class CanvasController extends _CanvasCore
+    with _CanvasLayers, _CanvasView, _CanvasSelection {
   final StorageService _storage;
 
   // ignore: prefer_final_fields (se reemplaza al restaurar desde la nube)
@@ -41,6 +80,7 @@ class CanvasController extends ChangeNotifier {
   int _pageIndex = 0;
 
   // ---- Herramientas ----
+  @override
   ToolType _tool = ToolType.pen;
   Color _color = kDefaultStrokeColor;
   final Map<ToolType, double> _toolSizes = Map.of(kDefaultToolSizes);
@@ -52,14 +92,6 @@ class CanvasController extends ChangeNotifier {
   final Map<ToolType, double> _smoothing = Map.of(kDefaultSmoothing);
   final Map<ToolType, double> _streamline = Map.of(kDefaultStreamline);
 
-  // ---- Transformación de vista ----
-  double _scale = kDefaultZoom;
-  Offset _translate = Offset.zero;
-  bool _viewInitialized = false;
-
-  /// Tamaño del viewport del lienzo (lo actualiza la vista en cada layout).
-  Size viewportSize = Size.zero;
-
   // ---- Trazo en progreso ----
   // El trazo activo comparte esta lista mutable: añadir un punto es O(1)
   // (antes se copiaba la lista entera en cada evento → O(n²) por trazo).
@@ -69,6 +101,7 @@ class CanvasController extends ChangeNotifier {
   bool _isDrawing = false;
 
   // ---- Selección de imágenes ----
+  @override
   String? _selectedImageId;
 
   // ---- Guías magnéticas (snap) ----
@@ -88,9 +121,6 @@ class CanvasController extends ChangeNotifier {
     _snapHorizontalGuides = [];
   }
 
-  // ---- Capas ----
-  int _activeLayerIndex = 0;
-
   // ---- Regla virtual ----
   bool _rulerEnabled = false;
   RulerType _rulerType = RulerType.straight;
@@ -105,14 +135,12 @@ class CanvasController extends ChangeNotifier {
   Offset _magnifierPosition = Offset.zero;
   double _magnifierZoom = kMagnifierDefaultZoom;
 
-  // ---- Selección con lazo ----
-  List<Offset> _lassoPath = [];
-  List<Stroke> _selectedStrokes = [];
-
-  // ---- Portapapeles de trazos (copy/paste) ----
-  List<Stroke> _clipboardStrokes = [];
-
-  final UndoStack _undoStack = UndoStack(maxDepth: kMaxUndoDepth);
+  /// Historial de deshacer **por página**: cambiar de página (a mano o al
+  /// desplazarse de forma continua) ya no pierde lo que se podía deshacer.
+  final Map<String, UndoStack> _undoStacks = {};
+  @override
+  UndoStack get _undoStack =>
+      _undoStacks.putIfAbsent(page.id, () => UndoStack(maxDepth: kMaxUndoDepth));
 
   // ---- Notificadores granulares ----
   // Permiten que la barra del editor y sus popovers solo se reconstruyan cuando
@@ -130,11 +158,13 @@ class CanvasController extends ChangeNotifier {
   int _bottomBarContextVersion = 0;
 
   /// Notifica solo a los listeners del tool rail.
+  @override
   void _notifyToolContext() {
     _toolContextNotifier.value = ++_toolContextVersion;
   }
 
   /// Notifica solo a los listeners de la bottom bar.
+  @override
   void _notifyBottomBarContext() {
     _bottomBarContextNotifier.value = ++_bottomBarContextVersion;
   }
@@ -160,7 +190,7 @@ class CanvasController extends ChangeNotifier {
       _shapeMode,
       _fingerDrawingEnabled,
       selectionCount,
-      _clipboardStrokes.isNotEmpty,
+      hasClipboard,
     );
     if (bottomKey != _lastBottomBarKey) {
       _lastBottomBarKey = bottomKey;
@@ -187,6 +217,7 @@ class CanvasController extends ChangeNotifier {
   Future<void> Function(Note note)? onRemoteSync;
 
   /// Callback invocado cuando se intenta editar en una capa bloqueada.
+  @override
   VoidCallback? _onLayerBlocked;
 
   /// Registra el callback de capa bloqueada.
@@ -205,6 +236,122 @@ class CanvasController extends ChangeNotifier {
   /// reinicia la espera, un cierre inesperado podía perder minutos de trabajo.
   Duration get autosaveDebounce => kSaveDebounce;
 
+  /// Acota el desplazamiento de una **hoja fija** (centrada en el origen del
+  /// mundo) para que no se pierda de vista: si la hoja en pantalla es mayor
+  /// que el viewport, sus bordes no pueden entrar más de [margin] px; si es
+  /// menor, se mueve libremente pero sin salir del viewport.
+  @visibleForTesting
+  static Offset clampSheetTranslate(
+    Offset translate,
+    double scale,
+    Size sheet,
+    Size viewport, {
+    double margin = 48,
+  }) =>
+      clampToWorldRect(
+        translate,
+        scale,
+        Rect.fromCenter(center: Offset.zero, width: sheet.width, height: sheet.height),
+        viewport,
+        margin: margin,
+      );
+
+  /// Como [clampSheetTranslate] para cualquier rectángulo del mundo (la hoja
+  /// actual más sus vecinas en el desplazamiento continuo).
+  static Offset clampToWorldRect(
+    Offset translate,
+    double scale,
+    Rect world,
+    Size viewport, {
+    double margin = 48,
+  }) {
+    double axis(double t, double lo, double hi, double viewLen) {
+      final a = margin - lo * scale; // borde inicial en el margen
+      final b = viewLen - margin - hi * scale; // borde final en el margen
+      return t.clamp(min(a, b), max(a, b));
+    }
+
+    return Offset(
+      axis(translate.dx, world.left, world.right, viewport.width),
+      axis(translate.dy, world.top, world.bottom, viewport.height),
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // Desplazamiento continuo entre hojas fijas
+  // ------------------------------------------------------------------
+
+  /// Separación (mundo) entre hojas apiladas.
+  static const double pageGap = 48;
+
+  static const _prefContinuousScroll = 'continuous_scroll';
+  bool _continuousScroll = true;
+
+  /// Las hojas fijas se apilan en vertical y se pasa de una a otra
+  /// desplazándose (como GoodNotes/Notability). Se recuerda.
+  @override
+  bool get continuousScroll => _continuousScroll;
+
+  void setContinuousScroll(bool value) {
+    if (value == _continuousScroll) return;
+    _continuousScroll = value;
+    notifyListeners();
+    SharedPreferences.getInstance()
+        .then((p) => p.setBool(_prefContinuousScroll, value))
+        .catchError((_) => false);
+  }
+
+  /// Página vecina ([delta] = ±1) y su desplazamiento vertical (mundo)
+  /// respecto a la actual, o null si no hay o alguna no es hoja fija.
+  @override
+  ({Page page, double dy})? _neighbor(int delta) {
+    if (!_continuousScroll || !page.template.isFinite) return null;
+    final i = _pageIndex + delta;
+    if (i < 0 || i >= pageCount) return null;
+    final other = _note.pages[i];
+    if (!other.template.isFinite) return null;
+    final dy = page.template.sheetSize.height / 2 +
+        pageGap +
+        other.template.sheetSize.height / 2;
+    return (page: other, dy: delta > 0 ? dy : -dy);
+  }
+
+  /// Hojas vecinas visibles para pintarlas alrededor de la actual.
+  List<({Page page, double dy})> get stackedNeighbors => [
+        ?_neighbor(-1),
+        ?_neighbor(1),
+      ];
+
+  /// Pasa a la página vecina conservando lo que se ve en pantalla (la vista
+  /// se desplaza lo mismo que el origen del mundo).
+  @override
+  void _enterNeighborPage(int delta) {
+    final n = _neighbor(delta);
+    if (n == null) return;
+    _pageIndex += delta;
+    _resetPageState();
+    _translate += Offset(0, n.dy * _scale);
+    _notifyBottomBarContext();
+  }
+
+  /// Si [world] cae en una hoja vecina, la convierte en la actual y
+  /// devuelve el punto en las coordenadas de esa hoja.
+  Offset _adoptPageAt(Offset world) {
+    for (final delta in const [-1, 1]) {
+      final n = _neighbor(delta);
+      if (n == null) continue;
+      final size = n.page.template.sheetSize;
+      final rect = Rect.fromCenter(
+          center: Offset(0, n.dy), width: size.width, height: size.height);
+      if (rect.contains(world)) {
+        _enterNeighborPage(delta);
+        notifyListeners();
+        return world - Offset(0, n.dy);
+      }
+    }
+    return world;
+  }
+
   // ------------------------------------------------------------------
   // Accesores
   // ------------------------------------------------------------------
@@ -212,17 +359,8 @@ class CanvasController extends ChangeNotifier {
   Note get note => _note;
   String get notebookId => _notebookId;
 
-  /// Compatibilidad: devuelve un Document construido desde el Note.
-  /// Se usa en exportación y sync (que todavía esperan Document).
-  Document get document => Document(
-        id: _note.id,
-        title: _note.title,
-        createdAt: _note.createdAt,
-        updatedAt: _note.updatedAt,
-        pages: _note.pages,
-      );
-
   List<Page> get pages => _note.pages;
+  @override
   Page get page => _note.pages[_pageIndex];
   int get pageIndex => _pageIndex;
   int get pageCount => _note.pages.length;
@@ -245,60 +383,12 @@ class CanvasController extends ChangeNotifier {
   /// Rango de tamaño permitido para la herramienta actual.
   (double, double) get sizeRange => kToolSizeRanges[_tool] ?? (2, 14);
 
-  double get scale => _scale;
-  Offset get translate => _translate;
   Stroke? get activeStroke => _activeStroke;
   bool get isDrawing => _isDrawing;
   List<Offset> get activeEraserPath => _activeEraserPath;
   String? get selectedImageId => _selectedImageId;
-  List<Offset> get lassoPath => List.unmodifiable(_lassoPath);
-  List<Stroke> get selectedStrokes => List.unmodifiable(_selectedStrokes);
-
-  // ---- Selección del lazo: imágenes y cajas de texto ----
-  // Se guardan por id: sus instancias se reemplazan al moverlas.
-  Set<String> _selectedImageIds = {};
-  Set<String> _selectedTextIds = {};
-
-  /// Imágenes seleccionadas con el lazo (instancias actuales de la página).
-  List<ImageItem> get selectedImages =>
-      page.images.where((i) => _selectedImageIds.contains(i.id)).toList();
-
-  /// Cajas de texto seleccionadas con el lazo.
-  List<TextItem> get selectedTexts =>
-      page.textItems.where((t) => _selectedTextIds.contains(t.id)).toList();
-
-  /// Número total de elementos seleccionados con el lazo.
-  int get selectionCount =>
-      _selectedStrokes.length + _selectedImageIds.length + _selectedTextIds.length;
-
-  bool get hasLassoSelection => selectionCount > 0;
-
-  /// Rectángulo que envuelve toda la selección (trazos, imágenes y textos).
-  Rect get selectionBoundsAll {
-    Rect? r = _selectedStrokes.isEmpty ? null : selectionBounds(_selectedStrokes);
-    for (final i in selectedImages) {
-      r = r == null ? i.rect : r.expandToInclude(i.rect);
-    }
-    for (final t in selectedTexts) {
-      r = r == null ? t.rect : r.expandToInclude(t.rect);
-    }
-    return r ?? Rect.zero;
-  }
-
-  void _clearItemSelection() {
-    _selectedImageIds = {};
-    _selectedTextIds = {};
-    _moveImagesBefore = null;
-    _moveTextsBefore = null;
-  }
-
-  /// Estado de imágenes/textos al empezar a mover la selección.
-  List<ImageItem>? _moveImagesBefore;
-  List<TextItem>? _moveTextsBefore;
-  int get activeLayerIndex => _activeLayerIndex;
   bool get canUndo => _undoStack.canUndo;
   bool get canRedo => _undoStack.canRedo;
-  bool get viewNeedsInit => !_viewInitialized;
 
   // ---- Regla ----
   bool get rulerEnabled => _rulerEnabled;
@@ -324,30 +414,8 @@ class CanvasController extends ChangeNotifier {
   double get eraserRadius => _toolSizes[ToolType.eraser]! / 2;
 
   /// Tamaño de la hoja finita actual (sheet o custom sin relleno).
+  @override
   Size get sheetSize => page.template.sheetSize;
-
-  // ------------------------------------------------------------------
-  // Capas bloqueadas
-  // ------------------------------------------------------------------
-
-  /// Verifica si la capa activa está bloqueada.
-  bool get isActiveLayerLocked {
-    if (_activeLayerIndex < page.layers.length) {
-      return page.layers[_activeLayerIndex].locked;
-    }
-    return false;
-  }
-
-  /// Verifica si la capa de un trazo/imagen/texto está bloqueada.
-  bool _isLayerLocked(int layerIndex) {
-    if (layerIndex < page.layers.length) {
-      return page.layers[layerIndex].locked;
-    }
-    return false;
-  }
-
-  bool _isLayerVisible(int layerIndex) =>
-      layerIndex >= page.layers.length || page.layers[layerIndex].visible;
 
   // ------------------------------------------------------------------
   // Herramientas
@@ -414,6 +482,7 @@ class CanvasController extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _fingerDrawingUserSet = prefs.getBool(_prefFingerDrawingUserSet) ?? false;
+      _continuousScroll = prefs.getBool(_prefContinuousScroll) ?? true;
       final saved = prefs.getBool(_prefFingerDrawing);
       if (saved != null && saved != _fingerDrawingEnabled && !_disposed) {
         _fingerDrawingEnabled = saved;
@@ -635,6 +704,8 @@ class CanvasController extends ChangeNotifier {
     required ToolType tool,
   }) {
     if (tool == ToolType.select) return;
+    // Empezar a escribir en una hoja vecina visible la hace la actual.
+    worldPoint = _adoptPageAt(worldPoint);
     if (tool == ToolType.lasso) {
       beginLasso(worldPoint);
       return;
@@ -943,7 +1014,6 @@ class CanvasController extends ChangeNotifier {
     _clearItemSelection();
     _lassoPath = [];
     _editingTextId = null;
-    _undoStack.clear();
     _activeLayerIndex = 0;
   }
 
@@ -1153,416 +1223,6 @@ class CanvasController extends ChangeNotifier {
   }
 
   // ------------------------------------------------------------------
-  // Selección con lazo
-  // ------------------------------------------------------------------
-
-  void beginLasso(Offset worldPoint) {
-    _lassoPath = [worldPoint];
-    _selectedStrokes = [];
-    notifyListeners();
-  }
-
-  void addLassoPoint(Offset worldPoint) {
-    if (_lassoPath.isEmpty) return;
-    _lassoPath.add(worldPoint);
-    notifyListeners();
-  }
-
-  /// Termina el lazo y selecciona los trazos que caen dentro.
-  ///
-  /// Usa una estrategia de 3 niveles para una selección precisa:
-  /// 1. **Punto dentro**: al menos un punto del trazo está dentro del polígono.
-  /// 2. **Borde cruzado**: el contorno del trazo cruza el borde del lazo.
-  /// 3. **Bounding box**: el rectángulo delimitador del trazo está completamente
-  ///    dentro del lazo (para trazos grandes que no tienen puntos dentro).
-  void endLasso() {
-    if (_lassoPath.length < 3) {
-      _lassoPath = [];
-      notifyListeners();
-      return;
-    }
-    final lassoPolygon = _lassoPath;
-    final lassoBounds = polygonBounds(lassoPolygon);
-
-    _selectedStrokes = page.strokes.where((stroke) {
-      // Ignorar trazos en capas ocultas.
-      if (stroke.layerIndex < page.layers.length &&
-          !page.layers[stroke.layerIndex].visible) {
-        return false;
-      }
-      // Ignorar herramientas especiales.
-      if (stroke.tool == ToolType.eraser ||
-          stroke.tool == ToolType.select ||
-          stroke.tool == ToolType.lasso) {
-        return false;
-      }
-      return isStrokeInLasso(stroke, lassoPolygon, lassoBounds);
-    }).toList();
-
-    // Imágenes y cajas de texto: entran si su centro está dentro del lazo
-    // (capas ocultas o bloqueadas se ignoran).
-    bool selectable(int layer) => _isLayerVisible(layer) && !_isLayerLocked(layer);
-    _selectedImageIds = {
-      for (final i in page.images)
-        if (selectable(i.layerIndex) && pointInPolygon(Offset(i.x, i.y), lassoPolygon)) i.id,
-    };
-    _selectedTextIds = {
-      for (final t in page.textItems)
-        if (selectable(t.layerIndex) && pointInPolygon(Offset(t.x, t.y), lassoPolygon)) t.id,
-    };
-
-    _lassoPath = [];
-    // Auto-cambiar a herramienta select para poder mover/redimensionar.
-    if (hasLassoSelection) {
-      _tool = ToolType.select;
-    }
-    _notifyToolContext();
-    _notifyBottomBarContext();
-    notifyListeners();
-  }
-
-  void clearLassoSelection() {
-    _selectedStrokes = [];
-    _clearItemSelection();
-    _lassoPath = [];
-    notifyListeners();
-  }
-
-  /// Restaura los trazos seleccionados a su estado original (sin mover).
-  ///
-  /// Se usa al cancelar un gesto de movimiento.
-  void restoreStrokeSelection(List<Stroke> originals) {
-    for (final original in originals) {
-      final idx = page.strokes.indexWhere((s) => s.id == original.id);
-      if (idx >= 0) {
-        page.strokes[idx] = original;
-      }
-    }
-    _selectedStrokes = List<Stroke>.from(originals);
-    // Imágenes y textos vuelven a donde estaban al empezar a mover.
-    for (final img in _moveImagesBefore ?? const <ImageItem>[]) {
-      final idx = page.images.indexWhere((i) => i.id == img.id);
-      if (idx >= 0) page.images[idx] = img;
-    }
-    for (final txt in _moveTextsBefore ?? const <TextItem>[]) {
-      final idx = page.textItems.indexWhere((t) => t.id == txt.id);
-      if (idx >= 0) page.textItems[idx] = txt;
-    }
-    _moveImagesBefore = null;
-    _moveTextsBefore = null;
-    _touch();
-  }
-
-  /// Elimina los trazos seleccionados con el lazo (deshacer possible).
-  /// Elimina toda la selección del lazo (trazos, imágenes y textos) en una
-  /// sola acción deshacible. Las capas bloqueadas no se tocan.
-  void deleteSelectedStrokes() {
-    if (!hasLassoSelection) return;
-    final removable = Set<Stroke>.identity()
-      ..addAll(_selectedStrokes.where((s) => !_isLayerLocked(s.layerIndex)));
-    final images = selectedImages.where((i) => !_isLayerLocked(i.layerIndex)).toList();
-    final texts = selectedTexts.where((t) => !_isLayerLocked(t.layerIndex)).toList();
-    if (removable.isEmpty && images.isEmpty && texts.isEmpty) return;
-    final before = List<Stroke>.of(page.strokes);
-    page.strokes.removeWhere(removable.contains);
-    _selectedStrokes.removeWhere(removable.contains);
-    final imageIds = {for (final i in images) i.id};
-    final textIds = {for (final t in texts) t.id};
-    page.images.removeWhere((i) => imageIds.contains(i.id));
-    page.textItems.removeWhere((t) => textIds.contains(t.id));
-    _selectedImageIds.removeAll(imageIds);
-    _selectedTextIds.removeAll(textIds);
-    final diff = CanvasAction.strokeDiff(before, page.strokes);
-    _undoStack.push(CanvasAction(
-      strokesRemoved: diff.strokesRemoved,
-      strokesRemovedAt: diff.strokesRemovedAt,
-      imagesRemoved: images,
-      textItemsRemoved: texts,
-    ));
-    _notifyBottomBarContext();
-    _touch();
-  }
-
-  /// Copia los trazos seleccionados al portapapeles interno.
-  void copySelectedStrokes() {
-    if (_selectedStrokes.isEmpty) return;
-    _clipboardStrokes = List<Stroke>.from(_selectedStrokes);
-    _notifyBottomBarContext();
-  }
-
-  /// Pega los trazos del portapapeles en la página actual,
-  /// desplazándolos 30 unidades en X e Y para que no se superpongan.
-  void pasteStrokes() {
-    if (_clipboardStrokes.isEmpty) return;
-    const offset = Offset(kPasteOffset, kPasteOffset);
-    final newStrokes = <Stroke>[];
-    // Pegar en una capa bloqueada no tiene sentido.
-    if (_isLayerLocked(_activeLayerIndex)) {
-      _onLayerBlocked?.call();
-      return;
-    }
-    for (final s in _clipboardStrokes) {
-      // Conserva color, relleno, figura y ajustes; se pega en la capa activa.
-      final newStroke = s.translated(offset).copyWith(
-            id: newId('st'),
-            layerIndex: _activeLayerIndex,
-          );
-      newStrokes.add(newStroke);
-      page.strokes.add(newStroke);
-    }
-    _undoStack.push(CanvasAction(strokesAdded: newStrokes));
-    _selectedStrokes = newStrokes;
-    _notifyBottomBarContext();
-    _touch();
-  }
-
-  bool get hasClipboard => _clipboardStrokes.isNotEmpty;
-
-  /// Cambia el color de los trazos seleccionados (deshacible). Los trazos
-  /// rellenos conservan su relleno; solo cambia la tinta.
-  void recolorSelection(Color color) {
-    _editSelection((s) => s.copyWith(colorValue: color.toARGB32()));
-  }
-
-  /// Multiplica el grosor de los trazos seleccionados (deshacible).
-  void scaleSelectionThickness(double factor) {
-    _editSelection((s) => s.copyWith(size: (s.size * factor).clamp(0.5, 120.0)));
-  }
-
-  /// Aplica [edit] a cada trazo seleccionado (salvo capas bloqueadas),
-  /// reemplazándolo en su sitio y registrando una sola acción de deshacer.
-  void _editSelection(Stroke Function(Stroke) edit) {
-    if (_selectedStrokes.isEmpty) return;
-    final positions = <String, int>{
-      for (var i = 0; i < page.strokes.length; i++) page.strokes[i].id: i,
-    };
-    final before = <Stroke>[]; // originales editados
-    final edited = <Stroke>[]; // sus reemplazos (mismo id, mismo orden)
-    final newSelection = <Stroke>[];
-    for (final original in _selectedStrokes) {
-      final idx = positions[original.id];
-      if (idx == null || _isLayerLocked(original.layerIndex)) {
-        newSelection.add(original);
-        continue;
-      }
-      final replacement = edit(original);
-      page.strokes[idx] = replacement;
-      before.add(original);
-      edited.add(replacement);
-      newSelection.add(replacement);
-    }
-    if (before.isEmpty) return;
-    _selectedStrokes = newSelection;
-    // Mismos ids → deshacer/rehacer reemplazan en sitio (z-order intacto).
-    _undoStack.push(CanvasAction(strokesRemoved: before, strokesAdded: edited));
-    _touch();
-  }
-
-  /// Sustituye los trazos seleccionados por una caja de texto con [text]
-  /// (resultado del reconocimiento de escritura), en el mismo sitio y con un
-  /// tamaño de letra acorde a la altura escrita. Una sola acción de deshacer.
-  void convertSelectionToText(String text) {
-    final removable = _selectedStrokes
-        .where((s) => !_isLayerLocked(s.layerIndex))
-        .toList();
-    if (removable.isEmpty || text.trim().isEmpty) return;
-    final bounds = selectionBounds(removable);
-    final lines = '\n'.allMatches(text.trim()).length + 1;
-    final fontSize = (bounds.height / lines * 0.75).clamp(12.0, 96.0);
-    final item = TextItem(
-      id: newId('txt'),
-      x: bounds.center.dx,
-      y: bounds.center.dy,
-      width: bounds.width.clamp(120.0, 4000.0),
-      text: text.trim(),
-      fontSize: fontSize,
-      colorValue: removable.first.colorValue,
-      layerIndex: removable.first.layerIndex,
-    );
-    final before = List<Stroke>.of(page.strokes);
-    final removeSet = Set<Stroke>.identity()..addAll(removable);
-    page.strokes.removeWhere(removeSet.contains);
-    page.textItems.add(item);
-    final diff = CanvasAction.strokeDiff(before, page.strokes);
-    _undoStack.push(CanvasAction(
-      strokesRemoved: diff.strokesRemoved,
-      strokesRemovedAt: diff.strokesRemovedAt,
-      textItemsAdded: [item],
-    ));
-    _selectedStrokes = [];
-    _touch();
-  }
-
-  /// Duplica la selección (copiar + pegar desplazado) sin tocar el
-  /// portapapeles del usuario.
-  void duplicateSelectedStrokes() {
-    if (_selectedStrokes.isEmpty) return;
-    final saved = _clipboardStrokes;
-    _clipboardStrokes = List.of(_selectedStrokes);
-    pasteStrokes();
-    _clipboardStrokes = saved;
-  }
-
-  // ------------------------------------------------------------------
-  // Transformar selección (escalar/rotar)
-  // ------------------------------------------------------------------
-
-  /// Aplica una transformación afín a los trazos seleccionados.
-  /// [scaleFactor] = factor de escala, [rotationAngle] = ángulo en radianes,
-  /// ambos relativos al centro de la selección.
-  void transformSelectedStrokes({
-    required double scaleFactor,
-    required double rotationAngle,
-    required Offset pivotPoint,
-  }) {
-    if (_selectedStrokes.isEmpty) return;
-    final cosA = cos(rotationAngle);
-    final sinA = sin(rotationAngle);
-
-    for (final original in List<Stroke>.from(_selectedStrokes)) {
-      if (_isLayerLocked(original.layerIndex)) continue;
-      final newPoints = original.points.map((p) {
-        // 1. Trasladar al origen relativo al pivot.
-        var dx = p.x - pivotPoint.dx;
-        var dy = p.y - pivotPoint.dy;
-        // 2. Escalar.
-        dx *= scaleFactor;
-        dy *= scaleFactor;
-        // 3. Rotar.
-        final rx = dx * cosA - dy * sinA;
-        final ry = dx * sinA + dy * cosA;
-        // 4. Volver al espacio mundo.
-        return StrokePoint(rx + pivotPoint.dx, ry + pivotPoint.dy, p.pressure);
-      }).toList();
-
-      // copyWith conserva capa, figura, relleno y ajustes.
-      final newStroke = original.copyWith(
-        points: newPoints,
-        size: original.size * scaleFactor,
-      );
-
-      // Reemplaza el trazo en la página (misma posición = mismo z-order).
-      final idx = page.strokes.indexWhere((s) => s.id == original.id);
-      if (idx >= 0) page.strokes[idx] = newStroke;
-      // Actualiza la referencia en la selección.
-      final selIdx = _selectedStrokes.indexOf(original);
-      if (selIdx >= 0) _selectedStrokes[selIdx] = newStroke;
-    }
-    _touchLive();
-  }
-
-  /// Confirma la transformación de selección (empuja acción de deshacer).
-  void commitTransformSelection(List<Stroke> before) {
-    if (_selectedStrokes.isEmpty) return;
-    _undoStack.push(
-      CanvasAction(
-        strokesRemoved: before,
-        strokesAdded: List<Stroke>.from(_selectedStrokes),
-      ),
-    );
-    _touch();
-  }
-
-  // ------------------------------------------------------------------
-  // Seleccionar trazos por hit-test (herramienta select)
-  // ------------------------------------------------------------------
-
-  /// Selecciona el trazo más cercano a [worldPoint].
-  ///
-  /// Se usa con la herramienta select: al tocar un trazo, se selecciona
-  /// (si no había otro seleccionado) o se añade/quita de la selección.
-  /// Devuelve true si se seleccionó algún trazo.
-  bool selectStrokeAt(Offset worldPoint) {
-    final hit = StrokeEngine.findStrokeAt(
-      worldPoint,
-      page.strokes,
-      maxDistance: 20.0 / _scale,
-    );
-    if (hit == null) return false;
-    _selectedImageId = null;
-    if (_selectedStrokes.contains(hit)) {
-      _selectedStrokes.remove(hit);
-    } else {
-      _selectedStrokes = [hit];
-    }
-    _touch();
-    return true;
-  }
-
-  /// Mueve todos los trazos seleccionados por un [delta] total desde [before].
-  ///
-  /// [before] es el estado original de los trazos antes de empezar a mover.
-  /// Se traslada cada trazo original por el delta completo (no incremental)
-  /// para evitar acumulación durante el arrastre.
-  ///
-  /// Se busca el trazo en `page.strokes` por **id** (no por identidad de
-  /// instancia) porque después del primer frame los originales ya fueron
-  /// reemplazados y `indexOf` devolvería -1.
-  void moveSelectedStrokes(Offset delta, {required List<Stroke> before}) {
-    // Imágenes y textos del lazo: se trasladan desde su estado inicial.
-    _moveImagesBefore ??=
-        selectedImages.where((i) => !_isLayerLocked(i.layerIndex)).toList();
-    _moveTextsBefore ??=
-        selectedTexts.where((t) => !_isLayerLocked(t.layerIndex)).toList();
-    for (final img in _moveImagesBefore!) {
-      final idx = page.images.indexWhere((i) => i.id == img.id);
-      if (idx >= 0) page.images[idx] = img.copyWith(x: img.x + delta.dx, y: img.y + delta.dy);
-    }
-    for (final txt in _moveTextsBefore!) {
-      final idx = page.textItems.indexWhere((t) => t.id == txt.id);
-      if (idx >= 0) {
-        page.textItems[idx] = txt.copyWith(x: txt.x + delta.dx, y: txt.y + delta.dy);
-      }
-    }
-    // Filtrar trazos en capas bloqueadas: esos no se mueven.
-    final movable = before.where((s) => !_isLayerLocked(s.layerIndex)).toList();
-    if (movable.isEmpty) {
-      _touchLive();
-      return;
-    }
-    // Índice por id de la página (una pasada, no indexWhere por trazo).
-    final positions = <String, int>{
-      for (var i = 0; i < page.strokes.length; i++) page.strokes[i].id: i,
-    };
-    _selectedStrokes = [];
-    for (final original in movable) {
-      final newStroke = original.translated(delta);
-      // Buscar por id (no por identidad) — después del primer frame,
-      // el objeto original ya no está en page.strokes.
-      final idx = positions[original.id];
-      if (idx != null) page.strokes[idx] = newStroke;
-      _selectedStrokes.add(newStroke);
-    }
-    // Durante el arrastre: repintar sin agendar guardado (se guarda al soltar).
-    _touchLive();
-  }
-
-  /// Confirma el movimiento de trazos seleccionados (empuja acción de deshacer).
-  /// Confirma el movimiento: una sola acción con trazos, imágenes y textos
-  /// (mismos ids → deshacer los devuelve a su sitio sin cambiar el orden).
-  void commitMoveStrokes(List<Stroke> before) {
-    if (!hasLassoSelection) return;
-    final movedIds = {for (final s in _selectedStrokes) s.id};
-    final imagesBefore = _moveImagesBefore ?? const <ImageItem>[];
-    final textsBefore = _moveTextsBefore ?? const <TextItem>[];
-    final imageIds = {for (final i in imagesBefore) i.id};
-    final textIds = {for (final t in textsBefore) t.id};
-    _undoStack.push(
-      CanvasAction(
-        strokesRemoved: before.where((s) => movedIds.contains(s.id)).toList(),
-        strokesAdded: List<Stroke>.from(_selectedStrokes),
-        imagesRemoved: imagesBefore,
-        imagesAdded: page.images.where((i) => imageIds.contains(i.id)).toList(),
-        textItemsRemoved: textsBefore,
-        textItemsAdded: page.textItems.where((t) => textIds.contains(t.id)).toList(),
-      ),
-    );
-    _moveImagesBefore = null;
-    _moveTextsBefore = null;
-    _touch();
-  }
-
-  // ------------------------------------------------------------------
   // TextItems (cajas de texto)
   // ------------------------------------------------------------------
 
@@ -1605,56 +1265,6 @@ class CanvasController extends ChangeNotifier {
     page.textItems.removeWhere((t) => t.id == item.id);
     if (_editingTextId == item.id) _editingTextId = null;
     _undoStack.push(CanvasAction(textItemsRemoved: [item]));
-    _touch();
-  }
-
-  // ------------------------------------------------------------------
-  // Capas
-  // ------------------------------------------------------------------
-
-  void setActiveLayer(int index) {
-    if (index < 0 || index >= page.layers.length) return;
-    _activeLayerIndex = index;
-    notifyListeners();
-  }
-
-  void addLayer() {
-    final name = 'Capa ${page.layers.length + 1}';
-    page.layers.add(Layer(name: name));
-    _activeLayerIndex = page.layers.length - 1;
-    _touch();
-  }
-
-  void removeLayer(int index) {
-    if (page.layers.length <= 1 || index == 0) return; // No eliminar la capa 0
-    page.layers.removeAt(index);
-    if (_activeLayerIndex >= page.layers.length) {
-      _activeLayerIndex = page.layers.length - 1;
-    }
-    _touch();
-  }
-
-  void toggleLayerVisibility(int index) {
-    if (index < 0 || index >= page.layers.length) return;
-    page.layers[index].visible = !page.layers[index].visible;
-    _touch();
-  }
-
-  void toggleLayerLocked(int index) {
-    if (index < 0 || index >= page.layers.length) return;
-    page.layers[index].locked = !page.layers[index].locked;
-    _touch();
-  }
-
-  void renameLayer(int index, String name) {
-    if (index < 0 || index >= page.layers.length) return;
-    page.layers[index].name = name;
-    _touch();
-  }
-
-  void setLayerOpacity(int index, double opacity) {
-    if (index < 0 || index >= page.layers.length) return;
-    page.layers[index].opacity = opacity.clamp(0.0, 1.0);
     _touch();
   }
 
@@ -1742,78 +1352,12 @@ class CanvasController extends ChangeNotifier {
   }
 
   // ------------------------------------------------------------------
-  // Transformación de vista (zoom / pan)
-  // ------------------------------------------------------------------
-
-  void _setView(double scale, Offset translate) {
-    _scale = scale.clamp(kMinZoom, kMaxZoom);
-    _translate = translate;
-    notifyListeners();
-  }
-
-  /// Aplica directamente una transformación (usado por el gesto de pellizco).
-  void setView(double scale, Offset translate) => _setView(scale, translate);
-
-  /// Aplica zoom alrededor de un punto de la pantalla (en coordenadas del
-  /// viewport). Usado por el gesto de pellizco y por los botones de zoom.
-  void zoomAt(double factor, Offset focal, Size viewportSize) {
-    final newScale = (_scale * factor).clamp(kMinZoom, kMaxZoom);
-    final scaleChange = newScale / _scale;
-    // Mantiene fijo el punto del mundo que está bajo [focal].
-    final newTranslate = focal - (focal - _translate) * scaleChange;
-    _setView(newScale, newTranslate);
-  }
-
-  /// Pan por un delta de pantalla.
-  void panBy(Offset delta) {
-    _setView(_scale, _translate + delta);
-  }
-
-  /// Ajusta la vista al contenido: hoja finita centrada o zoom 100% para
-  /// lienzos infinitos.
-  void fitView(Size viewportSize) {
-    if (viewportSize.isEmpty) return;
-    final t = page.template;
-    if (t.isFinite) {
-      final s = sheetSize;
-      final fit = min(
-        viewportSize.width / s.width,
-        viewportSize.height / s.height,
-      );
-      final scale = min(fit * 0.95, 1.5);
-      // La hoja se dibuja CENTRADA en el origen del mundo (ver paintWorld:
-      // Rect.fromCenter(center: Offset.zero)), así que el origen debe caer en
-      // el centro del viewport. (Antes se trataba como si la esquina superior
-      // izquierda estuviera en el origen y la hoja salía desplazada.)
-      _setView(
-        scale,
-        Offset(viewportSize.width / 2, viewportSize.height / 2),
-      );
-    } else {
-      _setView(1.0, Offset.zero);
-    }
-    _viewInitialized = true;
-  }
-
-  /// Convierte un punto del viewport a coordenadas de mundo.
-  Offset viewportToWorld(Offset local, Size viewportSize) =>
-      (local - _translate) / _scale;
-
-  /// Convierte coordenadas de mundo a viewport.
-  Offset worldToViewport(Offset world, Size viewportSize) =>
-      world * _scale + _translate;
-
-  /// Llamado tras el primer layout del lienzo para encuadrar la vista.
-  void ensureViewInitialized(Size viewportSize) {
-    if (!_viewInitialized) fitView(viewportSize);
-  }
-
-  // ------------------------------------------------------------------
   // Persistencia
   // ------------------------------------------------------------------
 
   /// Marca el documento como modificado y agenda guardado automático
   /// (debounced) para no perder trazos ante cierres inesperados.
+  @override
   void _touch() {
     _note.updatedAt = DateTime.now();
     _dirty = true;
@@ -1824,6 +1368,7 @@ class CanvasController extends ChangeNotifier {
 
   /// Repinta la capa confirmada sin agendar guardado (arrastres en vivo).
   /// El cambio se persiste con el `_touch()` del commit al soltar.
+  @override
   void _touchLive() {
     _contentVersion++;
     notifyListeners();
@@ -1848,6 +1393,7 @@ class CanvasController extends ChangeNotifier {
     _note = note;
     if (notebookId != null) _notebookId = notebookId;
     _pageIndex = 0;
+    _undoStacks.clear(); // otra nota: lo anterior ya no aplica
     _resetPageState();
     _viewInitialized = false;
     _touch();

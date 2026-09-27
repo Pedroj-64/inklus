@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import '../constants.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'theme/inklus_colors.dart';
+import 'widgets/page_scaffold.dart';
+import 'theme/tokens.dart';
 
 import '../models/note.dart';
 import '../models/notebook.dart';
@@ -11,7 +13,6 @@ import '../services/export_service.dart';
 import '../services/image_service.dart';
 import '../services/storage_service.dart';
 import 'home_screen.dart';
-import '../utils/theme_colors.dart';
 import 'widgets/dialogs.dart';
 
 /// Pantalla que muestra la lista de apuntes (notes) dentro de un cuaderno.
@@ -244,90 +245,53 @@ class _NoteListScreenState extends State<NoteListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _notebook.title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+    final count = _notebook.notes.length;
+    return InklusPage(
+      title: _notebook.title,
+      subtitle: count == 1 ? '1 nota' : '$count notas',
+      maxWidth: double.infinity,
+      actions: [
+        IconButton(
+          tooltip: 'Renombrar cuaderno',
+          icon: const Icon(Icons.edit_outlined),
+          onPressed: _renameNotebook,
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Renombrar cuaderno',
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: _renameNotebook,
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'Nueva nota',
-        backgroundColor: kAccentColor,
-        foregroundColor: Colors.white,
+      ],
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: _createNote,
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('Nueva nota'),
       ),
-      body: _notebook.notes.isEmpty
-          ? _buildEmptyState()
-          : _buildNoteList(isDark),
+      slivers: [
+        if (count == 0)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: EmptyState(
+              icon: Icons.note_add_outlined,
+              title: 'Sin notas',
+              message: 'Crea tu primera nota para empezar a escribir.',
+              actions: [
+                FilledButton.icon(
+                  onPressed: _createNote,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Crear nota'),
+                ),
+              ],
+            ),
+          )
+        else
+          _buildNoteGrid(),
+      ],
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: kAccentColor.withAlpha(20),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.note_add_outlined,
-                size: 40,
-                color: kAccentColor,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Sin notas',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Crea tu primera nota para empezar a escribir.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white54
-                    : ThemeColors.of(context).textSecondary,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 28),
-            FilledButton.icon(
-              onPressed: _createNote,
-              icon: const Icon(Icons.add),
-              label: const Text('Crear nota'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNoteList(bool isDark) {
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+  Widget _buildNoteGrid() {
+    return SliverGrid.builder(
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 280,
-        mainAxisExtent: 200,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        mainAxisExtent: 210,
+        crossAxisSpacing: Spacing.md,
+        mainAxisSpacing: Spacing.md,
       ),
       itemCount: _notebook.notes.length,
       itemBuilder: (context, index) {
@@ -336,10 +300,6 @@ class _NoteListScreenState extends State<NoteListScreen> {
         final timeAgo = _relativeTime(note.updatedAt);
         return Card(
           clipBehavior: Clip.antiAlias,
-          elevation: 1,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
           child: InkWell(
             onTap: () => _openNote(note),
             child: Column(
@@ -351,7 +311,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
                     fit: StackFit.expand,
                     children: [
                       Container(
-                        color: isDark ? const Color(0xFF333333) : const Color(0xFFF1F0EC),
+                        color: context.colors.surfaceContainerHighest,
                         child: FutureBuilder<Uint8List>(
                           future: _thumbFor(note),
                           builder: (context, snapshot) {
@@ -365,7 +325,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
                             if (snapshot.hasError) {
                               return Icon(
                                 Icons.description_outlined,
-                                color: isDark ? Colors.white30 : ThemeColors.of(context).border,
+                                color: context.colors.outline,
                                 size: 36,
                               );
                             }
@@ -381,18 +341,16 @@ class _NoteListScreenState extends State<NoteListScreen> {
                       ),
                       // Menú contextual flotante
                       Positioned(
-                        top: 4,
-                        right: 4,
+                        top: Spacing.xs,
+                        right: Spacing.xs,
                         child: PopupMenuButton<String>(
                           tooltip: 'Opciones',
-                          icon: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withAlpha(40),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.more_vert, size: 18, color: Colors.white),
+                          style: IconButton.styleFrom(
+                            backgroundColor:
+                                context.colors.surface.withValues(alpha: 0.85),
+                            foregroundColor: context.colors.onSurface,
                           ),
+                          icon: const Icon(Icons.more_vert),
                           onSelected: (v) {
                             switch (v) {
                               case 'rename':
@@ -403,7 +361,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
                                 _deleteNote(note);
                             }
                           },
-                          itemBuilder: (context) => const [
+                          itemBuilder: (context) => [
                             PopupMenuItem(
                               value: 'rename',
                               child: ListTile(
@@ -426,11 +384,11 @@ class _NoteListScreenState extends State<NoteListScreen> {
                               child: ListTile(
                                 leading: Icon(
                                   Icons.delete_outline,
-                                  color: Color(0xFFD32F2F),
+                                  color: context.inklus.danger,
                                 ),
                                 title: Text(
                                   'Eliminar',
-                                  style: TextStyle(color: Color(0xFFD32F2F)),
+                                  style: TextStyle(color: context.inklus.danger),
                                 ),
                                 dense: true,
                               ),
@@ -443,7 +401,8 @@ class _NoteListScreenState extends State<NoteListScreen> {
                 ),
                 // Info de la nota
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                  padding: const EdgeInsets.fromLTRB(
+                      Spacing.md, Spacing.sm, Spacing.sm, Spacing.md),
                   child: Row(
                     children: [
                       Expanded(
@@ -454,18 +413,13 @@ class _NoteListScreenState extends State<NoteListScreen> {
                               note.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: context.text.titleSmall,
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: Spacing.xxs),
                             Text(
                               '$pageCount página${pageCount == 1 ? '' : 's'} · $timeAgo',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? Colors.white54 : ThemeColors.of(context).textSecondary,
-                              ),
+                              style: context.text.bodySmall?.copyWith(
+                                  color: context.colors.onSurfaceVariant),
                             ),
                           ],
                         ),
@@ -511,7 +465,6 @@ class _CompactTemplateGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final templates = <(TemplateType, IconData, String)>[
       (TemplateType.blank, Icons.landscape, 'Infinito'),
       (TemplateType.ruled, Icons.format_list_bulleted, 'Rayas'),
@@ -537,15 +490,13 @@ class _CompactTemplateGrid extends StatelessWidget {
             height: 64,
             decoration: BoxDecoration(
               color: isSelected
-                  ? kAccentColor.withAlpha(20)
-                  : (isDark
-                      ? Colors.white.withAlpha(8)
-                      : Colors.grey.withAlpha(25)),
+                  ? context.colors.primary.withAlpha(20)
+                  : context.colors.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: isSelected
-                    ? kAccentColor
-                    : ThemeColors.of(context).borderLight,
+                    ? context.colors.primary
+                    : context.colors.outlineVariant,
                 width: isSelected ? 2 : 1,
               ),
             ),
@@ -556,8 +507,8 @@ class _CompactTemplateGrid extends StatelessWidget {
                   icon,
                   size: 22,
                   color: isSelected
-                      ? kAccentColor
-                      : (isDark ? Colors.white60 : ThemeColors.of(context).textSecondary),
+                      ? context.colors.primary
+                      : context.colors.onSurfaceVariant,
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -568,8 +519,8 @@ class _CompactTemplateGrid extends StatelessWidget {
                     fontWeight:
                         isSelected ? FontWeight.w600 : FontWeight.normal,
                     color: isSelected
-                        ? kAccentColor
-                        : (isDark ? Colors.white70 : ThemeColors.of(context).textPrimary),
+                        ? context.colors.primary
+                        : context.colors.onSurface,
                   ),
                 ),
               ],

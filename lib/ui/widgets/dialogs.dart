@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 
+import '../theme/inklus_colors.dart';
+
 /// Diálogos reutilizables (antes había varias copias casi idénticas, y
 /// ninguna liberaba su TextEditingController).
 
@@ -100,6 +102,42 @@ class _TextPromptDialogState extends State<_TextPromptDialog> {
       ],
     );
   }
+}
+
+/// Pide confirmación. Con [destructive] el botón usa el color de peligro
+/// del tema (borrar, vaciar…). Devuelve true solo si se confirma.
+Future<bool> showConfirmDialog(
+  BuildContext context, {
+  required String title,
+  required String message,
+  String confirmLabel = 'Aceptar',
+  String cancelLabel = 'Cancelar',
+  bool destructive = false,
+}) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(cancelLabel),
+        ),
+        FilledButton(
+          style: destructive
+              ? FilledButton.styleFrom(
+                  backgroundColor: context.inklus.danger,
+                  foregroundColor: context.colors.onError,
+                )
+              : null,
+          onPressed: () => Navigator.pop(context, true),
+          child: Text(confirmLabel),
+        ),
+      ],
+    ),
+  );
+  return ok ?? false;
 }
 
 /// Muestra un indicador de progreso modal mientras corre [task] y lo cierra

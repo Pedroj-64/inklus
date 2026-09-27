@@ -350,4 +350,85 @@ void main() {
       expect(tempDir.listSync().where((e) => e.path.contains('.tmp-')), isEmpty);
     });
   });
+
+  group('Papelera', () {
+    Directory trash() => Directory('${tempDir.path}/trash');
+
+    test('un cuaderno borrado es UNA entrada, con sus notas y su fecha', () async {
+      final nb = await storage.createNotebook(title: 'Física');
+      await storage.createNote(nb.id, title: 'Tema 2');
+      await storage.deleteNotebook(nb.id);
+
+      final entries = await storage.loadTrash();
+      expect(entries.single.id, nb.id);
+      expect(entries.single.kind, TrashKind.notebook);
+      expect(entries.single.noteCount, 2);
+      expect(DateTime.now().difference(entries.single.deletedAt).inMinutes, 0);
+    });
+
+    test('una nota borrada vuelve a su cuaderno', () async {
+      final nb = await storage.createNotebook(title: 'Química');
+      final extra = await storage.createNote(nb.id, title: 'Enlaces');
+      await storage.deleteNote(nb.id, extra.id);
+
+      final entry = (await storage.loadTrash()).single;
+      expect(entry.kind, TrashKind.note);
+      expect(entry.notebookTitle, 'Química');
+
+      await storage.restoreFromTrash(extra.id);
+      final loaded = (await storage.loadNotebook(nb.id))!;
+      expect(loaded.notes.map((n) => n.id), contains(extra.id));
+      expect(await storage.loadTrash(), isEmpty);
+      expect((await storage.loadIndex()).length, 1, reason: 'sin cuaderno nuevo');
+    });
+
+    test('si su cuaderno ya no existe, la nota vuelve en uno nuevo', () async {
+      final nb = await storage.createNotebook(title: 'Historia');
+      final extra = await storage.createNote(nb.id, title: 'Roma');
+      await storage.deleteNote(nb.id, extra.id);
+      await storage.deleteNotebook(nb.id);
+      await storage.purgeFromTrash(nb.id);
+
+      await storage.restoreFromTrash(extra.id);
+      final metas = await storage.loadIndex();
+      expect(metas.single.title, 'Historia');
+      final restored = (await storage.loadNotebook(metas.single.id))!;
+      expect(restored.notes.single.title, 'Roma');
+    });
+
+    test('borrar definitivamente un cuaderno borra también sus notas', () async {
+      final nb = await storage.createNotebook(title: 'Temporal');
+      await storage.deleteNotebook(nb.id);
+      await storage.purgeFromTrash(nb.id);
+      expect(trash().listSync(), isEmpty);
+    });
+
+    test('restaurar un cuaderno recupera todas sus notas', () async {
+      final nb = await storage.createNotebook(title: 'Arte');
+      final n2 = await storage.createNote(nb.id, title: 'Color');
+      await storage.deleteNotebook(nb.id);
+      await storage.restoreFromTrash(nb.id);
+
+      final loaded = (await storage.loadNotebook(nb.id))!;
+      expect(loaded.notes.map((n) => n.id), [nb.notes.first.id, n2.id]);
+      expect(await storage.loadTrash(), isEmpty);
+      final raw = File('${tempDir.path}/notebooks/${nb.id}.json').readAsStringSync();
+      expect(raw.contains('_trash'), isFalse);
+    });
+
+    test('lo que lleva más de 30 días se borra solo', () async {
+      final nb = await storage.createNotebook(title: 'Viejo');
+      await storage.deleteNotebook(nb.id);
+      final f = File('${trash().path}/${nb.id}.json');
+      final json = jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
+      json['_trash'] = {
+        'deletedAt':
+            DateTime.now().subtract(const Duration(days: 31)).toIso8601String(),
+      };
+      f.writeAsStringSync(jsonEncode(json));
+
+      expect(await storage.loadTrash(), isEmpty);
+      expect(trash().listSync(), isEmpty, reason: 'también sus notas');
+    });
+  });
 }

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import '../constants.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../utils/theme_colors.dart';
+
+import 'theme/inklus_colors.dart';
+import 'theme/tokens.dart';
 
 /// Pantalla de onboarding que se muestra la primera vez que se abre la app.
 ///
-/// Muestra 3 páginas de acción (cómo usar la app) con ilustraciones.
+/// Muestra 4 páginas (cómo usar la app) con ilustraciones.
 /// Se guarda en SharedPreferences que ya se vio, para no mostrar de nuevo.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key, this.onDone});
@@ -34,30 +35,41 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   static const _pages = <_OnboardingPage>[
     _OnboardingPage(
-      icon: Icons.edit,
-      color: kAccentColor,
-      title: 'Toca con el stylus',
-      description:
-          'Escribe directamente en la pantalla como en un cuaderno real. '
-          'Inklus detecta tu stylus y rechaza la palma automáticamente.',
+      icon: Icons.edit_outlined,
+      title: 'Escribe con tu lápiz',
+      description: 'Apoya la mano sin miedo: Inklus reconoce el lápiz y '
+          'descarta la palma. La goma del lápiz o el botón lateral borran.',
     ),
     _OnboardingPage(
-      icon: Icons.zoom_out_map,
-      color: Color(0xFF8B5CF6),
-      title: 'Dos dedos para hacer zoom',
-      description:
-          'Pellizca con dos dedos para acercar o alejar. '
-          'Arrastra con dos dedos para moverte por el lienzo.',
+      icon: Icons.pan_tool_outlined,
+      title: 'Muévete con los dedos',
+      description: 'Con el lápiz, un dedo desplaza la página y dos dedos '
+          'acercan o alejan. Puedes volver a dibujar con el dedo desde la barra.',
     ),
     _OnboardingPage(
-      icon: Icons.menu,
-      color: Color(0xFF10B981),
-      title: 'Barra de herramientas',
-      description:
-          'Usa la barra lateral para cambiar entre lapicero, '
-          'borrador, lazo y más herramientas.',
+      icon: Icons.construction_outlined,
+      title: 'Herramientas arriba',
+      description: 'Toca una herramienta para usarla y tócala otra vez para '
+          'ver sus opciones: grosor, color, borrador parcial, figuras…',
+    ),
+    _OnboardingPage(
+      icon: Icons.lock_outline,
+      title: 'Tus notas son tuyas',
+      description: 'Todo se guarda en este dispositivo, sin cuentas ni '
+          'anuncios. Si quieres, puedes hacer copia en tu Google Drive.',
     ),
   ];
+
+  /// Color de cada página y su color de texto encima (roles del tema:
+  /// funciona en claro y oscuro).
+  (Color, Color) _accentPair(BuildContext context, int i) => switch (i) {
+        0 => (context.colors.primary, context.colors.onPrimary),
+        1 => (context.colors.tertiary, context.colors.onTertiary),
+        2 => (context.colors.secondary, context.colors.onSecondary),
+        _ => (context.inklus.success, context.colors.onPrimary),
+      };
+
+  Color _accent(BuildContext context, int i) => _accentPair(context, i).$1;
 
   @override
   void dispose() {
@@ -67,16 +79,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   void _next() {
     if (_page < _pages.length - 1) {
-      _controller.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+      _controller.nextPage(duration: Motion.slow, curve: Curves.easeInOut);
     } else {
       _finish();
     }
   }
-
-  void _skip() => _finish();
 
   void _finish() async {
     await OnboardingScreen.markSeen();
@@ -85,34 +92,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final isSmall = size.height < 600;
+    final isSmall = MediaQuery.sizeOf(context).height < 600;
+    final accent = _accent(context, _page);
+    final last = _page == _pages.length - 1;
 
     return Scaffold(
-      backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
-            // Botón saltar
             Align(
               alignment: Alignment.topRight,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(0, 8, 16, 0),
-                child: TextButton(
-                  onPressed: _skip,
-                  child: Text(
-                    'Saltar',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.grey.shade500,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
+                padding: const EdgeInsets.fromLTRB(0, Spacing.sm, Spacing.lg, 0),
+                child: TextButton(onPressed: _finish, child: const Text('Saltar')),
               ),
             ),
-
-            // Páginas
             Expanded(
               child: PageView.builder(
                 controller: _controller,
@@ -120,115 +114,73 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 onPageChanged: (i) => setState(() => _page = i),
                 itemBuilder: (context, i) {
                   final p = _pages[i];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Ilustración circular
-                        Container(
-                          width: isSmall ? 100 : 140,
-                          height: isSmall ? 100 : 140,
-                          decoration: BoxDecoration(
-                            color: p.color.withAlpha(25),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            p.icon,
-                            size: isSmall ? 50 : 64,
-                            color: p.color,
-                          ),
+                  final color = _accent(context, i);
+                  return Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: Spacing.xxl),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 520),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: isSmall ? 100 : 140,
+                              height: isSmall ? 100 : 140,
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: context.isDark ? 0.2 : 0.12),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(p.icon, size: isSmall ? 48 : 64, color: color),
+                            ),
+                            SizedBox(height: isSmall ? Spacing.xl : Spacing.xxxl),
+                            Text(
+                              p.title,
+                              textAlign: TextAlign.center,
+                              style: isSmall
+                                  ? context.text.headlineSmall
+                                  : context.text.headlineMedium,
+                            ),
+                            const SizedBox(height: Spacing.md),
+                            Text(
+                              p.description,
+                              textAlign: TextAlign.center,
+                              style: context.text.bodyLarge
+                                  ?.copyWith(color: context.colors.onSurfaceVariant),
+                            ),
+                          ],
                         ),
-                        SizedBox(height: isSmall ? 24 : 40),
-                        Text(
-                          p.title,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: isSmall ? 22 : 26,
-                            fontWeight: FontWeight.bold,
-                            color: ThemeColors.of(context).textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          p.description,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: isSmall ? 13 : 15,
-                            color: Colors.grey.shade600,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   );
                 },
               ),
             ),
-
-            // Indicadores de página + botón siguiente
             Padding(
               padding: EdgeInsets.fromLTRB(
-                32,
-                0,
-                32,
-                isSmall ? 20 : 32,
-              ),
+                  Spacing.xxl, 0, Spacing.xxl, isSmall ? Spacing.lg : Spacing.xxl),
               child: Row(
                 children: [
-                  // Dots indicadores
-                  ...List.generate(
-                    _pages.length,
-                    (i) => AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      margin: const EdgeInsets.only(right: 6),
+                  for (var i = 0; i < _pages.length; i++)
+                    AnimatedContainer(
+                      duration: Motion.normal,
+                      margin: const EdgeInsets.only(right: Spacing.sm),
                       width: i == _page ? 24 : 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: i == _page
-                            ? _pages[_page].color
-                            : Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(4),
+                        color: i == _page ? accent : context.colors.outlineVariant,
+                        borderRadius: BorderRadius.circular(Radii.pill),
                       ),
                     ),
-                  ),
-
                   const Spacer(),
-
-                  // Botón siguiente / empezar
-                  FilledButton(
+                  FilledButton.icon(
                     onPressed: _next,
                     style: FilledButton.styleFrom(
-                      backgroundColor: _pages[_page].color,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 28,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      backgroundColor: accent,
+                      foregroundColor: _accentPair(context, _page).$2,
+                      minimumSize: const Size(0, Sizes.minTouch),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _page == _pages.length - 1
-                              ? 'Empezar'
-                              : 'Siguiente',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(
-                          _page == _pages.length - 1
-                              ? Icons.check
-                              : Icons.arrow_forward_ios,
-                          size: 16,
-                        ),
-                      ],
-                    ),
+                    iconAlignment: IconAlignment.end,
+                    icon: Icon(last ? Icons.check : Icons.arrow_forward),
+                    label: Text(last ? 'Empezar' : 'Siguiente'),
                   ),
                 ],
               ),
@@ -242,13 +194,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
 class _OnboardingPage {
   final IconData icon;
-  final Color color;
   final String title;
   final String description;
 
   const _OnboardingPage({
     required this.icon,
-    required this.color,
     required this.title,
     required this.description,
   });
