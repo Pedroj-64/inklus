@@ -612,13 +612,19 @@ class CanvasController extends ChangeNotifier {
       );
       // Reconstruir la lista: protegidos + sobrevivientes.
       final survivors = [...protected.values, ...erasableSurvivors];
-      final removed = before.where((s) => !survivors.contains(s)).toList();
-      if (removed.isNotEmpty) {
+      // Detectar si algo cambió (algún trazo fue modificado o eliminado).
+      final changed = before.where((s) => !survivors.contains(s)).isNotEmpty ||
+          before.length != survivors.length;
+      if (changed) {
         page.strokes
           ..clear()
           ..addAll(survivors);
+        // IMPORTANTE: strokesRemoved debe ser TODO el listado anterior
+        // (no solo los eliminados), porque page.strokes fue reemplazado
+        // completamente. Al deshacer, se quitan survivors y se restaura
+        // el listado original completo.
         _undoStack.push(
-          CanvasAction(strokesRemoved: removed, strokesAdded: survivors),
+          CanvasAction(strokesRemoved: List<Stroke>.from(before), strokesAdded: survivors),
         );
       }
     }
@@ -1209,6 +1215,10 @@ class CanvasController extends ChangeNotifier {
   /// [before] es el estado original de los trazos antes de empezar a mover.
   /// Se traslada cada trazo original por el delta completo (no incremental)
   /// para evitar acumulación durante el arrastre.
+  ///
+  /// Se busca el trazo en `page.strokes` por **id** (no por identidad de
+  /// instancia) porque después del primer frame los originales ya fueron
+  /// reemplazados y `indexOf` devolvería -1.
   void moveSelectedStrokes(Offset delta, {required List<Stroke> before}) {
     if (before.isEmpty) return;
     // Filtrar trazos en capas bloqueadas.
@@ -1231,8 +1241,9 @@ class CanvasController extends ChangeNotifier {
         layerIndex: original.layerIndex,
         shapeType: original.shapeType,
       );
-      // Reemplaza el trazo en la página.
-      final idx = page.strokes.indexOf(original);
+      // Buscar por id (no por identidad) — después del primer frame,
+      // el objeto original ya no está en page.strokes.
+      final idx = page.strokes.indexWhere((s) => s.id == original.id);
       if (idx >= 0) page.strokes[idx] = newStroke;
       _selectedStrokes.add(newStroke);
     }
