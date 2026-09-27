@@ -2,6 +2,17 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versiones [SemVer](https://semver.org/lang/es/).
 
+## [1.4.3] — 2026-09-27
+
+### Corregido
+- **Fecha de guardado desfasada**: cada nota se escribía en disco con el `updatedAt` del guardado *anterior*, lo que podía hacer ganar a la copia equivocada en la sincronización con Drive. Las copias restauradas de Drive conservan su fecha original.
+- **Importar una nota suelta** (copias `.inklus` de Drive o "copia .inklus" del editor) fallaba con "No es un cuaderno .inklus v2 válido": el formato se detecta por su contenido (`notebook.json` / `document.json`).
+- **`.inklus` antiguo importado vacío**: la nota se guardaba fuera del cuaderno creado; ahora queda dentro, con un id nuevo.
+
+### Rendimiento
+- Crear, renombrar, duplicar o borrar una nota, y cambiar título/color/etiquetas de un cuaderno, ya **no leen ni reescriben todas las notas del cuaderno**.
+- Las notas grandes (más de ~20.000 puntos) se codifican y escriben en otro isolate: el autoguardado no bloquea la escritura.
+
 ## [1.4.2] — 2026-09-26
 
 ### Añadido

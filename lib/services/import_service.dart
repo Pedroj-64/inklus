@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import 'dart:io';
 import 'dart:isolate';
 
 import 'package:archive/archive.dart';
@@ -6,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/document.dart';
+import '../models/id.dart';
 import '../models/note.dart';
 import '../models/notebook.dart';
 import 'inklus_format.dart';
@@ -76,9 +78,9 @@ abstract final class ImportService {
     if (names.contains('backup.json') || names.contains('index.json')) {
       return ImportKind.fullBackup;
     }
-    if (names.contains('format.json') || names.contains('notebook.json')) {
-      return ImportKind.notebook;
-    }
+    // Una nota suelta (copia de Drive, "copia .inklus") es v1 aunque lleve
+    // format.json: manda la entrada de contenido.
+    if (names.contains('notebook.json')) return ImportKind.notebook;
     if (names.contains('document.json')) return ImportKind.legacyDocument;
     throw const FormatException(
       'El archivo no es un cuaderno .inklus ni un respaldo de Inklus.',
@@ -89,6 +91,7 @@ abstract final class ImportService {
   static Future<ImportResult> importBytes(
     Uint8List bytes, {
     StorageService? storage,
+    @visibleForTesting Directory? extractTo,
   }) async {
     final s = storage ?? StorageService.instance;
     final kind = await detect(bytes);
@@ -98,7 +101,7 @@ abstract final class ImportService {
         return ImportResult(kind, 'Respaldo restaurado: $count cuaderno(s)');
       case ImportKind.notebook:
       case ImportKind.legacyDocument:
-        final result = await InklusFormat.importAuto(bytes);
+        final result = await InklusFormat.importAuto(bytes, extractTo: extractTo);
         if (result is Notebook) {
           await s.saveNotebook(result);
           return ImportResult(
@@ -108,15 +111,17 @@ abstract final class ImportService {
           );
         }
         final doc = result as Document;
+        // Id nuevo: la nota original puede seguir en la biblioteca y dos
+        // cuadernos no deben compartir `notes/<id>.json`.
         final note = Note(
-          id: 'note_${doc.id}',
+          id: newId('note'),
           title: doc.title,
           createdAt: doc.createdAt,
           updatedAt: doc.updatedAt,
           pages: doc.pages,
         );
-        final nb = await s.createNotebook(title: doc.title);
-        await s.saveNote(nb.id, note);
+        final nb = Notebook(id: newId('nb'), title: doc.title, notes: [note]);
+        await s.saveNotebook(nb);
         return ImportResult(
           kind,
           'Cuaderno "${doc.title}" importado',

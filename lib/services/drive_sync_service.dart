@@ -727,7 +727,7 @@ class DriveSyncService extends ChangeNotifier {
       if (hit == null) {
         missing.add(note);
       } else if (note.updatedAt.isAfter(hit.$2.updatedAt)) {
-        await storage.saveNote(hit.$1, note);
+        await storage.saveNote(hit.$1, note, touch: false);
         updated++;
       }
     }

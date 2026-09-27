@@ -269,4 +269,85 @@ void main() {
       expect(tempDir.listSync().where((e) => e.path.contains('.tmp-')), isEmpty);
     });
   });
+
+  group('Notas sin reescribir el cuaderno', () {
+    File noteFile(String id) => File('${tempDir.path}/notes/$id.json');
+
+    test('saveNote guarda en disco el updatedAt de ese guardado', () async {
+      final nb = await storage.createNotebook(title: 'Fechas');
+      final note = nb.notes.first;
+      final before = note.updatedAt;
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+
+      await storage.saveNote(nb.id, note);
+
+      final onDisk = (await storage.loadNote(note.id))!.updatedAt;
+      expect(onDisk.isAfter(before), isTrue);
+      expect(onDisk, note.updatedAt);
+    });
+
+    test('createNote, renameNote y duplicateNote no tocan las otras notas',
+        () async {
+      final nb = await storage.createNotebook(title: 'Grande');
+      final first = nb.notes.first;
+      final stamp = DateTime(2001);
+      noteFile(first.id).setLastModifiedSync(stamp);
+
+      final created = await storage.createNote(nb.id, title: 'Nueva');
+      await storage.renameNote(nb.id, created.id, 'Renombrada');
+      final copy = await storage.duplicateNote(nb.id, created.id);
+
+      expect(noteFile(first.id).lastModifiedSync(), stamp);
+      final loaded = (await storage.loadNotebook(nb.id))!;
+      expect(loaded.notes.map((n) => n.id), [first.id, created.id, copy.id]);
+      expect(loaded.notes[1].title, 'Renombrada');
+    });
+
+    test('deleteNote quita la nota pero nunca la última', () async {
+      final nb = await storage.createNotebook(title: 'Borrar');
+      final extra = await storage.createNote(nb.id);
+
+      await storage.deleteNote(nb.id, extra.id);
+      var loaded = (await storage.loadNotebook(nb.id))!;
+      expect(loaded.notes.map((n) => n.id), [nb.notes.first.id]);
+      expect(noteFile(extra.id).existsSync(), isFalse);
+
+      await storage.deleteNote(nb.id, nb.notes.first.id);
+      loaded = (await storage.loadNotebook(nb.id))!;
+      expect(loaded.notes.length, 1);
+    });
+
+    test('renombrar, color y etiquetas actualizan cuaderno e índice', () async {
+      final nb = await storage.createNotebook(title: 'Antes', colorValue: 0xFF112233);
+      await storage.renameNotebook(nb.id, 'Después');
+      await storage.setNotebookTags(nb.id, ['física']);
+      await storage.setNotebookColor(nb.id, null);
+
+      final meta = (await storage.loadIndex()).single;
+      expect(meta.title, 'Después');
+      expect(meta.tags, ['física']);
+      expect(meta.colorValue, isNull);
+      final loaded = (await storage.loadNotebook(nb.id))!;
+      expect(loaded.title, 'Después');
+      expect(loaded.tags, ['física']);
+      expect(loaded.colorValue, isNull);
+      expect(loaded.notes.length, 1);
+    });
+
+    test('createNote en un cuaderno inexistente no deja la nota huérfana',
+        () async {
+      await expectLater(storage.createNote('nb_no_existe'), throwsStateError);
+      final notesDir = Directory('${tempDir.path}/notes');
+      final left = notesDir.existsSync() ? notesDir.listSync() : const [];
+      expect(left, isEmpty);
+    });
+
+    test('writeJsonAtomic en segundo plano escribe el mismo JSON', () async {
+      final f = File('${tempDir.path}/big.json');
+      final json = {'a': List.generate(1000, (i) => {'x': i, 'y': i / 2})};
+      await writeJsonAtomic(f, json, background: true);
+      expect(jsonDecode(f.readAsStringSync()), json);
+      expect(tempDir.listSync().where((e) => e.path.contains('.tmp-')), isEmpty);
+    });
+  });
 }

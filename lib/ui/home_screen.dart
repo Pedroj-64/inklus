@@ -772,7 +772,7 @@ class _HomeScreenState extends State<HomeScreen> {
       } else {
         _c.replaceNote(restored, notebookId: widget.notebookId);
         // Persistir la nota restaurada en disco local.
-        await _storage.saveNote(widget.notebookId, restored);
+        await _storage.saveNote(widget.notebookId, restored, touch: false);
         _snack('Nota restaurada desde Google Drive');
       }
     } catch (e) {

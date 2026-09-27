@@ -39,7 +39,8 @@ logic/
 services/
   storage_service.dart     ★ índice v2 + notebooks/ + notes/; escrituras atómicas, cola del
                              índice, recuperación de índice corrupto, backup completo, favoritos
-  file_utils.dart          writeAtomic, safeJoin/safeFileName, decodeJsonAsync, SerialQueue
+  file_utils.dart          writeAtomic, writeJsonAtomic (isolate para notas grandes), safeJoin/
+                             safeFileName, decodeJsonAsync, SerialQueue
   backup_crypto.dart       AES-256-GCM + PBKDF2 en isolate
   search_service.dart      índice de búsqueda v2 por nota (título, texto tecleado, escritura
                              reconocida); sin acentos; SearchService.instance compartido
@@ -157,7 +158,7 @@ marketplace/               plantilla del repo inklus-marketplace (validador + CI
 ## Reglas de negocio
 
 - La **biblioteca** (`NotebookLibraryScreen`) es la pantalla de inicio → `NoteListScreen` → `HomeScreen(note:, notebookId:)`, que recibe el `Note` ya cargado (no lo lee de disco). Al volver se refrescan índice y miniaturas.
-- `StorageService`: `index.json` (`formatVersion: 2`, metadatos por `updatedAt`) + `notebooks/<id>.json` (solo `noteIds`) + `notes/<id>.json`. Toda escritura pasa por `writeAtomic`; toda modificación del índice por `_updateIndex` (cola serializada). Las imágenes viven en `inklus/images/` compartido; `collectOrphanedImages` borra las no referenciadas (notas activas, papelera y versiones) con 10 min de gracia.
+- `StorageService`: `index.json` (`formatVersion: 2`, metadatos por `updatedAt`) + `notebooks/<id>.json` (solo `noteIds`) + `notes/<id>.json`. Toda escritura pasa por `writeAtomic`; toda modificación del índice por `_updateIndex` (cola serializada). Cambios de un cuaderno que no tocan el contenido (crear/renombrar/duplicar/borrar nota, título, color, etiquetas) van por `_editNotebook` (solo `notebooks/<id>.json` + índice, **sin** cargar ni reescribir las notas); `saveNotebook` reescribe todas y es solo para cuadernos nuevos/importados. `saveNote` hace `touch()` **antes** de escribir (`touch: false` para copias restauradas: conservan su fecha). `.inklus`: v2 = tiene `notebook.json`; v1/nota suelta = `document.json` (también lleva `format.json`, no usarlo para detectar). Las imágenes viven en `inklus/images/` compartido; `collectOrphanedImages` borra las no referenciadas (notas activas, papelera y versiones) con 10 min de gracia.
 - Migración: `current_document.json` o un índice v1 (`documents/`) se convierten a Notebook+Note automáticamente.
 - Lienzo infinito: plantillas `blank/ruled/grid/custom+infiniteFill`; hoja finita: `sheet/custom sin relleno` (contenido recortado a la hoja).
 - `fitView` centra la hoja finita o pone zoom 1.0 en infinitas.

@@ -109,13 +109,16 @@ class InklusFormat {
   // -------------------------------------------------------------------------
 
   /// Detecta la versión del .inklus y delega al importer correcto.
+  ///
+  /// Se decide por `notebook.json` (v2), **no** por `format.json`: las
+  /// copias de una sola nota (Drive, "copia .inklus" del editor) son v1 y
+  /// también llevan `format.json`.
   static Future<Object> importAuto(
     Uint8List bytes, {
     Directory? extractTo,
   }) async {
     final archive = ZipDecoder().decodeBytes(bytes);
-    final hasFormatJson = archive.files.any((f) => f.name == _formatEntry);
-    if (hasFormatJson) {
+    if (archive.files.any((f) => f.name == _notebookEntry)) {
       return importNotebookBytes(bytes, extractTo: extractTo);
     }
     // v1 legacy → devuelve Document

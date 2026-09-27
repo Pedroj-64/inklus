@@ -197,6 +197,10 @@ class StorageService {
   /// guardados concurrentes (autoguardado, saveNow, biblioteca) no se pisen.
   final SerialQueue _indexQueue = SerialQueue();
 
+  /// Serializa las lecturas-modificación-escritura de `notebooks/<id>.json`
+  /// (ver [_editNotebook]).
+  final SerialQueue _notebookQueue = SerialQueue();
+
   Future<List<NotebookMeta>> _readIndex(Directory base) async {
     final file = await _indexFile(base);
     if (!await file.exists()) return [];
@@ -646,9 +650,12 @@ class StorageService {
       await _saveNoteRaw(base, note);
     }
 
-    // Guardar el Notebook (solo IDs, no contenido de notes)
+    // Guardar el Notebook (solo IDs, no contenido de notes); en la misma
+    // cola que [_editNotebook] para no pisar una edición en curso.
     final file = await _notebookFile(base, notebook.id);
-    await writeAtomic(file, jsonEncode(notebook.toJson()));
+    await _notebookQueue.run(
+      () => writeAtomic(file, jsonEncode(notebook.toJson())),
+    );
 
     // Actualizar índice (conserva syncEnabled del meta anterior).
     await _updateIndex(base, (metas) {
@@ -668,11 +675,78 @@ class StorageService {
     });
   }
 
-  /// Guarda solo un Note (sin tocar el Notebook ni el índice).
+  /// Guarda solo un Note (sin tocar el Notebook ni el índice). Las notas
+  /// grandes se codifican en otro isolate (ver [writeJsonAtomic]).
   Future<void> _saveNoteRaw(Directory base, Note note) async {
     final file = await _noteFile(base, note.id);
-    await writeAtomic(file, jsonEncode(note.toJson()));
+    // toJson() aquí: instantánea coherente aunque el lienzo siga mutando la
+    // página mientras se escribe.
+    await writeJsonAtomic(
+      file,
+      note.toJson(),
+      background: _pointCount(note) > kBackgroundSavePoints,
+    );
   }
+
+  /// Puntos de trazo de una nota (aproxima el tamaño de su JSON sin
+  /// codificarlo).
+  static int _pointCount(Note note) {
+    var n = 0;
+    for (final page in note.pages) {
+      for (final s in page.strokes) {
+        n += s.points.length;
+      }
+    }
+    return n;
+  }
+
+  /// Modifica solo `notebooks/<id>.json` (título, color, etiquetas o
+  /// `noteIds`) y su entrada del índice, **sin leer ni reescribir las
+  /// notas**: renombrar o añadir una nota no cuesta O(tamaño del cuaderno).
+  ///
+  /// [mutate] recibe el JSON del cuaderno; si devuelve false no se escribe
+  /// nada. Con [touch] la fecha del cuaderno en el índice pasa a "ahora".
+  /// Devuelve false si el cuaderno no existe o [mutate] canceló.
+  Future<bool> _editNotebook(
+    String id,
+    bool Function(Map<String, dynamic> json) mutate, {
+    bool touch = false,
+  }) async {
+    final base = await _baseDir();
+    final file = await _notebookFile(base, id);
+    final changed = await _notebookQueue.run(() async {
+      if (!await file.exists()) return null;
+      final raw = await file.readAsString();
+      if (raw.trim().isEmpty) return null;
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      if (!mutate(json)) return null;
+      await writeAtomic(file, jsonEncode(json));
+      return json;
+    });
+    if (changed == null) return false;
+    await _updateIndex(base, (metas) {
+      final idx = metas.indexWhere((m) => m.id == id);
+      if (idx < 0) return;
+      final prev = metas[idx];
+      metas[idx] = NotebookMeta(
+        id: id,
+        title: changed['title'] as String? ?? prev.title,
+        updatedAt: touch ? DateTime.now() : prev.updatedAt,
+        colorValue: (changed['color'] as num?)?.toInt(),
+        syncEnabled: prev.syncEnabled,
+        favorite: prev.favorite,
+        coverStyle: prev.coverStyle,
+        coverImagePath: prev.coverImagePath,
+        tags: (changed['tags'] as List? ?? const [])
+            .map((t) => t as String)
+            .toList(),
+      );
+    });
+    return true;
+  }
+
+  static List<String> _noteIdsOf(Map<String, dynamic> json) =>
+      (json['noteIds'] as List? ?? const []).map((e) => e as String).toList();
 
   /// Crea un Notebook nuevo con un Note en blanco.
   Future<Notebook> createNotebook({
@@ -703,26 +777,34 @@ class StorageService {
   /// Renombra un Notebook.
   Future<void> renameNotebook(String id, String title) async {
     if (title.trim().isEmpty) return;
-    final nb = await loadNotebook(id);
-    if (nb == null) return;
-    nb.title = title.trim();
-    await saveNotebook(nb);
+    await _editNotebook(id, (json) {
+      json['title'] = title.trim();
+      return true;
+    });
   }
 
   /// Asigna un color de portada a un Notebook.
   Future<void> setNotebookColor(String id, int? colorValue) async {
-    final nb = await loadNotebook(id);
-    if (nb == null) return;
-    nb.colorValue = colorValue;
-    await saveNotebook(nb);
+    await _editNotebook(id, (json) {
+      if (colorValue == null) {
+        json.remove('color');
+      } else {
+        json['color'] = colorValue;
+      }
+      return true;
+    });
   }
 
   /// Establece las etiquetas de un Notebook.
   Future<void> setNotebookTags(String id, List<String> tags) async {
-    final nb = await loadNotebook(id);
-    if (nb == null) return;
-    nb.tags = tags;
-    await saveNotebook(nb);
+    await _editNotebook(id, (json) {
+      if (tags.isEmpty) {
+        json.remove('tags');
+      } else {
+        json['tags'] = List<String>.from(tags);
+      }
+      return true;
+    });
   }
 
   /// Duplica un Notebook con id nuevo, título "... (copia)" y copia profunda
@@ -824,12 +906,18 @@ class StorageService {
   }
 
   /// Guarda un Note (actualiza su archivo + el updatedAt del Notebook padre).
-  Future<void> saveNote(String notebookId, Note note) async {
+  ///
+  /// Con [touch] (edición local) la nota pasa a fecha "ahora"; sin él se
+  /// conserva la suya (copias restauradas de Drive: si no, parecerían más
+  /// nuevas que el original y ganarían el last-write-wins).
+  Future<void> saveNote(String notebookId, Note note, {bool touch = true}) async {
     final base = await _baseDir();
+    // touch() ANTES de escribir: el archivo debe llevar la fecha de este
+    // guardado (last-write-wins de Drive y "Recientes" la leen de disco).
+    if (touch) note.touch();
     await _saveNoteRaw(base, note);
 
     // Actualizar el updatedAt del Notebook en el índice
-    note.touch();
     await _updateIndex(base, (metas) {
       final idx = metas.indexWhere((m) => m.id == notebookId);
       if (idx >= 0) {
@@ -844,16 +932,19 @@ class StorageService {
     String? title,
     PageTemplate? template,
   }) async {
-    final nb = await loadNotebook(notebookId);
-    if (nb == null) throw StateError('Notebook no encontrado: $notebookId');
-
     final note = Note.newBlank(title: title);
     if (template != null && note.pages.isNotEmpty) {
       note.pages.first.template = template;
     }
-
-    nb.notes.add(note);
-    await saveNotebook(nb);
+    await _saveNoteRaw(await _baseDir(), note);
+    final ok = await _editNotebook(notebookId, (json) {
+      json['noteIds'] = [..._noteIdsOf(json), note.id];
+      return true;
+    }, touch: true);
+    if (!ok) {
+      await _deleteNoteFile(note.id);
+      throw StateError('Notebook no encontrado: $notebookId');
+    }
     return note;
   }
 
@@ -873,14 +964,14 @@ class StorageService {
   /// Elimina un Note de un Notebook (a la papelera).
   Future<void> deleteNote(String notebookId, String noteId) async {
     final base = await _baseDir();
-    final nb = await loadNotebook(notebookId);
-    if (nb == null) return;
-
-    // No permitir eliminar el último note
-    if (nb.notes.length <= 1) return;
-
-    // Quitar de la lista
-    nb.notes.removeWhere((n) => n.id == noteId);
+    // Quitar de la lista (nunca el último note).
+    final removed = await _editNotebook(notebookId, (json) {
+      final ids = _noteIdsOf(json);
+      if (ids.length <= 1 || !ids.remove(noteId)) return false;
+      json['noteIds'] = ids;
+      return true;
+    }, touch: true);
+    if (!removed) return;
 
     // Mover archivo a papelera
     final trashDir = Directory('${base.path}/trash');
@@ -891,8 +982,6 @@ class StorageService {
       await noteFile.delete();
     }
 
-    await saveNotebook(nb);
-
     // Limpiar imágenes huérfanas en background.
     unawaited(collectOrphanedImages());
   }
@@ -902,13 +991,8 @@ class StorageService {
     String notebookId,
     String noteId,
   ) async {
-    final nb = await loadNotebook(notebookId);
-    if (nb == null) throw StateError('Notebook no encontrado: $notebookId');
-
-    final original = nb.notes.firstWhere(
-      (n) => n.id == noteId,
-      orElse: () => throw StateError('Note no encontrado: $noteId'),
-    );
+    final original = await loadNote(noteId);
+    if (original == null) throw StateError('Note no encontrado: $noteId');
 
     // Copia profunda vía roundtrip JSON
     final copy = Note.fromJson(
@@ -922,12 +1006,27 @@ class StorageService {
       pages: copy.pages,
     );
 
+    await _saveNoteRaw(await _baseDir(), newNote);
     // Insertar después del original
-    final idx = nb.notes.indexWhere((n) => n.id == noteId);
-    nb.notes.insert(idx + 1, newNote);
-
-    await saveNotebook(nb);
+    final ok = await _editNotebook(notebookId, (json) {
+      final ids = _noteIdsOf(json);
+      final idx = ids.indexOf(noteId);
+      ids.insert(idx < 0 ? ids.length : idx + 1, newNote.id);
+      json['noteIds'] = ids;
+      return true;
+    }, touch: true);
+    if (!ok) {
+      await _deleteNoteFile(newNote.id);
+      throw StateError('Notebook no encontrado: $notebookId');
+    }
     return newNote;
+  }
+
+  /// Borra `notes/<id>.json` (deshace una nota recién creada si su cuaderno
+  /// no existe).
+  Future<void> _deleteNoteFile(String id) async {
+    final file = await _noteFile(await _baseDir(), id);
+    if (await file.exists()) await file.delete();
   }
 
   // -------------------------------------------------------------------------

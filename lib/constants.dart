@@ -15,7 +15,7 @@ import 'models/stroke.dart';
 
 /// Versión visible de la app (debe coincidir con `version:` de pubspec.yaml;
 /// lo comprueba `test/app_version_test.dart`).
-const String kAppVersion = '1.4.2';
+const String kAppVersion = '1.4.3';
 
 // ---------------------------------------------------------------------------
 // Tema / Colores de acento
