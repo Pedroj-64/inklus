@@ -22,6 +22,18 @@ import 'package:inklus/services/storage_service.dart';
 import 'package:http/testing.dart';
 import 'package:inklus/services/marketplace/marketplace_service.dart';
 import 'package:inklus/ui/marketplace_screen.dart';
+import 'package:inklus/ui/note_list_screen.dart';
+import 'package:inklus/ui/settings_screen.dart';
+import 'package:inklus/ui/trash_screen.dart';
+import 'package:inklus/ui/reminder_screen.dart';
+import 'package:inklus/ui/writing_stats_screen.dart';
+import 'package:inklus/ui/create_notebook_screen.dart';
+import 'package:inklus/ui/onboarding_screen.dart';
+import 'package:inklus/ui/widgets/template_picker_sheet.dart';
+import 'package:inklus/ui/widgets/tag_editor_sheet.dart';
+import 'package:inklus/ui/widgets/smart_folders_sheet.dart';
+import 'package:inklus/ui/widgets/layers_sidebar.dart';
+import 'package:inklus/services/template_library_service.dart';
 import 'package:inklus/ui/home_screen.dart';
 import 'package:inklus/ui/theme/app_theme.dart';
 import 'package:inklus/logic/canvas_controller.dart';
@@ -166,5 +178,128 @@ void main() {
     ));
     await settle(tester);
     await shot(tester, 'marketplace');
+  });
+
+  // --- Resto de pantallas y hojas (revisión del sistema de diseño) ---------
+  Future<void> app(WidgetTester tester, Widget home, {bool dark = false}) async {
+    tester.view.physicalSize = const Size(2560, 1600);
+    tester.view.devicePixelRatio = 2;
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: dark ? AppTheme.dark() : AppTheme.light(),
+      home: home,
+    ));
+    await settle(tester);
+  }
+
+  /// Pantalla con un botón que abre una hoja/diálogo; captura con ella abierta.
+  Future<void> sheet(WidgetTester tester, String name,
+      Future<void> Function(BuildContext) open, {bool dark = false}) async {
+    await app(
+      tester,
+      Scaffold(
+        body: Builder(
+          builder: (ctx) => Center(
+            child: FilledButton(onPressed: () => open(ctx), child: const Text('abrir')),
+          ),
+        ),
+      ),
+      dark: dark,
+    );
+    await tester.tap(find.text('abrir'));
+    await settle(tester);
+    await shot(tester, name);
+  }
+
+  for (final dark in [false, true]) {
+    final tag = dark ? 'dark' : 'light';
+    testWidgets('notes $tag', (tester) async {
+      final nb = await tester.runAsync(() async {
+        await seed();
+        final metas = await StorageService.instance.loadIndex();
+        return StorageService.instance.loadNotebook(metas.first.id);
+      });
+      await app(tester, NoteListScreen(notebook: nb!), dark: dark);
+      await shot(tester, 'notes_$tag');
+    });
+
+    testWidgets('settings $tag', (tester) async {
+      await app(tester, const SettingsScreen(), dark: dark);
+      await shot(tester, 'settings_$tag');
+    });
+  }
+
+  testWidgets('trash', (tester) async {
+    await app(tester, TrashScreen(storage: StorageService.instance));
+    await shot(tester, 'trash');
+  });
+
+  testWidgets('reminders', (tester) async {
+    await app(tester, const ReminderScreen());
+    await shot(tester, 'reminders');
+  });
+
+  testWidgets('stats', (tester) async {
+    await app(tester, const WritingStatsScreen());
+    await shot(tester, 'stats');
+  });
+
+  testWidgets('create notebook', (tester) async {
+    await app(tester, const CreateNotebookScreen(notebookCount: 4));
+    await shot(tester, 'create_notebook');
+  });
+
+  testWidgets('onboarding', (tester) async {
+    await app(tester, const OnboardingScreen());
+    await shot(tester, 'onboarding');
+  });
+
+  testWidgets('template picker', (tester) async {
+    final c = CanvasController(StorageService.instance)..setHapticEnabled(false);
+    await sheet(
+      tester,
+      'template_picker',
+      (ctx) => showTemplatePicker(ctx,
+          controller: c,
+          imageService: ImageService(),
+          templateLibrary: TemplateLibraryService()),
+    );
+  });
+
+  testWidgets('tag editor', (tester) async {
+    await sheet(
+      tester,
+      'tag_editor',
+      (ctx) => showTagEditor(
+          context: ctx,
+          currentTags: const ['clase', 'física'],
+          allAvailableTags: const ['clase', 'física', 'ideas', 'diario']),
+    );
+  });
+
+  testWidgets('smart folders', (tester) async {
+    final metas = await tester.runAsync(() async {
+      await seed();
+      return StorageService.instance.loadIndex();
+    });
+    await sheet(
+      tester,
+      'smart_folders',
+      (ctx) => showSmartFoldersSheet(context: ctx, metas: metas!, currentFolder: null),
+    );
+  });
+
+  testWidgets('layers', (tester) async {
+    final c = CanvasController(StorageService.instance)..setHapticEnabled(false);
+    await app(
+      tester,
+      Scaffold(
+        body: Row(children: [
+          const Expanded(child: SizedBox()),
+          SizedBox(width: 280, child: LayersSidebar(controller: c, onClose: () {})),
+        ]),
+      ),
+    );
+    await shot(tester, 'layers');
   });
 }

@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import '../constants.dart';
-import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
 
-import '../logic/canvas_controller.dart';
-import '../services/drive_sync_service.dart' show DriveSyncService, GoogleConfigException;
+import '../constants.dart';
+import '../services/drive_sync_service.dart';
+import '../services/import_service.dart';
 import '../services/storage_service.dart';
-import 'writing_stats_screen.dart';
-import 'reminder_screen.dart';
-import '../utils/theme_colors.dart';
 import '../theme_controller.dart';
+import 'reminder_screen.dart';
+import 'theme/inklus_colors.dart';
+import 'theme/tokens.dart';
+import 'trash_screen.dart';
+import 'widgets/dialogs.dart';
+import 'widgets/page_scaffold.dart';
+import 'writing_stats_screen.dart';
 
-/// Pantalla de configuración / ajustes de la app.
-///
-/// Accesible desde la biblioteca (icono de engranaje) y contiene:
-/// - Respaldo en la nube (Google Drive)
-/// - Tema claro / oscuro
-/// - Backup local (exportar/importar todo)
-/// - Acerca de
+/// Configuración de la app: Google Drive, apariencia, copias/archivos,
+/// herramientas y "acerca de".
 class SettingsScreen extends StatefulWidget {
+  /// Se conserva por compatibilidad; el tema se elige ahora con un selector
+  /// Claro / Oscuro / Sistema ([ThemeModeController]).
   final VoidCallback? onToggleTheme;
 
   const SettingsScreen({super.key, this.onToggleTheme});
@@ -29,327 +29,240 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _syncService = DriveSyncService.instance;
+  final _sync = DriveSyncService.instance;
   final _storage = StorageService.instance;
-  bool _syncing = false;
-  int _autosaveInterval = 300; // 5 minutos por defecto (en segundos)
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    _syncService.restoreSession();
-    _loadAutosaveInterval();
+    _sync.restoreSession();
   }
 
-  Future<void> _loadAutosaveInterval() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final seconds = prefs.getInt('autosave_interval') ?? 300;
-      if (mounted) setState(() => _autosaveInterval = seconds);
-    } catch (_) {}
-  }
-
-  String _autosaveLabel(int seconds) {
-    if (seconds < 60) return 'Cada $seconds segundos';
-    if (seconds == 60) return 'Cada minuto';
-    return 'Cada ${seconds ~/ 60} minutos';
-  }
-
-  void _showAutosavePicker() {
-    showModalBottomSheet<int>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Intervalo de autoguardado',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-            ListTile(
-              title: const Text('30 segundos'),
-              leading: _autosaveInterval == 30 ? const Icon(Icons.check, color: kAccentColor) : null,
-              onTap: () => Navigator.pop(context, 30),
-            ),
-            ListTile(
-              title: const Text('1 minuto'),
-              leading: _autosaveInterval == 60 ? const Icon(Icons.check, color: kAccentColor) : null,
-              onTap: () => Navigator.pop(context, 60),
-            ),
-            ListTile(
-              title: const Text('2 minutos'),
-              leading: _autosaveInterval == 120 ? const Icon(Icons.check, color: kAccentColor) : null,
-              onTap: () => Navigator.pop(context, 120),
-            ),
-            ListTile(
-              title: const Text('5 minutos (predeterminado)'),
-              leading: _autosaveInterval == 300 ? const Icon(Icons.check, color: kAccentColor) : null,
-              onTap: () => Navigator.pop(context, 300),
-            ),
-            ListTile(
-              title: const Text('10 minutos'),
-              leading: _autosaveInterval == 600 ? const Icon(Icons.check, color: kAccentColor) : null,
-              onTap: () => Navigator.pop(context, 600),
-            ),
-            ListTile(
-              title: const Text('30 minutos'),
-              leading: _autosaveInterval == 1800 ? const Icon(Icons.check, color: kAccentColor) : null,
-              onTap: () => Navigator.pop(context, 1800),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    ).then((v) {
-      if (v != null) {
-        setState(() => _autosaveInterval = v);
-        // Persistir el intervalo y notificar al CanvasController.
-        CanvasController.setAutosaveInterval(Duration(seconds: v));
-      }
-    });
-  }
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Configuración',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: false,
-      ),
-      body: ListView(
-        children: [
-          // ===== SECCIÓN: Nube =====
-          _SectionHeader(title: 'Nube y respaldo'),
-          _SettingsCard(
-            children: [
-              // Estado de sesión
-              ListenableBuilder(
-                listenable: _syncService,
-                builder: (context, _) {
-                  final isSignedIn = _syncService.isSignedIn;
-                  return ListTile(
-                    leading: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: isSignedIn
-                            ? const Color(0xFF10B981).withAlpha(25)
-                            : Colors.grey.withAlpha(25),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        isSignedIn ? Icons.cloud_done : Icons.cloud_off,
-                        color: isSignedIn
-                            ? const Color(0xFF10B981)
-                            : Colors.grey,
-                      ),
-                    ),
-                    title: Text(
-                      isSignedIn
-                          ? 'Conectado a Google Drive'
-                          : 'Respaldar en la nube',
-                    ),
-                    subtitle: Text(
-                      isSignedIn
-                          ? _syncService.email ?? 'Cuenta Google'
-                          : 'Inicia sesión para respaldar tus cuadernos',
-                      style: TextStyle(
-                        color: isSignedIn
-                            ? ThemeColors.of(context).textSecondary
-                            : Colors.grey.shade500,
-                      ),
-                    ),
-                    trailing: FilledButton.tonal(
-                      onPressed: _syncing
-                          ? null
-                          : (isSignedIn ? _signOut : _signIn),
-                      child: _syncing
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(isSignedIn ? 'Salir' : 'Conectar'),
-                    ),
-                  );
-                },
-              ),
-              if (_syncService.isSignedIn) ...[
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.cloud_upload_outlined),
-                  title: const Text('Subir respaldo ahora'),
-                  subtitle: const Text('Copia tu cuaderno a Google Drive'),
-                  onTap: _backupNow,
+    return InklusPage(
+      title: 'Configuración',
+      subtitle: 'Inklus $kAppVersion · tus notas se guardan en este dispositivo',
+      maxWidth: 820,
+      slivers: [
+        SliverList.list(
+          children: [
+            const SectionLabel('Google Drive', trailing: null),
+            ListenableBuilder(listenable: _sync, builder: (context, _) => _driveCard()),
+            const SectionLabel('Apariencia'),
+            SectionCard(children: [_themeTile()]),
+            const SectionLabel('Copias y archivos'),
+            SectionCard(
+              children: [
+                SettingsTile(
+                  icon: Icons.file_download_outlined,
+                  title: 'Importar .inklus o respaldo',
+                  subtitle: 'Un cuaderno (.inklus) o un respaldo completo (.zip); '
+                      'se reconoce solo',
+                  onTap: _busy ? null : _import,
                 ),
-                ListTile(
-                  leading: const Icon(Icons.cloud_download_outlined),
-                  title: const Text('Restaurar desde la nube'),
-                  subtitle: const Text('Descarga la última versión guardada'),
-                  onTap: () => _snack('Abre un cuaderno y usa el botón ☁️'),
+                SettingsTile(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'Exportar respaldo completo',
+                  subtitle: 'Todos los cuadernos, imágenes y papelera en un .zip',
+                  onTap: _busy ? null : _exportAll,
                 ),
-                ListTile(
-                  leading: const Icon(Icons.history),
-                  title: const Text('Versiones en Drive'),
-                  subtitle: const Text('Ver y restaurar versiones anteriores'),
-                  onTap: () => _snack('Abre un cuaderno y usa el botón ☁️'),
+                const SettingsTile(
+                  icon: Icons.save_outlined,
+                  title: 'Guardado automático',
+                  subtitle: 'Cada cambio se guarda al instante en este dispositivo. '
+                      'Al abrir y cerrar una nota se guarda una versión '
+                      '(menú ⋮ → Historial de versiones).',
                 ),
               ],
-            ],
-          ),
-
-          // ===== SECCIÓN: Apariencia =====
-          _SectionHeader(title: 'Apariencia'),
-          _SettingsCard(
-            children: [
-              SwitchListTile(
-                secondary: Icon(
-                  isDark ? Icons.dark_mode : Icons.light_mode,
-                  color: theme.colorScheme.primary,
+            ),
+            const SectionLabel('Herramientas'),
+            SectionCard(
+              children: [
+                SettingsTile(
+                  icon: Icons.insights_outlined,
+                  title: 'Estadísticas de escritura',
+                  subtitle: 'Trazos, páginas, rachas y actividad',
+                  onTap: () => _push(const WritingStatsScreen()),
                 ),
-                title: const Text('Modo oscuro'),
-                subtitle: Text(
-                  isDark ? 'Activado' : 'Desactivado',
-                  style: TextStyle(color: ThemeColors.of(context).textSecondary),
+                SettingsTile(
+                  icon: Icons.alarm_outlined,
+                  title: 'Recordatorios',
+                  subtitle: 'Avisos vinculados a tus cuadernos',
+                  onTap: () => _push(const ReminderScreen()),
                 ),
-                value: isDark,
-                onChanged: (_) =>
-                    (widget.onToggleTheme ?? () => ThemeModeController.toggle(context))(),
-              ),
-            ],
-          ),
-
-          // ===== SECCIÓN: Datos =====
-          _SectionHeader(title: 'Datos y almacenamiento'),
-          _SettingsCard(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.download_outlined),
-                title: const Text('Exportar todos los cuadernos'),
-                subtitle: const Text('Guarda un ZIP con todo tu contenido'),
-                onTap: _exportAll,
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.upload_outlined),
-                title: const Text('Importar respaldo'),
-                subtitle: const Text('Restaura desde un ZIP anterior'),
-                onTap: _importAll,
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.timer_outlined),
-                title: const Text('Intervalo de autoguardado'),
-                subtitle: Text(_autosaveLabel(_autosaveInterval)),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _showAutosavePicker,
-              ),
-            ],
-          ),
-
-          // ===== SECCIÓN: Herramientas =====
-          _SectionHeader(title: 'Herramientas'),
-          _SettingsCard(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.analytics_outlined),
-                title: const Text('Estadísticas de escritura'),
-                subtitle: const Text('Trazos, páginas, rachas y actividad'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const WritingStatsScreen(),
-                    ),
-                  );
-                },
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.alarm_outlined),
-                title: const Text('Recordatorios'),
-                subtitle: const Text('Vinculados a tus cuadernos'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ReminderScreen(),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-
-          // ===== SECCIÓN: Acerca de =====
-          _SectionHeader(title: 'Acerca de'),
-          _SettingsCard(
-            children: [
-              const ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('Inklus'),
-                subtitle: Text('Versión 1.0.0 — App de escritura a mano'),
-              ),
-              const Divider(height: 1),
-              const ListTile(
-                leading: Icon(Icons.code),
-                title: Text('Código abierto'),
-                subtitle: Text(
-                  'Inklus es open source y gratuito. Sin funciones premium.',
+                SettingsTile(
+                  icon: Icons.delete_outline,
+                  title: 'Papelera',
+                  subtitle: 'Recupera cuadernos eliminados',
+                  onTap: () => _push(TrashScreen(storage: _storage)),
                 ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 32),
-        ],
-      ),
+              ],
+            ),
+            const SectionLabel('Acerca de'),
+            SectionCard(
+              children: [
+                const SettingsTile(
+                  icon: Icons.edit_outlined,
+                  title: 'Inklus $kAppVersion',
+                  subtitle: 'Escritura a mano para tablets con lápiz',
+                ),
+                SettingsTile(
+                  icon: Icons.favorite_outline,
+                  accent: context.inklus.danger,
+                  title: 'Libre y gratuito',
+                  subtitle: 'Código abierto (GPL-3.0). Sin funciones de pago, '
+                      'sin anuncios y sin analítica.',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
     );
   }
+
+  Widget _driveCard() {
+    final signedIn = _sync.isSignedIn;
+    return SectionCard(
+      children: [
+        SettingsTile(
+          icon: signedIn ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+          accent: signedIn ? context.inklus.success : context.colors.onSurfaceVariant,
+          title: signedIn ? 'Conectado' : 'Copia en la nube',
+          subtitle: signedIn
+              ? (_sync.email ?? 'Cuenta de Google')
+              : 'Opcional: guarda una copia de tus notas en tu Google Drive',
+          trailing: _busy
+              ? const SizedBox.square(
+                  dimension: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                )
+              : signedIn
+                  ? _accountMenu()
+                  : FilledButton.icon(
+                      onPressed: _signIn,
+                      icon: const Icon(Icons.login),
+                      label: const Text('Conectar'),
+                    ),
+        ),
+        if (signedIn) ...[
+          SettingsTile(
+            icon: Icons.cloud_upload_outlined,
+            title: 'Subir ahora',
+            subtitle: 'Sube las notas de los cuadernos con sincronización activa',
+            onTap: _busy ? null : _backupNow,
+          ),
+          SettingsTile(
+            icon: Icons.cloud_download_outlined,
+            title: 'Restaurar desde Drive',
+            subtitle: 'Trae las versiones más recientes y recupera las notas '
+                'que no estén en este dispositivo',
+            onTap: _busy ? null : _restoreFromDrive,
+          ),
+          SettingsTile(
+            icon: Icons.history,
+            title: 'Versiones de una nota',
+            subtitle: 'En el editor: ☁️ → Ver versiones',
+            accent: context.colors.onSurfaceVariant,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _accountMenu() => MenuAnchor(
+        menuChildren: [
+          MenuItemButton(
+            leadingIcon: const Icon(Icons.switch_account_outlined),
+            onPressed: _switchAccount,
+            child: const Text('Cambiar de cuenta'),
+          ),
+          MenuItemButton(
+            leadingIcon: const Icon(Icons.logout),
+            onPressed: _signOut,
+            child: const Text('Cerrar sesión'),
+          ),
+        ],
+        builder: (context, menu, _) => IconButton(
+          tooltip: 'Cuenta',
+          icon: const Icon(Icons.more_vert),
+          onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+        ),
+      );
+
+  Widget _themeTile() => ValueListenableBuilder<ThemeMode>(
+        valueListenable: ThemeModeController.mode,
+        builder: (context, mode, _) => Padding(
+          padding: const EdgeInsets.all(Spacing.lg),
+          child: Row(
+            children: [
+              IconBadge(icon: context.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined),
+              const SizedBox(width: Spacing.lg),
+              Expanded(child: Text('Tema', style: context.text.titleMedium)),
+              SegmentedButton<ThemeMode>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                      value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined), label: Text('Claro')),
+                  ButtonSegment(
+                      value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined), label: Text('Oscuro')),
+                  ButtonSegment(
+                      value: ThemeMode.system,
+                      icon: Icon(Icons.brightness_auto_outlined),
+                      label: Text('Sistema')),
+                ],
+                selected: {mode},
+                onSelectionChanged: (v) => ThemeModeController.set(v.first),
+              ),
+            ],
+          ),
+        ),
+      );
 
   // ---------------------------------------------------------------------------
   // Acciones
   // ---------------------------------------------------------------------------
 
-  Future<void> _signIn() async {
-    setState(() => _syncing = true);
+  void _push(Widget screen) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
+
+  /// Ejecuta [task] marcando la tarjeta como ocupada y avisa del error.
+  Future<void> _run(Future<void> Function() task) async {
+    setState(() => _busy = true);
     try {
-      final ok = await _syncService.signIn();
-      if (ok && mounted) {
-        _snack('Conectado como ${_syncService.email}');
-      }
+      await task();
     } on GoogleConfigException catch (e) {
       if (mounted) _showConfigErrorDialog(e.message);
     } catch (e) {
-      if (mounted) _snack('Error: $e');
+      if (mounted) _snack(e is FormatException ? e.message : 'Error: $e');
     } finally {
-      if (mounted) setState(() => _syncing = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
+  Future<void> _signIn() => _run(() async {
+        if (await _sync.signIn() && mounted) _snack('Conectado como ${_sync.email}');
+      });
+
+  Future<void> _switchAccount() => _run(() async {
+        if (await _sync.switchAccount() && mounted) _snack('Conectado como ${_sync.email}');
+      });
+
   void _showConfigErrorDialog(String message) {
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        icon: const Icon(Icons.error_outline, color: Colors.orange, size: 48),
-        title: const Text('Error de configuración Google'),
-        content: SingleChildScrollView(
-          child: Text(message, style: const TextStyle(fontSize: 13, height: 1.5)),
-        ),
+        icon: Icon(Icons.error_outline, color: context.inklus.warning, size: 40),
+        title: const Text('Google no está configurado'),
+        content: SingleChildScrollView(child: SelectableText(message)),
         actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Entendido'),
-          ),
+          FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
         ],
       ),
     );
@@ -359,148 +272,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Cerrar sesión'),
+        title: const Text('¿Cerrar sesión?'),
         content: const Text(
-          'Se cerrará la sesión de Google Drive. '
-          'Los respaldos existentes no se eliminarán.',
+          'Dejarán de subirse copias a Google Drive. '
+          'Las copias que ya están en Drive no se borran.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Cerrar sesión'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Cerrar sesión')),
         ],
       ),
     );
     if (ok != true) return;
-    await _syncService.signOut();
+    await _sync.signOut();
     if (mounted) _snack('Sesión cerrada');
   }
 
-  Future<void> _backupNow() async {
-    setState(() => _syncing = true);
-    try {
-      // A8: backup individual por Note (no el Document completo).
-      // Iteramos notebooks → notes y subimos cada Note por separado.
-      final metas = await _storage.loadIndex();
-      var noteCount = 0;
-      for (final meta in metas) {
-        if (!meta.isSyncEnabled) continue;
-        try {
+  Future<void> _backupNow() => _run(() async {
+        var count = 0;
+        for (final meta in await _storage.loadIndex()) {
+          if (!meta.isSyncEnabled) continue;
           final nb = await _storage.loadNotebook(meta.id);
-          if (nb == null) continue;
-          for (final note in nb.notes) {
-            await _syncService.backupNote(note, promptForConsent: true);
-            noteCount++;
+          for (final note in nb?.notes ?? const []) {
+            await _sync.backupNote(note, promptForConsent: true);
+            count++;
           }
-        } catch (_) {}
-      }
-      if (mounted) {
-        _snack(noteCount > 0
-            ? '$noteCount nota(s) sincronizada(s)'
-            : 'No hay cuadernos para respaldar');
-      }
-    } catch (e) {
-      if (mounted) _snack('Error: $e');
-    } finally {
-      if (mounted) setState(() => _syncing = false);
-    }
+        }
+        _snack(count > 0 ? '$count nota(s) subida(s) a Drive' : 'No hay cuadernos con sincronización activa');
+      });
+
+  Future<void> _restoreFromDrive() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.cloud_download_outlined),
+        title: const Text('Restaurar desde Drive'),
+        content: const Text(
+          'Las notas de este dispositivo se reemplazan solo si la copia de Drive es '
+          'más reciente. Las que no existan aquí se guardan en un cuaderno nuevo '
+          '"Recuperado de Drive".',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Restaurar')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _run(() async {
+      final result = await _sync.restoreLibrary(_storage);
+      _snack(result.message);
+    });
   }
 
-  Future<void> _exportAll() async {
-    try {
-      _snack('Preparando respaldo completo...');
-      final bytes = await _storage.exportFullBackup();
-      final saved = await FilePicker.saveFile(
-        dialogTitle: 'Guardar respaldo Inklus',
-        fileName: 'inklus_backup.zip',
-        bytes: bytes,
-      );
-      if (saved != null && mounted) {
-        _snack('Respaldo exportado');
-      }
-    } catch (e) {
-      if (mounted) _snack('Error al exportar: $e');
-    }
+  Future<void> _import() async {
+    final bytes = await ImportService.pickFile();
+    if (bytes == null || !mounted) return;
+    await _run(() async {
+      final result = await runWithLoading(context, () => ImportService.importBytes(bytes));
+      _snack(result.message);
+    });
   }
 
-  Future<void> _importAll() async {
-    try {
-      final files = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['zip']);
-      if (files.isEmpty) return;
-      final bytes = await files.first.xFile.readAsBytes();
-      final count = await _storage.importFullBackup(bytes);
-      if (mounted) {
-        _snack('$count cuaderno(s) importado(s)');
-      }
-    } catch (e) {
-      if (mounted) _snack('Error al importar: $e');
-    }
-  }
+  Future<void> _exportAll() => _run(() async {
+        final bytes = await _storage.exportFullBackup();
+        final stamp = DateTime.now().toIso8601String().substring(0, 10);
+        final saved = await FilePicker.saveFile(
+          dialogTitle: 'Guardar respaldo de Inklus',
+          fileName: 'inklus_respaldo_$stamp.zip',
+          bytes: bytes,
+        );
+        if (saved != null) _snack('Respaldo guardado');
+      });
 
   void _snack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(msg)));
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Widgets auxiliares
-// ---------------------------------------------------------------------------
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  const _SectionHeader({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-      child: Text(
-        title.toUpperCase(),
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: Colors.grey.shade500,
-          letterSpacing: 0.8,
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsCard extends StatelessWidget {
-  final List<Widget> children;
-  const _SettingsCard({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(12),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Material(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          child: Column(children: children),
-        ),
-      ),
-    );
   }
 }

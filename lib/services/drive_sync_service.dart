@@ -9,9 +9,12 @@ import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 
 import '../models/document.dart';
+import '../models/id.dart';
 import '../models/note.dart';
+import '../models/notebook.dart';
 import 'inklus_format.dart';
 import 'backup_crypto.dart';
+import 'storage_service.dart';
 
 /// Estados de sincronización de un cuaderno con Google Drive.
 enum SyncStatus {
@@ -99,8 +102,26 @@ class DriveSyncService extends ChangeNotifier {
   static const _folderMimeType = 'application/vnd.google-apps.folder';
   static const _inklusMimeType = 'application/x-inklus';
 
+  /// Cliente OAuth **web** del proyecto de Google Cloud (el mismo que
+  /// `default_web_client_id` en `android/app/src/main/res/values/strings.xml`).
+  /// En Android, Credential Manager lo exige como `serverClientId`; se pasa
+  /// explícito para no depender de que el recurso sobreviva al shrinker.
+  static const _serverClientId =
+      '895214163532-kbqh115nrc5417lbs3b1sqmsguqqeje4.apps.googleusercontent.com';
+
   GoogleSignInAccount? _account;
   bool _restoreAttempted = false;
+
+  /// google_sign_in 7 exige `initialize()` **una sola vez** y esperar a que
+  /// termine antes de cualquier otra llamada (si no, el sign-in falla con
+  /// "serverClientId must be provided").
+  Future<void>? _initFuture;
+  Future<void> _ensureInitialized() => _initFuture ??= GoogleSignIn.instance
+      .initialize(serverClientId: _serverClientId)
+      .catchError((Object e) {
+        _initFuture = null; // permitir reintentar
+        throw e;
+      });
 
   /// Estado de sincronización por id de documento.
   final Map<String, SyncStatus> _syncStatus = {};
@@ -137,6 +158,7 @@ class DriveSyncService extends ChangeNotifier {
     // Google Sign-In no está soportado en Linux desktop.
     if (defaultTargetPlatform == TargetPlatform.linux) return;
     try {
+      await _ensureInitialized();
       final future = GoogleSignIn.instance.attemptLightweightAuthentication();
       final account = future == null ? null : await future;
       if (account != null) {
@@ -152,6 +174,7 @@ class DriveSyncService extends ChangeNotifier {
   Future<bool> signIn() async {
     GoogleSignInAccount account;
     try {
+      await _ensureInitialized();
       account = await GoogleSignIn.instance.authenticate(
         scopeHint: const [_driveScope],
       );
@@ -184,6 +207,7 @@ class DriveSyncService extends ChangeNotifier {
 
   /// Cierra sesión y limpia el estado.
   Future<void> signOut() async {
+    await _ensureInitialized();
     await GoogleSignIn.instance.signOut();
     _account = null;
     _syncStatus.clear();
@@ -641,15 +665,10 @@ class DriveSyncService extends ChangeNotifier {
     }
   }
 
-  /// Descarga TODAS las notas desde Drive para un notebook específico.
-  ///
-  /// Busca archivos `.inklus` cuyo nombre empiece por el notebookId
-  /// (formato: `{noteId}.inklus`). Devuelve las Notes restauradas.
-  /// Útil para el backup general desde settings (restore completo por notebook).
-  Future<List<Note>> restoreAllNotes({
-    required String notebookId,
-    String? password,
-  }) async {
+  /// Descarga **todas** las notas `.inklus` de la carpeta "Inklus" de Drive
+  /// (las imágenes embebidas se extraen a local). Las copias ilegibles se
+  /// omiten.
+  Future<List<Note>> downloadAllNotes({String? password}) async {
     if (_account == null) throw const NotSignedInException();
     final token = await _interactiveToken();
     final client = _authClient(token);
@@ -660,34 +679,98 @@ class DriveSyncService extends ChangeNotifier {
         q: "'$folderId' in parents and trashed = false",
         $fields: 'files(id,name)',
       );
-      final files = list.files ?? [];
       final notes = <Note>[];
-
-      for (final file in files) {
+      for (final file in list.files ?? const <drive.File>[]) {
         final id = file.id;
         final name = file.name ?? '';
         if (id == null || !name.endsWith('.inklus')) continue;
         try {
           final resp = await client.get(
-            Uri.parse(
-              'https://www.googleapis.com/drive/v3/files/$id?alt=media',
-            ),
+            Uri.parse('https://www.googleapis.com/drive/v3/files/$id?alt=media'),
           );
           if (resp.statusCode != 200) continue;
           var bytes = resp.bodyBytes;
           if (password != null && password.isNotEmpty) {
             bytes = await _decryptBytes(bytes, password);
           }
-          final note = await InklusFormat.importNoteBytes(bytes);
-          notes.add(note);
+          notes.add(await InklusFormat.importNoteBytes(bytes));
         } catch (e) {
-          debugPrint('DriveSyncService.restoreAllNotes: copia no legible ($name): $e');
+          debugPrint('DriveSyncService.downloadAllNotes: copia no legible ($name): $e');
         }
       }
       return notes;
     } finally {
       client.close();
     }
+  }
+
+  /// Restaura la biblioteca desde Drive (**last-write-wins** por nota):
+  /// - si la nota existe en local y la de Drive es más reciente, se actualiza
+  ///   en su cuaderno;
+  /// - si no existe (p. ej. en un dispositivo nuevo), se reúne en un cuaderno
+  ///   "Recuperado de Drive" (Drive guarda notas sueltas, no los cuadernos).
+  Future<LibraryRestoreResult> restoreLibrary(StorageService storage) async {
+    final remote = await downloadAllNotes();
+    // noteId → (cuaderno, nota local)
+    final local = <String, (String, Note)>{};
+    for (final meta in await storage.loadIndex()) {
+      final nb = await storage.loadNotebook(meta.id);
+      if (nb == null) continue;
+      for (final n in nb.notes) {
+        local[n.id] = (nb.id, n);
+      }
+    }
+    var updated = 0;
+    final missing = <Note>[];
+    for (final note in remote) {
+      final hit = local[note.id];
+      if (hit == null) {
+        missing.add(note);
+      } else if (note.updatedAt.isAfter(hit.$2.updatedAt)) {
+        await storage.saveNote(hit.$1, note);
+        updated++;
+      }
+    }
+    if (missing.isNotEmpty) {
+      missing.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      await storage.saveNotebook(Notebook(
+        id: newId('nb'),
+        title: 'Recuperado de Drive',
+        notes: missing,
+      ));
+    }
+    return LibraryRestoreResult(
+      found: remote.length,
+      updated: updated,
+      added: missing.length,
+    );
+  }
+}
+
+/// Resumen de [DriveSyncService.restoreLibrary].
+class LibraryRestoreResult {
+  const LibraryRestoreResult({
+    required this.found,
+    required this.updated,
+    required this.added,
+  });
+
+  /// Notas encontradas en Drive.
+  final int found;
+
+  /// Notas locales reemplazadas por una versión más reciente de Drive.
+  final int updated;
+
+  /// Notas que no existían en local (van a "Recuperado de Drive").
+  final int added;
+
+  String get message {
+    if (found == 0) return 'No hay copias de Inklus en tu Google Drive';
+    if (updated == 0 && added == 0) return 'Todo está al día: nada que restaurar';
+    return [
+      if (updated > 0) '$updated nota(s) actualizada(s)',
+      if (added > 0) '$added recuperada(s) en "Recuperado de Drive"',
+    ].join(' · ');
   }
 }
 
@@ -700,10 +783,14 @@ class _BearerClient extends http.BaseClient {
   final String _token;
   final http.Client _inner = http.Client();
 
+  /// Tiempo máximo hasta recibir la respuesta (cabeceras). Sin él, una red
+  /// que se queda colgada dejaba el ☁️ "sincronizando" para siempre.
+  static const _timeout = Duration(seconds: 60);
+
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
     request.headers['Authorization'] = 'Bearer $_token';
-    return _inner.send(request);
+    return _inner.send(request).timeout(_timeout);
   }
 
   @override

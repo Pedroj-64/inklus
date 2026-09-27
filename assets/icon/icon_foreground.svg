@@ -1,140 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Inklus: plumilla estilográfica escribiendo un trazo de tinta dorada. -->
   <defs>
-    <!-- Sombra suave para la hoja -->
-    <filter id="paperShadow" x="-10%" y="-10%" width="130%" height="130%">
-      <feDropShadow dx="4" dy="6" stdDeviation="12" flood-color="#1e3a5f" flood-opacity="0.35"/>
+    <linearGradient id="nibL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F2F6FF"/>
+    </linearGradient>
+    <linearGradient id="nibR" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#DCE7FF"/>
+      <stop offset="1" stop-color="#C3D5FF"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFD66B"/>
+      <stop offset="1" stop-color="#FF9F43"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#0B1F5C" flood-opacity="0.35"/>
     </filter>
-    <!-- Sombra del lápiz -->
-    <filter id="pencilShadow" x="-10%" y="-10%" width="130%" height="130%">
-      <feDropShadow dx="2" dy="3" stdDeviation="5" flood-color="#1e3a5f" flood-opacity="0.3"/>
-    </filter>
-    <!-- Resplandor para las estrellas -->
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="4" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <!-- Degradado de la hoja -->
-    <linearGradient id="paperGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#f0f4ff"/>
-    </linearGradient>
-    <!-- Degradado del lápiz cuerpo -->
-    <linearGradient id="pencilBody" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fbbf24"/>
-      <stop offset="50%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#d97706"/>
-    </linearGradient>
-    <!-- Degradado de la punta del lápiz -->
-    <linearGradient id="pencilTip" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fcd34d"/>
-      <stop offset="100%" stop-color="#92400e"/>
-    </linearGradient>
-    <!-- Degradado de la goma -->
-    <linearGradient id="eraserGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fb7185"/>
-      <stop offset="100%" stop-color="#e11d48"/>
-    </linearGradient>
-    <!-- Degradado de estrellas mágicas -->
-    <radialGradient id="starGlow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#fef3c7"/>
-      <stop offset="60%" stop-color="#fbbf24"/>
-      <stop offset="100%" stop-color="#f59e0b"/>
-    </radialGradient>
   </defs>
 
-  <!-- ===== HOJA DE PAPEL ===== -->
-  <g transform="translate(512, 490) rotate(-10)" filter="url(#paperShadow)">
-    <!-- Sombra de la hoja en el suelo -->
-    <rect x="-195" y="-250" width="390" height="500" rx="8" ry="8"
-          fill="url(#paperGrad)" stroke="#cbd5e1" stroke-width="2"/>
+  <!-- Trazo de tinta: sale de la punta y hace un bucle de escritura. -->
+  <path d="M318,706 C262,760 214,838 262,872 C312,906 402,806 470,812 C540,818 530,884 610,880 C668,877 712,840 752,800"
+        fill="none" stroke="url(#ink)" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
 
-    <!-- Líneas de la hoja (rayas sutiles) -->
-    <line x1="-155" y1="-180" x2="155" y2="-180" stroke="#dbeafe" stroke-width="1.5" opacity="0.6"/>
-    <line x1="-155" y1="-130" x2="155" y2="-130" stroke="#dbeafe" stroke-width="1.5" opacity="0.6"/>
-    <line x1="-155" y1="-80"  x2="155" y2="-80"  stroke="#dbeafe" stroke-width="1.5" opacity="0.6"/>
-    <line x1="-155" y1="-30"  x2="155" y2="-30"  stroke="#dbeafe" stroke-width="1.5" opacity="0.6"/>
-    <line x1="-155" y1="20"   x2="155" y2="20"   stroke="#dbeafe" stroke-width="1.5" opacity="0.6"/>
-    <line x1="-155" y1="70"   x2="155" y2="70"   stroke="#dbeafe" stroke-width="1.5" opacity="0.6"/>
-    <line x1="-155" y1="120"  x2="155" y2="120"  stroke="#dbeafe" stroke-width="1.5" opacity="0.6"/>
-    <line x1="-155" y1="170"  x2="155" y2="170"  stroke="#dbeafe" stroke-width="1.5" opacity="0.6"/>
-
-    <!-- Margen rojo de la hoja -->
-    <line x1="-130" y1="-240" x2="-130" y2="240" stroke="#fca5a5" stroke-width="1.5" opacity="0.5"/>
-  </g>
-
-  <!-- ===== LÁPIZ ===== -->
-  <g transform="translate(512, 470) rotate(-45)" filter="url(#pencilShadow)">
-    <!-- Cuerpo del lápiz -->
-    <rect x="-18" y="-180" width="36" height="280" rx="3" ry="3" fill="url(#pencilBody)"/>
-
-    <!-- Bandas decorativas del lápiz -->
-    <rect x="-18" y="-180" width="36" height="22" rx="3" ry="0" fill="#7c3aed" opacity="0.9"/>
-    <rect x="-18" y="-158" width="36" height="4" fill="#a78bfa"/>
-
-    <!-- Metal de la punta -->
-    <polygon points="-18,100 18,100 12,115 -12,115" fill="#9ca3af"/>
-    <polygon points="-12,115 12,115 0,148" fill="url(#pencilTip)"/>
-
-    <!-- Goma (extremo superior) -->
-    <rect x="-16" y="-210" width="32" height="35" rx="6" ry="6" fill="url(#eraserGrad)"/>
-    <rect x="-18" y="-178" width="36" height="6" rx="1" ry="1" fill="#9ca3af"/>
-
-    <!-- Brillo del cuerpo -->
-    <rect x="-10" y="-175" width="6" height="270" rx="3" fill="white" opacity="0.25"/>
-  </g>
-
-  <!-- ===== ESTRELLAS / CHISPAS MÁGICAS ===== -->
-  <g filter="url(#glow)">
-    <!-- Estrella grande arriba-derecha -->
-    <g transform="translate(680, 290)">
-      <polygon points="0,-28 8,-8 28,-8 12,6 18,26 0,14 -18,26 -12,6 -28,-8 -8,-8"
-               fill="url(#starGlow)" opacity="0.95"/>
-    </g>
-
-    <!-- Estrella mediana abajo-izquierda -->
-    <g transform="translate(340, 340)">
-      <polygon points="0,-20 6,-6 20,-6 9,4 13,19 0,11 -13,19 -9,4 -20,-6 -6,-6"
-               fill="url(#starGlow)" opacity="0.85"/>
-    </g>
-
-    <!-- Estrella pequeña arriba-centro -->
-    <g transform="translate(460, 270)">
-      <polygon points="0,-14 4,-4 14,-4 6,3 9,13 0,8 -9,13 -6,3 -14,-4 -4,-4"
-               fill="#fde68a" opacity="0.9"/>
-    </g>
-
-    <!-- Estrella tiny izquierda -->
-    <g transform="translate(310, 430)">
-      <polygon points="0,-10 3,-3 10,-3 5,2 7,9 0,5 -7,9 -5,2 -10,-3 -3,-3"
-               fill="#fef3c7" opacity="0.8"/>
-    </g>
-
-    <!-- Punto brillante derecha -->
-    <circle cx="720" cy="420" r="5" fill="#fde68a" opacity="0.7"/>
-
-    <!-- Punto brillante abajo -->
-    <circle cx="380" cy="580" r="4" fill="#fef3c7" opacity="0.6"/>
-
-    <!-- Pequeña chispa arriba-izquierda -->
-    <g transform="translate(350, 250) scale(0.6)">
-      <line x1="0" y1="-12" x2="0" y2="12" stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
-      <line x1="-12" y1="0" x2="12" y2="0" stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
-      <line x1="-8" y1="-8" x2="8" y2="8" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
-      <line x1="8" y1="-8" x2="-8" y2="8" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
-    </g>
-
-    <!-- Chispa derecha-arriba -->
-    <g transform="translate(700, 340) scale(0.5)">
-      <line x1="0" y1="-12" x2="0" y2="12" stroke="#fcd34d" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
-      <line x1="-12" y1="0" x2="12" y2="0" stroke="#fcd34d" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
-    </g>
-
-    <!-- Curva mágica (trail de polvo de hadas) -->
-    <path d="M 350,500 Q 420,380 500,350 Q 580,320 660,280"
-          fill="none" stroke="#fde68a" stroke-width="2" stroke-dasharray="4,8"
-          opacity="0.4" stroke-linecap="round"/>
+  <!-- Plumilla (dibujada vertical y girada 45°; la punta queda abajo a la izquierda). -->
+  <g transform="translate(560 470) rotate(45)" filter="url(#shadow)">
+    <!-- Mitad izquierda (luz) -->
+    <path d="M0,-190 L-150,-190 L-150,-110 C-150,-20 -70,110 0,330 Z" fill="url(#nibL)"/>
+    <!-- Mitad derecha (sombra) -->
+    <path d="M0,-190 L150,-190 L150,-110 C150,-20 70,110 0,330 Z" fill="url(#nibR)"/>
+    <!-- Virola / sección superior -->
+    <rect x="-172" y="-300" width="344" height="120" rx="36" fill="#FFFFFF"/>
+    <rect x="-172" y="-212" width="344" height="32" rx="12" fill="#C3D5FF"/>
+    <!-- Respiradero + ranura -->
+    <circle cx="0" cy="-30" r="34" fill="#2F6BF2"/>
+    <path d="M0,-30 L0,320" stroke="#2F6BF2" stroke-width="16" stroke-linecap="round"/>
   </g>
 </svg>

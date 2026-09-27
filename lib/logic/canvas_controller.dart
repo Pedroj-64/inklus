@@ -193,33 +193,17 @@ class CanvasController extends ChangeNotifier {
   set onLayerBlocked(VoidCallback? cb) => _onLayerBlocked = cb;
 
   Timer? _saveTimer;
-  Duration _autosaveDebounce = kSaveDebounce;
 
   CanvasController(this._storage, {Note? initial, String? notebookId})
       : _note = initial ?? Note.newBlank(),
         _notebookId = notebookId ?? '' {
-    _loadAutosaveInterval();
     _loadInputPrefs();
   }
 
-  /// Carga el intervalo de autoguardado desde SharedPreferences.
-  Future<void> _loadAutosaveInterval() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final seconds = prefs.getInt('autosave_interval') ?? 0;
-      if (seconds > 0) {
-        _autosaveDebounce = Duration(seconds: seconds);
-      }
-    } catch (_) {}
-  }
-
-  /// Persiste el intervalo de autoguardado.
-  static Future<void> setAutosaveInterval(Duration interval) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('autosave_interval', interval.inSeconds);
-  }
-
-  Duration get autosaveDebounce => _autosaveDebounce;
+  /// Espera tras el último cambio antes de guardar en disco. Es corta a
+  /// propósito: antes era configurable (hasta 30 min) y, como cada trazo
+  /// reinicia la espera, un cierre inesperado podía perder minutos de trabajo.
+  Duration get autosaveDebounce => kSaveDebounce;
 
   // ------------------------------------------------------------------
   // Accesores
@@ -1851,7 +1835,7 @@ class CanvasController extends ChangeNotifier {
 
   void _scheduleSave() {
     _saveTimer?.cancel();
-    _saveTimer = Timer(_autosaveDebounce, () async {
+    _saveTimer = Timer(kSaveDebounce, () async {
       await saveNow();
       // Replica a la nube si la UI registró un callback (sesión iniciada).
       // La UI decide con qué frecuencia sube realmente (debounce propio).

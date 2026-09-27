@@ -2,6 +2,22 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versiones [SemVer](https://semver.org/lang/es/).
 
+## [1.4.2] — 2026-09-26
+
+### Añadido
+- **Restaurar desde Drive** (Configuración): trae la versión más reciente de cada nota (*last-write-wins*) y reúne las que no existen en el dispositivo en el cuaderno "Recuperado de Drive".
+- **Importación unificada**: un solo "Importar .inklus o respaldo" detecta el tipo por el contenido (cuaderno `.inklus` v1/v2 o respaldo completo `.zip`), incluidos los `.inklus` que Android renombra a `.zip`.
+
+### Corregido
+- **Cierre al abrir la app (release)**: R8 eliminaba `WorkDatabase_Impl` de WorkManager (Room la crea por reflexión); reglas `-keep` en `proguard-rules.pro`.
+- **Inicio de sesión con Google** ("serverClientId must be provided"): `google_sign_in` 7 se inicializa una vez con el cliente web antes de cualquier llamada.
+- **Sincronización colgada**: las peticiones a Drive expiran a los 60 s en vez de dejar el ☁️ "sincronizando" para siempre.
+- **Pérdida de trabajo tras un cierre inesperado**: se elimina el intervalo de autoguardado configurable (hasta 30 min); cada cambio se guarda al instante.
+
+### Cambiado
+- **Nuevo icono**: plumilla estilográfica con trazo de tinta dorada sobre degradado azul (fuentes SVG en `assets/icon/`).
+- **Configuración rediseñada** con el sistema de diseño (componentes compartidos en `ui/widgets/page_scaffold.dart`) y versión visible de la app.
+
 ## [1.4.0] — 2026-09-26
 
 ### Añadido

@@ -21,6 +21,7 @@ import '../services/export_service.dart';
 import '../services/ocr_service.dart';
 import '../services/pdf_import_service.dart';
 import '../services/image_service.dart';
+import '../services/import_service.dart';
 import '../services/inklus_format.dart';
 import '../services/storage_service.dart';
 import '../services/template_library_service.dart';
@@ -899,14 +900,15 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Sube un archivo .inklus manual a Drive.
   Future<void> _uploadInklusFile() async {
     try {
-      final files = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['inklus'],
-      );
-      if (files.isEmpty) return;
-      final filePath = files.first.path!;
-      final bytes = await File(filePath).readAsBytes();
-      final name = files.first.name;
+      final file = await ImportService.pickPlatformFile();
+      if (file == null) return;
+      final bytes = await file.xFile.readAsBytes();
+      if (await ImportService.detect(bytes) == ImportKind.fullBackup) {
+        _snack('Ese archivo es un respaldo completo, no un cuaderno .inklus');
+        return;
+      }
+      // Android puede haberlo renombrado a .zip: en Drive siempre .inklus.
+      final name = file.name.replaceFirst(RegExp(r'(\.inklus)?\.zip$'), '.inklus');
       setState(() => _syncing = true);
       await _syncService.uploadInklusFile(bytes, name, promptForConsent: true);
       if (mounted) _snack('Archivo "$name" subido a Google Drive');
@@ -1271,24 +1273,23 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Importa un cuaderno `.inklus` o un respaldo completo (detectado por el
+  /// contenido, ver [ImportService]).
   Future<void> _importFullBackup() async {
     try {
-      final files = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['zip'],
-      );
-      if (files.isEmpty) return;
-      final filePath = files.first.path!;
-      final bytes = await File(filePath).readAsBytes();
+      final bytes = await ImportService.pickFile();
+      if (bytes == null || !mounted) return;
+      final result =
+          await runWithLoading(context, () => ImportService.importBytes(bytes));
       if (!mounted) return;
-      final count =
-          await runWithLoading(context, () => _storage.importFullBackup(bytes));
-      if (!mounted) return;
-      _snack('Respaldo importado: $count cuaderno(s)');
+      _snack('${result.message}. Ábrelo desde la biblioteca.');
     } catch (e) {
-      if (mounted) _snack('Error al importar respaldo: $e');
+      if (mounted) {
+        _snack(e is FormatException ? e.message : 'Error al importar: $e');
+      }
     }
   }
+
 
   // -------------------------------------------------------------------------
   // UI
@@ -1692,7 +1693,7 @@ class _HomeScreenState extends State<HomeScreen> {
           leadingIcon: const Icon(Icons.backup_outlined),
           menuChildren: [
             item('backup', Icons.backup_outlined, 'Exportar respaldo completo'),
-            item('restoreBackup', Icons.restore_outlined, 'Importar respaldo'),
+            item('restoreBackup', Icons.file_download_outlined, 'Importar .inklus o respaldo'),
           ],
           child: const Text('Datos'),
         ),

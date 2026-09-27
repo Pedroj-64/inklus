@@ -13,7 +13,7 @@
 
 ## ✅ Lo que la app ofrece hoy
 
-> Verificado contra el código fuente (~22,200 líneas Dart en `lib/`, 173 tests pasando).
+> Verificado contra el código fuente (~25,400 líneas Dart en `lib/`, 178 tests pasando).
 
 ### ✨ UX y Onboarding
 - **Onboarding tutorial**: 4 páginas ilustradas skippable al primer inicio; persiste con `SharedPreferences`.
@@ -154,10 +154,31 @@
 - **F9 Láser** (también en modo presentación).
 - **Marketplace propio**: pantalla, instalación verificada, catálogo incluido sin red y plantilla del repo (`marketplace/`).
 
+### ✅ v1.4.2 — Estabilidad de la release (hecho)
+- Arranque en release (reglas R8 de WorkManager), inicio de sesión con Google (`initialize(serverClientId)`), timeout de 60 s en Drive.
+- **Restaurar desde Drive** (last-write-wins por nota + cuaderno "Recuperado de Drive").
+- **Importación única por contenido** (`ImportService`): `.inklus` v1/v2, respaldo completo y `.inklus.zip` renombrados.
+- Autoguardado fijo (sin intervalo configurable), nuevo icono, Configuración migrada al sistema de diseño.
+
+### 🎯 Siguiente: v1.5 — "Todo con el mismo diseño" (orden recomendado)
+> Objetivo: terminar el lavado de cara (P1), dejar lista la distribución pública (R2–R4) y cerrar las dos carencias más visibles del lazo y del historial (P7, P8).
+
+| Orden | Tarea | Qué hacer | Hecho cuando |
+|---|---|---|---|
+| 1 | **P1a — pantallas secundarias** | `trash_screen.dart`, `reminder_screen.dart`, `writing_stats_screen.dart` → `InklusPage` + `SectionCard`/`SettingsTile`/`EmptyState` de `ui/widgets/page_scaffold.dart`; colores de `context.colors`/`context.inklus`, medidas de `tokens.dart`. | Sin `ThemeColors`/`kAccentColor` en esos archivos; capturas de `tool/screenshots` revisadas en claro y oscuro. |
+| 2 | **P1b — hojas y listas** | `note_list_screen.dart`, `create_notebook_screen.dart`, `onboarding_screen.dart` y las hojas de `ui/widgets/` (`template_picker_sheet`, `layers_sidebar`, `tag_editor_sheet`, `smart_folders_sheet`, `stroke_options_sheet`, `custom_color_dialog`) → `SheetHeader` + tokens. | `grep -rn "ThemeColors\|kAccentColor" lib/ui` solo devuelve el lienzo (`canvas/`) y la biblioteca, justificados. |
+| 3 | **R2 — Política de privacidad** | `docs/privacy.md` publicado con GitHub Pages: todo local, Drive solo con `drive.file`, sin analítica ni rastreo; enlace desde Configuración → Acerca de. | URL pública y enlazada en la app y en el README. |
+| 4 | **R3 — OAuth en producción** *(manual, en Google Cloud)* | Pantalla de consentimiento: logo, dominio de la política, scope `drive.file` → *Publish app*. `drive.file` es no sensible: no requiere verificación completa. | El inicio de sesión ya no caduca a los 7 días ni está limitado a 100 usuarios de prueba. |
+| 5 | **R4 — Releases en GitHub** | Workflow en tags `v*`: `flutter build apk --release --split-per-abi` firmado con secretos (`key.properties` generado en CI), adjunta APKs y el bloque de `CHANGELOG.md` de esa versión. README: instalar desde "orígenes desconocidos". | `git tag v1.5.0 && git push --tags` publica la release sola. |
+| 6 | **P8 — Versiones de Drive en el historial** | En la hoja de "Historial de versiones", sección "En Google Drive" que lista revisiones (`DriveSyncService.downloadVersion` ya existe) y restaura igual que una versión local (guardando antes la actual). | Restaurar una revisión de Drive desde el editor sin salir de la nota. |
+| 7 | **P7 — Lazo completo** | Escalar/rotar y copiar/pegar también `ImageItem`/`TextItem` (hoy solo trazos); una única `CanvasAction` con los tres tipos. | Tests en `test/` de transformar + deshacer con selección mixta. |
+
+**Después de v1.5:** P3 (scroll vertical continuo) y P2 (i18n) son los siguientes de mayor valor; R5 (guion de pruebas en dispositivo) antes de anunciar la v2.0.
+
 ### 🟡 Pendiente (siguiente ronda)
 | # | Tarea | Detalle |
 |---|---|---|
-| P1 | **Migrar pantallas restantes al sistema de diseño** | Lista de notas, configuración, papelera, recordatorios, estadísticas, selector de plantillas y capas aún usan colores sueltos (`ThemeColors`/`kAccentColor`). |
+| P1 | **Migrar pantallas restantes al sistema de diseño** | ✅ Configuración (con `ui/widgets/page_scaffold.dart`). Faltan lista de notas, papelera, recordatorios, estadísticas, selector de plantillas y capas, que aún usan colores sueltos (`ThemeColors`/`kAccentColor`): reutilizar `InklusPage`/`SectionCard`/`SettingsTile`/`EmptyState`. |
 | P2 | **i18n** | `flutter_localizations` + ARB (ES fuente, EN); arregla selectores de fecha en inglés. |
 | P3 | **Desplazamiento vertical continuo** entre páginas (como GoodNotes/Notability) y vista doble en apaisado. |
 | P4 | **Audio sincronizado** (`record`) con reproducción que resalta lo escrito. |
@@ -204,7 +225,7 @@ Contenido inicial sugerido: agenda semanal/mensual real (con días y cabeceras, 
 | **Consolidar Drive legacy** | Caminos paralelos Document vs Note en `drive_sync_service`; `SearchService` aún indexa `Document`. |
 | **`AppPaths` único** | Cinco servicios reconstruyen `getApplicationSupportDirectory()/inklus` (usar `StorageService.baseDirectory()`). |
 | **Papelera de Notes sueltas** | Una Note borrada individualmente se trata como `Document` legacy al restaurar. |
-| **Timeouts de Drive** | Las llamadas a `googleapis` no tienen timeout propio. |
+| ✅ **Timeouts de Drive** | Resuelto en 1.4.2: `_BearerClient` corta a los 60 s (todas las llamadas pasan por él). |
 | **Pan sin límites** | En hoja fija se puede desplazar la vista indefinidamente; acotar a la hoja con margen. |
 | **Trazo activo incremental** | `getStroke` recorre todo el trazo en curso en cada evento; medir en trazos muy largos. |
 
@@ -212,9 +233,9 @@ Contenido inicial sugerido: agenda semanal/mensual real (con días y cabeceras, 
 
 | Métrica | Valor |
 |---|---|
-| Archivos Dart (lib/) | ~65 |
-| Líneas de código | ~22,200 |
-| Tests | 173 (todos pasando) |
+| Archivos Dart (lib/) | ~85 |
+| Líneas de código | ~25,400 |
+| Tests | 178 (todos pasando) |
 | Modelos | 9 (`document`, `note`, `notebook`, `page`, `stroke`, `template`, `image_item`, `text_item`, `id`) |
 | Servicios | 17 (+ `file_utils`) |
 | Herramientas de escritura | 10 (pen, pencil, highlighter, calligraphy, brush, eraser, select, lasso, bucket, text) |

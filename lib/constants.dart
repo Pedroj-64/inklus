@@ -13,6 +13,10 @@ import 'models/stroke.dart';
 // cambiar o que se repite en más de un lugar.
 // ============================================================================
 
+/// Versión visible de la app (debe coincidir con `version:` de pubspec.yaml;
+/// lo comprueba `test/app_version_test.dart`).
+const String kAppVersion = '1.4.2';
+
 // ---------------------------------------------------------------------------
 // Tema / Colores de acento
 // ---------------------------------------------------------------------------

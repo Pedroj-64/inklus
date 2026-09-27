@@ -52,6 +52,8 @@ services/
   inklus_format.dart       ★ formato .inklus (ZIP autocontenido)
   drive_sync_service.dart  ★ Google Drive offline-first (drive.file)
   pdf_import_service.dart  importPages: una página de la nota por página del PDF
+  import_service.dart      importación única: detecta por CONTENIDO .inklus v1/v2 o respaldo
+                             completo (acepta .inklus.zip renombrados por Android)
   template_library_service.dart  "Mis plantillas" (imágenes propias)
 ui/
   theme/                   ★ app_theme.dart (ThemeData claro/oscuro), inklus_colors.dart
@@ -67,7 +69,9 @@ ui/
   canvas/                  drawing_canvas (entrada), world_painter (pintado compartido con export),
                              canvas_overlays (regla, lupa)
   widgets/                 controller_selector, dialogs (showTextPrompt, runWithLoading),
-                             search_sheet, custom_color_dialog, text_edit_overlay, inklus_logo…
+                             search_sheet, custom_color_dialog, text_edit_overlay, inklus_logo,
+                             page_scaffold (InklusPage, PageHeader, SectionCard, SettingsTile,
+                             EmptyState, SheetHeader: base de las pantallas secundarias)…
 tool/screenshots/          capturas de la UI real sin dispositivo (fuera de la suite de tests)
 marketplace/               plantilla del repo inklus-marketplace (validador + CI + ejemplos)
 ```
@@ -126,7 +130,9 @@ marketplace/               plantilla del repo inklus-marketplace (validador + CI
 ### 7. Sincronización — `drive_sync_service.dart` (Google Drive, offline-first)
 - **Singleton** `DriveSyncService.instance` (`ChangeNotifier`): la sesión se comparte entre biblioteca y editor; el ☁️ escucha con `Listenable.merge([controller, service])`.
 - `signIn()`: `GoogleSignIn.instance.authenticate(scopeHint: [drive.file])`. El **access token NO viene en `authentication`** (v7 solo trae idToken): se pide con `account.authorizationClient.authorizeScopes([drive.file])` (interactivo) o `authorizationForScopes` (silencioso, puede devolver null).
+- Toda llamada a `GoogleSignIn.instance` va precedida de `await _ensureInitialized()` (`initialize(serverClientId:)` una sola vez; reintentable si falla).
 - `restoreSession()` (silenciosa, One Tap) se llama al arrancar en `NotebookLibraryScreen`.
+- `restoreLibrary(storage)` (Configuración → "Restaurar desde Drive"): last-write-wins por nota; las que no existen en local van a un cuaderno nuevo "Recuperado de Drive". `_BearerClient` aplica timeout de 60 s.
 - Backup: carpeta 'Inklus' en Drive, un archivo `<note.id>.inklus` por nota (upsert, no duplica) en el formato propio `InklusFormat` (documento + **imágenes embebidas** → el backup es autocontenido). Restore: lista la carpeta, importa cada `.inklus` (extrae imágenes a `<appSupport>/inklus/restored/<id>/`) y elige la más reciente por `updatedAt`. `googleapis` 16 (`drive/v3.dart`): `files.create/update` con `uploadMedia: commons.Media`; descarga con GET `alt=media` vía `_BearerClient` (http).
 - Backup automático = silencioso (si el scope no está autorizado se omite, el local ya protege); 'Subir ahora' usa `promptForConsent: true` (puede mostrar consentimiento).
 - La UI se entera vía `controller.onRemoteSync` (callback en cada guardado local; `HomeScreen` lo agrupa: máx. una subida cada 20 s + al salir) y `controller.replaceNote(note)` tras restaurar.
@@ -136,7 +142,7 @@ marketplace/               plantilla del repo inklus-marketplace (validador + CI
 ## 🚨 Gotchas de versiones (ya resueltas, no revertir)
 
 - **file_picker 12**: API estática — `FilePicker.pickFiles()` → `List<PlatformFile>`, `FilePicker.pickFile()` → `PlatformFile?`, `FilePicker.saveFile({fileName, bytes})` → `Uri?`. **No existe** `FilePicker.platform`.
-- **google_sign_in 7**: `GoogleSignIn.instance.authenticate({scopeHint})` / `attemptLightweightAuthentication()` (One Tap). `authentication` solo trae `idToken`; el access token se pide con `authorizationClient.authorizeScopes/authorizationForScopes`. `default_web_client_id` está **manualmente** en `android/app/src/main/res/values/strings.xml` (ya no lo genera google-services; no usar Firebase).
+- **google_sign_in 7**: exige `GoogleSignIn.instance.initialize(serverClientId: <cliente web>)` **una vez y esperado** antes de cualquier otra llamada (si no: "serverClientId must be provided"). `GoogleSignIn.instance.authenticate({scopeHint})` / `attemptLightweightAuthentication()` (One Tap). `authentication` solo trae `idToken`; el access token se pide con `authorizationClient.authorizeScopes/authorizationForScopes`. `default_web_client_id` está **manualmente** en `android/app/src/main/res/values/strings.xml` (ya no lo genera google-services; no usar Firebase).
 - **googleapis 16 / `_discoveryapis_commons`**: `drive.DriveApi(client)` con `uploadMedia: commons.Media(Stream.value(bytes), len, contentType:)`; `files.update(File request, String fileId, ...)` (¡el request va primero!). googleapis_auth no exporta su `AuthenticatedClient` → usar `_BearerClient` propio sobre `http`.
 - **No Firebase**: la app no inicializa ni depende de Firebase (se eliminó). Si se reintroduce, `main.dart` debe llamar a `Firebase.initializeApp()` antes de tocar `FirebaseAuth.instance` (causa del crash al arrancar).
 - **perfect_freehand 2.5.2**: `getStroke(List<PointVector>, options:)` → `List<Offset>` (polígono). `StrokeOptions` tiene `size/thinning/smoothing/streamline/simulatePressure/start/end/isComplete` (sin `roughness`). En `stroke_engine.dart` se importa con `hide StrokePoint` (colisión con nuestro modelo).

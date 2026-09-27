@@ -1,7 +1,9 @@
 # Configuración de iconos de lanzamiento (regenerar con `dart run flutter_launcher_icons`).
+# Fuentes vectoriales en assets/icon/*.svg → PNG con:
+#   rsvg-convert -w 1024 icon_full.svg -o app_icon.png (ídem foreground/background)
 flutter_launcher_icons:
   android: true
   ios: false
   image_path: "assets/icon/app_icon.png"
-  adaptive_icon_background: "#3B82F6"
+  adaptive_icon_background: "assets/icon/app_icon_background.png"
   adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"

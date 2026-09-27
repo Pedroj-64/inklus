@@ -3,14 +3,10 @@ import '../constants.dart';
 
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../models/document.dart';
-import '../models/note.dart';
-import '../models/notebook.dart';
 import '../services/drive_sync_service.dart';
-import '../services/inklus_format.dart';
+import '../services/import_service.dart';
 import '../services/storage_service.dart';
 import '../utils/date_utils.dart' as date_util;
 import 'note_list_screen.dart';
@@ -303,42 +299,17 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
     await _reload();
   }
 
-  /// Importa un archivo .inklus desde el dispositivo.
+  /// Importa un cuaderno `.inklus` o un respaldo completo `.zip` (el tipo se
+  /// detecta por el contenido, ver [ImportService]).
   Future<void> _importInklus() async {
     try {
-      final files = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['inklus'],
-      );
-      if (files.isEmpty) return;
-      final filePath = files.first.path!;
-      final bytes = await File(filePath).readAsBytes();
-      final result = await InklusFormat.importAuto(bytes);
-
-      if (result is Notebook) {
-        // v2: Notebook completo con notes individuales.
-        await _storage.saveNotebook(result);
-        if (!mounted) return;
-        _snack('Cuaderno "${result.title}" importado (${result.notes.length} nota(s))');
-      } else if (result is Document) {
-        // v1 legacy: Document → Notebook con un Note.
-        final note = Note(
-          id: 'note_${result.id}',
-          title: result.title,
-          createdAt: result.createdAt,
-          updatedAt: result.updatedAt,
-          pages: result.pages,
-        );
-        final nb = await _storage.createNotebook(
-          title: result.title,
-        );
-        await _storage.saveNote(nb.id, note);
-        if (!mounted) return;
-        _snack('Cuaderno "${result.title}" importado (formato legacy)');
-      }
+      final bytes = await ImportService.pickFile();
+      if (bytes == null || !mounted) return;
+      final result = await runWithLoading(context, () => ImportService.importBytes(bytes));
       await _reload();
+      _snack(result.message);
     } catch (e) {
-      _snack('Error al importar: $e');
+      _snack(e is FormatException ? e.message : 'Error al importar: $e');
     }
   }
 

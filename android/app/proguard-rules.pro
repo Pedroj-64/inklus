@@ -35,3 +35,12 @@
 
 # Nota: googleapis, cryptography y pdf son paquetes Dart puros (no Java):
 # no necesitan reglas de R8.
+
+# --- WorkManager / Room ---
+# WorkManager arranca con androidx.startup y crea WorkDatabase_Impl por
+# reflexión (Room busca "<Clase>_Impl"). Sin estas reglas R8 la elimina y la
+# app se cierra al abrir: "Failed to create an instance of WorkDatabase".
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
+-keep class androidx.work.impl.WorkDatabase_Impl { *; }
+-keep class androidx.work.** { *; }
+-dontwarn androidx.work.**
