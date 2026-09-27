@@ -1,9 +1,14 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inklus/models/document.dart';
+import 'package:inklus/models/image_item.dart';
 import 'package:inklus/models/stroke.dart';
+import 'package:inklus/services/file_utils.dart';
 import 'package:inklus/services/storage_service.dart';
 
 void main() {
@@ -134,6 +139,134 @@ void main() {
     test('sin datos previos el índice está vacío y no migra nada', () async {
       final metas = await storage.loadIndex();
       expect(metas, isEmpty);
+    });
+  });
+
+  group('Respaldo local completo', () {
+    test('exportFullBackup + importFullBackup restaura Notebook+Note e imágenes',
+        () async {
+      final imagesDir = Directory('${tempDir.path}/images')..createSync();
+      final img = File('${imagesDir.path}/foto.png')..writeAsBytesSync([1, 2, 3]);
+
+      final nb = await storage.createNotebook(title: 'Física');
+      final note = nb.notes.first;
+      note.pages.first.images.add(ImageItem(
+        id: 'img_1',
+        localPath: img.path,
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+      ));
+      await storage.saveNote(nb.id, note);
+      await storage.setSyncEnabled(nb.id, false);
+
+      final zip = await storage.exportFullBackup();
+
+      // Restaurar en "otro equipo" (otra carpeta base).
+      final otherDir = Directory.systemTemp.createTempSync('inklus_restore_');
+      try {
+        final other = StorageService(baseDir: otherDir);
+        final count = await other.importFullBackup(zip);
+        expect(count, 1);
+
+        final metas = await other.loadIndex();
+        expect(metas.single.title, 'Física');
+        expect(metas.single.isSyncEnabled, isFalse);
+
+        final restored = await other.loadNotebook(nb.id);
+        expect(restored, isNotNull);
+        final restoredImg = restored!.notes.first.pages.first.images.single;
+        // La ruta absoluta se re-mapea a la nueva carpeta base.
+        expect(restoredImg.localPath, '${otherDir.path}/images/foto.png');
+        expect(File(restoredImg.localPath).readAsBytesSync(), [1, 2, 3]);
+      } finally {
+        otherDir.deleteSync(recursive: true);
+      }
+    });
+
+    test('importFullBackup fusiona: conserva cuadernos locales', () async {
+      final a = await storage.createNotebook(title: 'A');
+      final zip = await storage.exportFullBackup();
+
+      final otherDir = Directory.systemTemp.createTempSync('inklus_merge_');
+      try {
+        final other = StorageService(baseDir: otherDir);
+        final local = await other.createNotebook(title: 'Local');
+        await other.importFullBackup(zip);
+        final ids = (await other.loadIndex()).map((m) => m.id).toSet();
+        expect(ids, {a.id, local.id});
+      } finally {
+        otherDir.deleteSync(recursive: true);
+      }
+    });
+
+    test('importFullBackup ignora rutas con .. (zip-slip)', () async {
+      final archive = Archive()
+        ..addFile(ArchiveFile('images/../../evil.txt', 1, [65]))
+        ..addFile(ArchiveFile('/abs.txt', 1, [65]));
+      final zip = Uint8List.fromList(ZipEncoder().encode(archive));
+
+      await storage.importFullBackup(zip);
+      expect(File('${tempDir.parent.path}/evil.txt').existsSync(), isFalse);
+      expect(File('/abs.txt').existsSync(), isFalse);
+    });
+
+    test('backup antiguo (solo documents/) se migra a Notebook+Note', () async {
+      final doc = Document.newBlank(title: 'Viejo');
+      final archive = Archive()
+        ..addFile(ArchiveFile.string(
+            'documents/${doc.id}.json', jsonEncode(doc.toJson())))
+        ..addFile(ArchiveFile.string(
+            'index.json',
+            jsonEncode({
+              'documents': [
+                {'id': doc.id, 'title': 'Viejo', 'updatedAt': doc.updatedAt.toIso8601String()}
+              ]
+            })));
+      final zip = Uint8List.fromList(ZipEncoder().encode(archive));
+
+      final count = await storage.importFullBackup(zip);
+      expect(count, 1);
+      final metas = await storage.loadIndex();
+      expect(metas.single.title, 'Viejo');
+      expect(await storage.loadNotebook(doc.id), isNotNull);
+    });
+  });
+
+  group('Robustez del índice', () {
+    test('índice corrupto se reconstruye desde notebooks/', () async {
+      final a = await storage.createNotebook(title: 'Uno');
+      final b = await storage.createNotebook(title: 'Dos');
+      File('${tempDir.path}/index.json').writeAsStringSync('{"formatVers');
+
+      final metas = await storage.loadIndex();
+      expect(metas.map((m) => m.id).toSet(), {a.id, b.id});
+    });
+
+    test('guardados concurrentes no pierden entradas del índice', () async {
+      final nbs = await Future.wait(
+        List.generate(8, (i) => storage.createNotebook(title: 'NB $i')),
+      );
+      final metas = await storage.loadIndex();
+      expect(metas.length, nbs.length);
+    });
+
+    test('safeJoin rechaza rutas peligrosas', () {
+      expect(safeJoin('/base', 'images/a.png'), '/base/images/a.png');
+      expect(safeJoin('/base', '../x'), isNull);
+      expect(safeJoin('/base', 'images/../../x'), isNull);
+      expect(safeJoin('/base', '/etc/passwd'), isNull);
+      expect(safeJoin('/base', 'C:/x'), isNull);
+      expect(safeJoin('/base', 'images/'), isNull);
+    });
+
+    test('writeAtomic no deja temporales', () async {
+      final f = File('${tempDir.path}/x.json');
+      await writeAtomic(f, '{"a":1}');
+      await writeAtomic(f, '{"a":2}');
+      expect(f.readAsStringSync(), '{"a":2}');
+      expect(tempDir.listSync().where((e) => e.path.contains('.tmp-')), isEmpty);
     });
   });
 }

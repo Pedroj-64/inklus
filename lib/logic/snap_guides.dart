@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:ui';
 
 import '../models/image_item.dart';
@@ -20,7 +21,11 @@ class SnapResult {
     this.horizontalGuides = const [],
   });
 
-  static final none = SnapResult(snappedPoint: Offset.zero);
+  /// true si hubo ajuste en algún eje. Usar esto (no comparar con
+  /// Offset.zero): el centro de la hoja (0,0) es un snap válido.
+  bool get hasSnap => verticalGuides.isNotEmpty || horizontalGuides.isNotEmpty;
+
+  static const none = SnapResult(snappedPoint: Offset.zero);
 }
 
 /// Servicio de snapping / guías magnéticas.
@@ -40,6 +45,7 @@ class SnapGuides {
     required List<Stroke> strokes,
     required List<ImageItem> images,
     required Size? sheetSize,
+    String? excludeImageId,
   }) {
     final candidatesX = <double>[];
     final candidatesY = <double>[];
@@ -54,6 +60,8 @@ class SnapGuides {
 
     // 2. Centros y bordes de imágenes existentes (excluyendo la candidata).
     for (final img in images) {
+      // La imagen que se arrastra no debe engancharse a sí misma.
+      if (img.id == excludeImageId) continue;
       final r = img.rect;
       candidatesX.add(img.x);
       candidatesY.add(img.y);
@@ -62,20 +70,13 @@ class SnapGuides {
     }
 
     // 3. Centros de trazos existentes (aproximación: bounding box).
+    // (bounding box cacheado por trazo: antes se recorrían todos los puntos
+    // de todos los trazos en cada evento de arrastre).
     for (final s in strokes) {
       if (s.points.isEmpty) continue;
-      var left = double.infinity, top = double.infinity;
-      var right = double.negativeInfinity, bottom = double.negativeInfinity;
-      for (final p in s.points) {
-        if (p.x < left) left = p.x;
-        if (p.y < top) top = p.y;
-        if (p.x > right) right = p.x;
-        if (p.y > bottom) bottom = p.y;
-      }
-      final cx = (left + right) / 2;
-      final cy = (top + bottom) / 2;
-      candidatesX.addAll([cx, left, right]);
-      candidatesY.addAll([cy, top, bottom]);
+      final b = s.pointBounds;
+      candidatesX.addAll([b.center.dx, b.left, b.right]);
+      candidatesY.addAll([b.center.dy, b.top, b.bottom]);
     }
 
     // 4. Encuentra el snap más cercano.

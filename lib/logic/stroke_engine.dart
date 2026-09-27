@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:ui';
 
 import 'package:perfect_freehand/perfect_freehand.dart'
@@ -15,15 +16,12 @@ import '../models/stroke.dart';
 class StrokeEngine {
   const StrokeEngine._();
 
-  // Caché de polígonos calculados para trazos confirmados.
-  // Clave = stroke.id, valor = polígono (lista de Offset).
-  static final Map<String, List<Offset>> _outlineCache = {};
-
-  /// Invalida la caché de un trazo (llamar al editar/eliminar).
-  static void invalidate(String strokeId) => _outlineCache.remove(strokeId);
-
-  /// Invalida toda la caché.
-  static void invalidateAll() => _outlineCache.clear();
+  // Caché de polígonos y Paths de trazos confirmados, **por instancia**.
+  // Un Stroke es inmutable (mover/transformar/borrar crea otra instancia),
+  // así que la caché nunca queda obsoleta y el GC la libera junto con el
+  // trazo: no hay que invalidar a mano ni puede crecer sin límite.
+  static final Expando<List<Offset>> _outlineCache = Expando('outline');
+  static final Expando<Path> _pathCache = Expando('path');
 
   /// Opciones de `perfect_freehand` para una herramienta dada.
   ///
@@ -112,33 +110,62 @@ class StrokeEngine {
     }
   }
 
+  /// Opciones para un trazo confirmado (respeta sus ajustes guardados).
+  static StrokeOptions optionsForStroke(Stroke stroke) => optionsFor(
+        stroke.tool,
+        stroke.size,
+        thinning: stroke.thinning,
+        smoothing: stroke.smoothing,
+        streamline: stroke.streamline,
+      );
+
   /// Polígono (lista de puntos) que envuelve el trazo, listo para rellenar.
-  /// Usa caché para trazos confirmados (misma ID, mismos puntos).
+  /// Cacheado por instancia de [Stroke].
   static List<Offset> outlineFor(Stroke stroke) {
-    final cached = _outlineCache[stroke.id];
+    final cached = _outlineCache[stroke];
     if (cached != null) return cached;
-    final points = stroke.points
-        .map((p) => PointVector(p.x, p.y, p.pressure))
-        .toList();
     final outline = getStroke(
-      points,
-      options: optionsFor(stroke.tool, stroke.size),
+      _vectors(stroke.points),
+      options: optionsForStroke(stroke),
     );
-    _outlineCache[stroke.id] = outline;
+    _outlineCache[stroke] = outline;
     return outline;
+  }
+
+  /// [Path] rellenable del trazo, cacheado por instancia (evita reconstruir
+  /// el Path en cada frame de pintado).
+  static Path pathFor(Stroke stroke) {
+    final cached = _pathCache[stroke];
+    if (cached != null) return cached;
+    final path = Path()..addPolygon(outlineFor(stroke), true);
+    _pathCache[stroke] = path;
+    return path;
   }
 
   /// Polígono del trazo en progreso (aún sin confirmar).
   static List<Offset> outlineForPoints(
     List<StrokePoint> points,
     ToolType tool,
-    double size,
-  ) {
+    double size, {
+    double? thinning,
+    double? smoothing,
+    double? streamline,
+  }) {
     return getStroke(
-      points.map((p) => PointVector(p.x, p.y, p.pressure)).toList(),
-      options: optionsFor(tool, size),
+      _vectors(points),
+      options: optionsFor(
+        tool,
+        size,
+        thinning: thinning,
+        smoothing: smoothing,
+        streamline: streamline,
+      ),
     );
   }
+
+  static List<PointVector> _vectors(List<StrokePoint> points) => [
+        for (final p in points) PointVector(p.x, p.y, p.pressure),
+      ];
 
   /// Color con el que se pinta cada herramienta. El resaltador se dibuja
   /// translúcido para que el texto/líneas de la plantilla se vean debajo.
@@ -196,6 +223,10 @@ class StrokeEngine {
     Stroke? closest;
     var closestDist = double.infinity;
     for (final stroke in strokes) {
+      // Descarte rápido por rectángulo antes del cálculo por segmentos.
+      if (!stroke.pointBounds.inflate(maxDistance).contains(worldPoint)) {
+        continue;
+      }
       final dist = distanceToStroke(worldPoint, stroke);
       if (dist < closestDist) {
         closestDist = dist;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import '../constants.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -9,6 +10,7 @@ import '../services/storage_service.dart';
 import 'writing_stats_screen.dart';
 import 'reminder_screen.dart';
 import '../utils/theme_colors.dart';
+import '../theme_controller.dart';
 
 /// Pantalla de configuración / ajustes de la app.
 ///
@@ -220,7 +222,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: TextStyle(color: ThemeColors.of(context).textSecondary),
                 ),
                 value: isDark,
-                onChanged: (_) => widget.onToggleTheme?.call(),
+                onChanged: (_) =>
+                    (widget.onToggleTheme ?? () => ThemeModeController.toggle(context))(),
               ),
             ],
           ),

@@ -1,116 +1,86 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 
-import '../models/document.dart';
+import '../models/note.dart';
+import 'file_utils.dart';
+import 'storage_service.dart';
 
-/// Resultado de búsqueda: un cuaderno con las páginas que coinciden.
-class SearchResult {
-  final String documentId;
-  final String documentTitle;
-  final int? colorValue;
-  final List<SearchMatch> matches;
+/// De dónde viene el texto que coincidió.
+enum SearchSource { title, typed, handwriting }
 
-  const SearchResult({
-    required this.documentId,
-    required this.documentTitle,
-    this.colorValue,
-    required this.matches,
-  });
-}
-
-/// Una coincidencia dentro de un documento.
+/// Una coincidencia dentro de una nota.
 class SearchMatch {
-  final int pageIndex;
-  final String pageName;
-  final String matchedText;
-
   const SearchMatch({
     required this.pageIndex,
-    required this.pageName,
-    required this.matchedText,
-  });
-}
-
-/// Índice de contenido OCR por cuaderno.
-class _DocIndex {
-  final String documentId;
-  final String title;
-  final List<_PageIndex> pages;
-
-  const _DocIndex({
-    required this.documentId,
-    required this.title,
-    required this.pages,
+    required this.pageId,
+    required this.snippet,
+    required this.source,
   });
 
-  factory _DocIndex.fromJson(Map<String, dynamic> json) => _DocIndex(
-        documentId: json['id'] as String,
-        title: json['title'] as String? ?? '',
-        pages: (json['pages'] as List? ?? [])
-            .map((p) => _PageIndex.fromJson(p as Map<String, dynamic>))
-            .toList(),
-      );
-
-  Map<String, dynamic> toJson() => {
-        'id': documentId,
-        'title': title,
-        'pages': pages.map((p) => p.toJson()).toList(),
-      };
+  /// Página (0-based) o -1 si coincidió el título.
+  final int pageIndex;
+  final String? pageId;
+  final String snippet;
+  final SearchSource source;
 }
 
-class _PageIndex {
-  final int index;
-  final String name;
-  final String ocrText;
-
-  const _PageIndex({
-    required this.index,
-    required this.name,
-    required this.ocrText,
+/// Resultado: una nota con sus coincidencias.
+class SearchResult {
+  const SearchResult({
+    required this.noteId,
+    required this.notebookId,
+    required this.noteTitle,
+    required this.matches,
   });
 
-  factory _PageIndex.fromJson(Map<String, dynamic> json) => _PageIndex(
-        index: json['index'] as int? ?? 0,
-        name: json['name'] as String? ?? '',
-        ocrText: json['text'] as String? ?? '',
-      );
-
-  Map<String, dynamic> toJson() => {
-        'index': index,
-        'name': name,
-        'text': ocrText,
-      };
+  final String noteId;
+  final String notebookId;
+  final String noteTitle;
+  final List<SearchMatch> matches;
 }
 
-/// Servicio de búsqueda en contenido de cuadernos.
+/// Índice de búsqueda de contenido (offline, local).
 ///
-/// Mantiene un índice de texto OCR extraído de las páginas.
-/// La indexación se hace bajo demanda (no automática para no gastar CPU).
+/// Por cada nota guarda su título y, por página, el **texto tecleado**
+/// (cajas de texto, se recalcula al indexar) y la **escritura reconocida**
+/// (OCR/ML Kit, se conserva hasta que se vuelva a reconocer esa página).
+///
+/// La búsqueda ignora mayúsculas y acentos ("matematicas" encuentra
+/// "Matemáticas"). Archivo: `<appSupport>/inklus/search_index.json`.
 class SearchService {
-  static const _fileName = 'search_index.json';
+  SearchService({StorageService? storage}) : _storage = storage ?? StorageService.instance;
 
-  Map<String, _DocIndex> _index = {};
+  /// Instancia compartida (biblioteca y editor ven el mismo índice).
+  static final SearchService instance = SearchService();
+
+  static const _fileName = 'search_index.json';
+  static const _version = 2;
+
+  final StorageService _storage;
+  final Map<String, _NoteIndex> _index = {};
+  bool _loaded = false;
 
   Future<File> _file() async {
-    final dir = await getApplicationSupportDirectory();
-    return File('${dir.path}/inklus/$_fileName');
+    final base = await _storage.baseDirectory();
+    return File('${base.path}/$_fileName');
   }
 
-  /// Carga el índice desde disco.
+  /// Carga el índice (una vez). Índices de versiones antiguas se descartan
+  /// y se reconstruyen al abrir las notas.
   Future<void> load() async {
+    if (_loaded) return;
+    _loaded = true;
     try {
       final f = await _file();
       if (!await f.exists()) return;
-      final raw = await f.readAsString();
-      if (raw.trim().isEmpty) return;
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      _index = {
-        for (final e in json.entries)
-          e.key: _DocIndex.fromJson(e.value as Map<String, dynamic>),
-      };
+      final json = jsonDecode(await f.readAsString());
+      if (json is! Map<String, dynamic> || json['v'] != _version) return;
+      for (final e in (json['notes'] as Map<String, dynamic>).entries) {
+        _index[e.key] = _NoteIndex.fromJson(e.value as Map<String, dynamic>);
+      }
     } catch (e) {
       debugPrint('SearchService.load: $e');
     }
@@ -118,109 +88,97 @@ class SearchService {
 
   Future<void> _save() async {
     try {
-      final f = await _file();
-      await f.parent.create(recursive: true);
-      final map = <String, dynamic>{};
-      for (final e in _index.entries) {
-        map[e.key] = e.value.toJson();
-      }
-      await f.writeAsString(jsonEncode(map));
+      await writeAtomic(
+        await _file(),
+        jsonEncode({
+          'v': _version,
+          'notes': {for (final e in _index.entries) e.key: e.value.toJson()},
+        }),
+      );
     } catch (e) {
       debugPrint('SearchService._save: $e');
     }
   }
 
-  /// Indexa un cuaderno: extrae texto de sus páginas y lo guarda.
-  /// [texts] es una lista de textos OCR por página (índice = página).
-  Future<void> indexDocument(Document doc, List<String> texts) async {
-    final pages = <_PageIndex>[];
-    for (var i = 0; i < doc.pages.length; i++) {
-      final page = doc.pages[i];
-      final text = i < texts.length ? texts[i] : '';
-      if (text.isNotEmpty) {
-        pages.add(_PageIndex(
-          index: i,
-          name: page.name,
-          ocrText: text,
-        ));
-      }
-      // También indexar textItems embebidos.
-      for (final ti in page.textItems) {
-        if (ti.text.isNotEmpty) {
-          pages.add(_PageIndex(
-            index: i,
-            name: page.name,
-            ocrText: ti.text,
-          ));
-        }
-      }
-    }
-    _index[doc.id] = _DocIndex(
-      documentId: doc.id,
-      title: doc.title,
-      pages: pages,
+  /// (Re)indexa una nota. El texto tecleado se toma de la nota; la escritura
+  /// reconocida previamente se conserva por página.
+  Future<void> indexNote(String notebookId, Note note) async {
+    await load();
+    final previous = _index[note.id];
+    _index[note.id] = _NoteIndex(
+      noteId: note.id,
+      notebookId: notebookId,
+      title: note.title,
+      pages: [
+        for (final page in note.pages)
+          _PageIndex(
+            pageId: page.id,
+            typed: page.textItems.map((t) => t.text).where((t) => t.isNotEmpty).join('\n'),
+            handwriting: previous?.pages
+                    .where((p) => p.pageId == page.id)
+                    .map((p) => p.handwriting)
+                    .firstOrNull ??
+                '',
+          ),
+      ],
     );
     await _save();
   }
 
-  /// Indexa el texto directo de las cajas de texto (sin OCR).
-  Future<void> indexTextItems(Document doc) async {
-    final pages = <_PageIndex>[];
-    for (var i = 0; i < doc.pages.length; i++) {
-      final page = doc.pages[i];
-      final texts = page.textItems.map((t) => t.text).join(' ');
-      if (texts.isNotEmpty) {
-        pages.add(_PageIndex(
-          index: i,
-          name: page.name,
-          ocrText: texts,
-        ));
-      }
-    }
-    if (pages.isNotEmpty) {
-      _index[doc.id] = _DocIndex(
-        documentId: doc.id,
-        title: doc.title,
-        pages: pages,
-      );
-      await _save();
-    }
-  }
-
-  /// Elimina un cuaderno del índice.
-  Future<void> removeDocument(String documentId) async {
-    _index.remove(documentId);
+  /// Guarda el texto reconocido de la escritura de una página.
+  Future<void> setHandwriting(String noteId, String pageId, String text) async {
+    await load();
+    final note = _index[noteId];
+    if (note == null) return;
+    final i = note.pages.indexWhere((p) => p.pageId == pageId);
+    if (i < 0) return;
+    note.pages[i] = note.pages[i].copyWith(handwriting: text);
     await _save();
   }
 
-  /// Busca texto en todos los cuadernos indexados.
-  List<SearchResult> search(String query) {
-    if (query.trim().isEmpty) return [];
-    final q = query.toLowerCase();
-    final results = <SearchResult>[];
+  Future<void> removeNote(String noteId) async {
+    await load();
+    if (_index.remove(noteId) != null) await _save();
+  }
 
-    for (final docIndex in _index.values) {
+  /// Busca en todas las notas indexadas (o solo en [onlyNoteId]).
+  List<SearchResult> search(String query, {String? onlyNoteId}) {
+    final q = normalize(query.trim());
+    if (q.isEmpty) return [];
+    final results = <SearchResult>[];
+    for (final note in _index.values) {
+      if (onlyNoteId != null && note.noteId != onlyNoteId) continue;
       final matches = <SearchMatch>[];
-      for (final page in docIndex.pages) {
-        if (page.ocrText.toLowerCase().contains(q)) {
-          // Extraer contexto alrededor del match.
-          final text = page.ocrText;
-          final lowerText = text.toLowerCase();
-          final idx = lowerText.indexOf(q);
-          final start = (idx - 30).clamp(0, text.length);
-          final end = (idx + q.length + 30).clamp(0, text.length);
-          final snippet = '...${text.substring(start, end)}...';
-          matches.add(SearchMatch(
-            pageIndex: page.index,
-            pageName: page.name,
-            matchedText: snippet,
-          ));
+      if (normalize(note.title).contains(q)) {
+        matches.add(SearchMatch(
+          pageIndex: -1,
+          pageId: null,
+          snippet: note.title,
+          source: SearchSource.title,
+        ));
+      }
+      for (var i = 0; i < note.pages.length; i++) {
+        final page = note.pages[i];
+        for (final (text, source) in [
+          (page.typed, SearchSource.typed),
+          (page.handwriting, SearchSource.handwriting),
+        ]) {
+          final snippet = _snippet(text, q);
+          if (snippet != null) {
+            matches.add(SearchMatch(
+              pageIndex: i,
+              pageId: page.pageId,
+              snippet: snippet,
+              source: source,
+            ));
+          }
         }
       }
       if (matches.isNotEmpty) {
         results.add(SearchResult(
-          documentId: docIndex.documentId,
-          documentTitle: docIndex.title,
+          noteId: note.noteId,
+          notebookId: note.notebookId,
+          noteTitle: note.title,
           matches: matches,
         ));
       }
@@ -228,9 +186,83 @@ class SearchService {
     return results;
   }
 
-  /// Estadísticas del índice.
-  int get indexedDocuments => _index.length;
+  /// Minúsculas y sin acentos, para comparar.
+  static String normalize(String s) {
+    const from = 'áàäâãéèëêíìïîóòöôõúùüûñç';
+    const to = 'aaaaaeeeeiiiiooooouuuunc';
+    final lower = s.toLowerCase();
+    final buf = StringBuffer();
+    for (final ch in lower.split('')) {
+      final i = from.indexOf(ch);
+      buf.write(i >= 0 ? to[i] : ch);
+    }
+    return buf.toString();
+  }
 
-  int get indexedPages =>
-      _index.values.fold(0, (sum, d) => sum + d.pages.length);
+  /// Fragmento de ~70 caracteres alrededor de la coincidencia, o null.
+  /// (La normalización no cambia la longitud, así que los índices valen.)
+  static String? _snippet(String text, String normalizedQuery) {
+    if (text.isEmpty) return null;
+    final idx = normalize(text).indexOf(normalizedQuery);
+    if (idx < 0) return null;
+    final start = (idx - 30).clamp(0, text.length);
+    final end = (idx + normalizedQuery.length + 30).clamp(0, text.length);
+    return '${start > 0 ? '…' : ''}${text.substring(start, end).replaceAll('\n', ' ')}'
+        '${end < text.length ? '…' : ''}';
+  }
+
+  int get indexedNotes => _index.length;
+}
+
+class _NoteIndex {
+  _NoteIndex({
+    required this.noteId,
+    required this.notebookId,
+    required this.title,
+    required this.pages,
+  });
+
+  final String noteId;
+  final String notebookId;
+  final String title;
+  final List<_PageIndex> pages;
+
+  factory _NoteIndex.fromJson(Map<String, dynamic> j) => _NoteIndex(
+        noteId: j['id'] as String,
+        notebookId: j['nb'] as String? ?? '',
+        title: j['title'] as String? ?? '',
+        pages: (j['pages'] as List? ?? [])
+            .map((p) => _PageIndex.fromJson(p as Map<String, dynamic>))
+            .toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': noteId,
+        'nb': notebookId,
+        'title': title,
+        'pages': [for (final p in pages) p.toJson()],
+      };
+}
+
+class _PageIndex {
+  const _PageIndex({required this.pageId, required this.typed, required this.handwriting});
+
+  final String pageId;
+  final String typed;
+  final String handwriting;
+
+  _PageIndex copyWith({String? handwriting}) =>
+      _PageIndex(pageId: pageId, typed: typed, handwriting: handwriting ?? this.handwriting);
+
+  factory _PageIndex.fromJson(Map<String, dynamic> j) => _PageIndex(
+        pageId: j['id'] as String? ?? '',
+        typed: j['typed'] as String? ?? '',
+        handwriting: j['ink'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': pageId,
+        if (typed.isNotEmpty) 'typed': typed,
+        if (handwriting.isNotEmpty) 'ink': handwriting,
+      };
 }

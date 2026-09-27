@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:math';
 import 'dart:ui' as ui;
 
@@ -7,12 +8,15 @@ import 'package:flutter/services.dart';
 
 import '../../constants.dart';
 import '../../logic/canvas_controller.dart';
+import '../../logic/palm_rejection.dart';
 import '../../logic/snap_guides.dart';
 import '../../logic/stroke_engine.dart';
 import '../../models/image_item.dart';
 import '../../models/page.dart';
 import '../../models/stroke.dart';
 import '../../services/image_service.dart';
+import '../../utils/geometry_utils.dart';
+import '../editor/editor_shortcuts.dart';
 import '../widgets/text_edit_overlay.dart';
 import 'canvas_overlays.dart';
 import 'world_painter.dart';
@@ -54,6 +58,7 @@ class CanvasPainter extends CustomPainter {
   final int contentVersion;
   final Size sheetSize;
   final Map<String, ui.Image> imageCache;
+  final int imageCacheVersion;
   final double scale;
   final Offset translate;
   final bool isDark;
@@ -63,6 +68,7 @@ class CanvasPainter extends CustomPainter {
     required this.contentVersion,
     required this.sheetSize,
     required this.imageCache,
+    this.imageCacheVersion = 0,
     required this.scale,
     required this.translate,
     this.isDark = false,
@@ -86,6 +92,7 @@ class CanvasPainter extends CustomPainter {
       sheetSize: sheetSize,
       imageCache: imageCache,
       isDark: isDark,
+      viewScale: scale,
     );
     canvas.restore();
   }
@@ -98,6 +105,7 @@ class CanvasPainter extends CustomPainter {
       oldDelegate.scale != scale ||
       oldDelegate.translate != translate ||
       oldDelegate.imageCache != imageCache ||
+      oldDelegate.imageCacheVersion != imageCacheVersion ||
       oldDelegate.isDark != isDark;
 }
 
@@ -137,15 +145,12 @@ class ActiveLayerPainter extends CustomPainter {
     }
 
     // Trazo en progreso.
-    if (active != null && active.points.length >= 2) {
-      final path = strokeToPath(active.points, active.tool, active.size);
-      final activePaint = Paint()
-        ..color = active.tool == ToolType.highlighter
-            ? active.color.withValues(alpha: 0.38)
-            : active.color
-        ..style = PaintingStyle.fill;
-      canvas.drawPath(path, activePaint);
+    if (active != null) {
+      paintActiveStroke(canvas, active);
     }
+
+    // Puntero láser: estela roja que se desvanece (no se guarda).
+    _paintLaser(canvas, controller, scale);
 
     // Lazo en progreso (trazo punteado del lazo).
     final lassoPath = controller.lassoPath;
@@ -158,29 +163,21 @@ class ActiveLayerPainter extends CustomPainter {
       canvas.drawPath(path, _lassoPaint);
     }
 
-    // Trazos seleccionados con el lazo (resaltados).
+    // Selección del lazo: trazos resaltados + recuadro de toda la selección
+    // (también imágenes y cajas de texto).
     final selectedStrokes = controller.selectedStrokes;
-    if (selectedStrokes.isNotEmpty) {
+    if (controller.hasLassoSelection) {
       for (final stroke in selectedStrokes) {
-        final outline = StrokeEngine.outlineFor(stroke);
-        if (outline.length < 3) continue;
-        final path = Path()..addPolygon(outline, true);
-        canvas.drawPath(path, _selectionFillPaint);
+        if (StrokeEngine.outlineFor(stroke).length < 3) continue;
+        canvas.drawPath(StrokeEngine.pathFor(stroke), _selectionFillPaint);
       }
-      // Dashed border around selected strokes (marching ants simplificado).
-      if (selectedStrokes.isNotEmpty) {
-        var left = double.infinity, top = double.infinity;
-        var right = double.negativeInfinity, bottom = double.negativeInfinity;
-        for (final s in selectedStrokes) {
-          for (final p in s.points) {
-            if (p.x < left) left = p.x;
-            if (p.y < top) top = p.y;
-            if (p.x > right) right = p.x;
-            if (p.y > bottom) bottom = p.y;
-          }
-        }
-        final bounds = Rect.fromLTRB(left, top, right, bottom);
-        if (!bounds.isEmpty) {
+      // Recuadro punteado (marching ants) + asas de escala/rotación, que
+      // solo afectan a los trazos.
+      {
+        final bounds = controller.selectionBoundsAll;
+        if (!bounds.isEmpty && selectedStrokes.isEmpty) {
+          drawMarchingAnts(canvas, bounds.inflate(8 / scale), scale);
+        } else if (!bounds.isEmpty) {
           final inflated = bounds.inflate(8 / scale);
           drawMarchingAnts(canvas, inflated, scale);
           // Handle de escala (esquina inferior derecha).
@@ -308,6 +305,33 @@ class ActiveLayerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(ActiveLayerPainter oldDelegate) => true;
+
+  static final Paint _laserGlow = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _laserCore = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+
+  /// Dibuja la estela del láser: cada segmento con opacidad según su edad.
+  static void _paintLaser(Canvas canvas, CanvasController c, double scale) {
+    final trail = c.laserTrail;
+    if (trail.isEmpty) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final fade = CanvasController.laserFade.inMilliseconds;
+    _laserGlow.strokeWidth = 14 / scale;
+    _laserCore.strokeWidth = 5 / scale;
+    for (var i = 1; i < trail.length; i++) {
+      final age = (now - trail[i].t).clamp(0, fade);
+      final alpha = 1 - age / fade;
+      if (alpha <= 0) continue;
+      _laserGlow.color = const Color(0xFFFF1744).withValues(alpha: 0.35 * alpha);
+      _laserCore.color = const Color(0xFFFF5252).withValues(alpha: alpha);
+      canvas.drawLine(trail[i - 1].point, trail[i].point, _laserGlow);
+      canvas.drawLine(trail[i - 1].point, trail[i].point, _laserCore);
+    }
+  }
 }
 
 /// ---------------------------------------------------------------------------
@@ -326,10 +350,19 @@ class DrawingCanvas extends StatefulWidget {
   final CanvasController controller;
   final ImageService imageService;
 
+  /// Modo nocturno de escritura: invierte la luminosidad del lienzo
+  /// (conserva el tono) solo en pantalla; la exportación no cambia.
+  final bool nightMode;
+
+  /// Abre "Ir a página" (atajo Ctrl+G). Opcional.
+  final VoidCallback? onGoToPage;
+
   const DrawingCanvas({
     super.key,
     required this.controller,
     required this.imageService,
+    this.nightMode = false,
+    this.onGoToPage,
   });
 
   @override
@@ -341,12 +374,27 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
 
   // Estado de punteros.
   int? _drawingPointer;
-  bool _stylusDown = false;
   bool _transforming = false;
 
-  // Gesto de transformación.
+  /// Rechazo de palma (lápiz apoyado/cerca, contacto grande).
+  final PalmRejection _palm = PalmRejection();
+
+  /// Toques de dedo aceptados y toques descartados como palma.
+  final Set<int> _touchPointers = {};
+  final Set<int> _rejectedPointers = {};
+
+  /// Dedos que están manipulando la regla (posición en pantalla).
+  final Map<int, Offset> _rulerPointers = {};
+  Map<int, Offset> _rulerGrab = {};
+  Offset _rulerGrabCenter = Offset.zero;
+  double _rulerGrabAngle = 0;
+
+  // Gesto de transformación (zoom/pan).
   double _startScale = 1;
   Offset _startTranslate = Offset.zero;
+  DateTime? _transformStartTime;
+  int _gesturePointerCount = 0;
+  double _prevGestureScale = 1;
 
   // Interacción con imágenes (herramienta select).
   bool _movingImage = false;
@@ -357,11 +405,9 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   Rect _imageGestureStartRect = Rect.zero;
   double _imageGestureStartRotation = 0;
 
-  // ---- Gestos y atajos ----
-  DateTime? _lastInvertedStylusTapTime;
-  // Para detectar dos-dedos tap (undo): rastrea pointers y tiempos.
-  final Set<int> _twoFingerPointers = {};
+  // ---- Atajo: toque con dos dedos = deshacer ----
   DateTime? _twoFingerStartTime;
+  bool _twoFingerMoved = false;
 
   // ---- Transformar selección ----
   bool _scalingSelection = false;
@@ -376,7 +422,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   Offset _strokeMoveStartWorld = Offset.zero;
   List<Stroke> _strokesBeforeMove = [];
 
-
+  /// Desplazamiento total del gesto de mover selección en curso.
+  Offset _strokeMoveDelta = Offset.zero;
 
   @override
   Widget build(BuildContext context) {
@@ -395,44 +442,15 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
 
         return Focus(
           autofocus: true,
-          onKeyEvent: (node, event) {
-            if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-              return KeyEventResult.ignored;
-            }
-            final ctrl = HardwareKeyboard.instance.isControlPressed ||
-                HardwareKeyboard.instance.isMetaPressed;
-            if (!ctrl) return KeyEventResult.ignored;
-
-            final key = event.logicalKey;
-
-            // C9: Ctrl+Z → deshacer
-            if (key == LogicalKeyboardKey.keyZ &&
-                !HardwareKeyboard.instance.isShiftPressed) {
-              if (widget.controller.canUndo) widget.controller.undo();
-              return KeyEventResult.handled;
-            }
-            // C9: Ctrl+Shift+Z / Ctrl+Y → rehacer
-            if ((key == LogicalKeyboardKey.keyZ &&
-                    HardwareKeyboard.instance.isShiftPressed) ||
-                key == LogicalKeyboardKey.keyY) {
-              if (widget.controller.canRedo) widget.controller.redo();
-              return KeyEventResult.handled;
-            }
-            // C9: Ctrl+C → copiar selección
-            if (key == LogicalKeyboardKey.keyC) {
-              widget.controller.copySelectedStrokes();
-              return KeyEventResult.handled;
-            }
-            // C9: Ctrl+V → pegar
-            if (key == LogicalKeyboardKey.keyV) {
-              widget.controller.pasteStrokes();
-              return KeyEventResult.handled;
-            }
-            return KeyEventResult.ignored;
-          },
+          onKeyEvent: (node, event) => EditorShortcuts.handle(
+            event,
+            widget.controller,
+            onGoToPage: widget.onGoToPage,
+          ),
           child: Listener(
           behavior: HitTestBehavior.opaque,
           onPointerDown: _onPointerDown,
+          onPointerHover: _onPointerHover,
           onPointerMove: _onPointerMove,
           onPointerUp: _onPointerUp,
           onPointerCancel: _onPointerCancel,
@@ -446,7 +464,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                 fit: StackFit.expand,
                 children: [
                   // Capa confirmada, cacheada por RepaintBoundary.
-                  RepaintBoundary(
+                  _nightFilter(RepaintBoundary(
                     child: ListenableBuilder(
                       listenable: widget.controller,
                       builder: (context, _) {
@@ -457,6 +475,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                             contentVersion: widget.controller.contentVersion,
                             sheetSize: widget.controller.sheetSize,
                             imageCache: widget.imageService.cache,
+                            imageCacheVersion: widget.imageService.cache.version,
                             scale: widget.controller.scale,
                             translate: widget.controller.translate,
                             isDark: Theme.of(context).brightness == Brightness.dark,
@@ -464,9 +483,9 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                         );
                       },
                     ),
-                  ),
+                  )),
                   // Capa activa (trazo en curso, cursor, selección).
-                  ListenableBuilder(
+                  _nightFilter(ListenableBuilder(
                     listenable: widget.controller,
                     builder: (context, _) => CustomPaint(
                       size: Size.infinite,
@@ -475,7 +494,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                         imageCache: widget.imageService.cache,
                       ),
                     ),
-                  ),
+                  )),
                   // Overlay de edición de texto.
                   TextEditOverlay(controller: widget.controller),
                 ],
@@ -487,6 +506,19 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       },
     );
   }
+
+  /// Invierte la luminosidad conservando el tono (inversión + rotación de
+  /// tono 180°): papel blanco → oscuro, tinta negra → clara, rojo → rojo.
+  static const ColorFilter _nightModeFilter = ColorFilter.matrix(<double>[
+    0.574, -1.43, -0.144, 0, 255, //
+    -0.426, -0.43, -0.144, 0, 255, //
+    -0.426, -1.43, 0.856, 0, 255, //
+    0, 0, 0, 1, 0, //
+  ]);
+
+  Widget _nightFilter(Widget child) => widget.nightMode
+      ? ColorFiltered(colorFilter: _nightModeFilter, child: child)
+      : child;
 
   /// Decodifica (una sola vez) las imágenes de la página y de la plantilla
   /// para poder pintarlas. Al terminar, repinta.
@@ -508,71 +540,115 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   // Eventos de puntero: detección de stylus + rechazo de palma
   // -------------------------------------------------------------------------
 
-  void _onPointerDown(PointerDownEvent event) {
-    final kind = event.kind;
-    final world = widget.controller.viewportToWorld(
-      event.localPosition,
-      _viewport,
-    );
-
-    if (kind == PointerDeviceKind.stylus ||
-        kind == PointerDeviceKind.invertedStylus ||
-        kind == PointerDeviceKind.mouse) {
-      // Puntero "serio": stylus, borrador físico (invertedStylus) o mouse
-      // (útil para probar en escritorio). El stylus activa el rechazo de
-      // palma para cualquier touch simultáneo.
-      _stylusDown = kind != PointerDeviceKind.mouse;
-      _drawingPointer = event.pointer;
-
-      if (kind == PointerDeviceKind.invertedStylus) {
-        // ---- Atajo: doble toque con borrador físico = borrar página ----
-        final now = DateTime.now();
-        final last = _lastInvertedStylusTapTime;
-        if (last != null && now.difference(last).inMilliseconds < 350) {
-          _lastInvertedStylusTapTime = null;
-          if (widget.controller.pageCount > 1) {
-            widget.controller.deleteCurrentPage();
-          }
-          return; // No comienza trazo
-        }
-        _lastInvertedStylusTapTime = now;
-        // InvertedStylus = borrador automático
-        widget.controller.beginStroke(world, event.pressure, tool: ToolType.eraser);
-      } else if (widget.controller.tool == ToolType.select) {
-        _handleSelectDown(event.localPosition, world, event.pointer);
-      } else {
-        // Lasso y herramientas de escritura: beginStroke gestiona internamente.
-        _drawingPointer = event.pointer;
-        widget.controller.beginStroke(world, event.pressure, tool: widget.controller.tool);
-      }
-    } else if (kind == PointerDeviceKind.touch) {
-      // REchazo de palma: mientras un stylus esté en contacto, todo touch
-      // se ignora por completo (no dibuja, no panea, no selecciona).
-      if (_stylusDown || _transforming) return;
-
-      // ---- Atajo: dos dedos tap = deshacer ----
-      _twoFingerPointers.add(event.pointer);
-      if (_twoFingerPointers.length == 2) {
-        _twoFingerStartTime = DateTime.now();
-      }
-
-      if (widget.controller.tool == ToolType.select) {
-        _handleSelectDown(event.localPosition, world, event.pointer);
-      } else if (widget.controller.fingerDrawingEnabled) {
-        _drawingPointer = event.pointer;
-        widget.controller.beginStroke(world, event.pressure,
-            tool: widget.controller.tool);
-      }
-    }
+  void _onPointerHover(PointerHoverEvent event) {
+    // S-Pen / Apple Pencil reportan hover a ~1 cm de la pantalla: sabemos que
+    // el lápiz viene ANTES de que la palma se apoye.
+    if (PalmRejection.isStylusKind(event.kind)) _palm.stylusHoverEvent();
   }
 
+  void _onPointerDown(PointerDownEvent event) {
+    final kind = event.kind;
+    final c = widget.controller;
+    final world = c.viewportToWorld(event.localPosition, _viewport);
+
+    if (PalmRejection.isStylusKind(kind) || kind == PointerDeviceKind.mouse) {
+      if (PalmRejection.isStylusKind(kind)) {
+        _palm.stylusDownEvent(event.pointer);
+        c.onStylusDetected();
+        _rejectPalmInProgress();
+      }
+      _drawingPointer = event.pointer;
+      // Goma física del lápiz (invertedStylus) o botón lateral del S-Pen
+      // pulsado = borrador para este trazo.
+      final eraserButton = kind == PointerDeviceKind.invertedStylus ||
+          (kind == PointerDeviceKind.stylus &&
+              (event.buttons & kSecondaryStylusButton) != 0);
+      if (eraserButton) {
+        c.beginStroke(world, event.pressure, tool: ToolType.eraser);
+      } else if (c.tool == ToolType.select) {
+        _handleSelectDown(event.localPosition, world, event.pointer);
+      } else {
+        c.beginStroke(world, event.pressure, tool: c.tool);
+      }
+      return;
+    }
+
+    if (kind != PointerDeviceKind.touch) return;
+
+    // Rechazo de palma: lápiz apoyado / cerca / recién levantado, o
+    // contacto demasiado grande → el toque se ignora por completo.
+    if (_palm.rejectTouch(radiusMajor: event.radiusMajor)) {
+      _rejectedPointers.add(event.pointer);
+      return;
+    }
+    // Regla: un dedo sobre ella la arrastra; un segundo dedo la rota.
+    if (c.rulerEnabled && (_rulerPointers.isNotEmpty || c.hitsRuler(world))) {
+      _rulerPointers[event.pointer] = event.localPosition;
+      _restartRulerGesture();
+      return;
+    }
+    _touchPointers.add(event.pointer);
+    if (_touchPointers.length == 2) {
+      _twoFingerStartTime = DateTime.now();
+      _twoFingerMoved = false;
+    }
+    if (_touchPointers.length > 1) {
+      // Segundo dedo = gesto (zoom/pan/deshacer): cancelar el trazo del primero.
+      if (c.isDrawing && _touchPointers.contains(_drawingPointer)) {
+        c.cancelStroke();
+        _drawingPointer = null;
+      }
+      return;
+    }
+    if (c.tool == ToolType.select) {
+      _handleSelectDown(event.localPosition, world, event.pointer);
+    } else if (c.fingerDrawingEnabled) {
+      _drawingPointer = event.pointer;
+      c.beginStroke(world, event.pressure, tool: c.tool);
+    }
+    // Si no se dibuja con el dedo, el GestureDetector desplaza la página.
+  }
+
+  /// Un lápiz acaba de apoyarse: lo que estuviera haciendo un dedo en ese
+  /// momento era casi seguro la palma → se descarta (trazo o desplazamiento).
+  void _rejectPalmInProgress() {
+    final c = widget.controller;
+    if (_drawingPointer != null && _touchPointers.contains(_drawingPointer)) {
+      c.cancelStroke();
+      _drawingPointer = null;
+    }
+    if (_transforming) {
+      final start = _transformStartTime;
+      if (start != null &&
+          DateTime.now().difference(start) < const Duration(milliseconds: 600)) {
+        c.setView(_startScale, _startTranslate); // deshace el pan de la palma
+      }
+      _transforming = false;
+    }
+    _rejectedPointers.addAll(_touchPointers);
+    _touchPointers.clear();
+    _twoFingerStartTime = null;
+  }
+
+  bool get _selectGestureActive =>
+      _movingImage ||
+      _resizingImage ||
+      _rotatingImage ||
+      _movingStrokes ||
+      _scalingSelection ||
+      _rotatingSelection;
+
   void _onPointerMove(PointerMoveEvent event) {
-    if (_movingImage || _resizingImage || _rotatingImage || _movingStrokes ||
-        _scalingSelection || _rotatingSelection) {
-      _handleSelectMove(event.localPosition);
+    if (_rulerPointers.containsKey(event.pointer)) {
+      _rulerPointers[event.pointer] = event.localPosition;
+      _updateRulerGesture();
       return;
     }
     if (event.pointer != _drawingPointer) return;
+    if (_selectGestureActive) {
+      _handleSelectMove(event.localPosition);
+      return;
+    }
     final world = widget.controller.viewportToWorld(
       event.localPosition,
       _viewport,
@@ -581,27 +657,33 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
   void _onPointerUp(PointerUpEvent event) {
-    // ---- Atajo: dos dedos tap = deshacer ----
-    _twoFingerPointers.remove(event.pointer);
-    if (_twoFingerPointers.isEmpty && _twoFingerStartTime != null) {
+    // Siempre, antes de cualquier return: si no, el estado "lápiz apoyado"
+    // se quedaba atascado y la pantalla dejaba de responder al tacto.
+    if (PalmRejection.isStylusKind(event.kind)) _palm.stylusUpEvent(event.pointer);
+    _rejectedPointers.remove(event.pointer);
+    if (_rulerPointers.remove(event.pointer) != null) {
+      _restartRulerGesture();
+      return;
+    }
+    final wasTouch = _touchPointers.remove(event.pointer);
+
+    // ---- Atajo: toque rápido con dos dedos = deshacer ----
+    if (wasTouch && _touchPointers.isEmpty && _twoFingerStartTime != null) {
       final elapsed = DateTime.now().difference(_twoFingerStartTime!);
       _twoFingerStartTime = null;
-      if (elapsed.inMilliseconds < 300 && !_transforming && !_stylusDown) {
+      if (elapsed.inMilliseconds < 300 && !_twoFingerMoved && !_palm.stylusNearby) {
         widget.controller.undo();
         return;
       }
     }
 
-    // ---- Transformar selección: confirmar ----
+    if (event.pointer != _drawingPointer) return;
+    _drawingPointer = null;
+
     if (_scalingSelection || _rotatingSelection) {
       widget.controller.commitTransformSelection(_transformStrokesBefore);
       _scalingSelection = false;
       _rotatingSelection = false;
-      _drawingPointer = null;
-      return;
-    }
-
-    if (event.pointer != _drawingPointer && !_movingImage && !_resizingImage && !_rotatingImage && !_movingStrokes) {
       return;
     }
     if (_movingStrokes) {
@@ -612,16 +694,18 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       _commitImageGesture();
       return;
     }
-    _drawingPointer = null;
-    if (event.kind == PointerDeviceKind.stylus ||
-        event.kind == PointerDeviceKind.invertedStylus) {
-      _stylusDown = false;
-    }
     widget.controller.endStroke();
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
-    _twoFingerPointers.remove(event.pointer);
+    if (PalmRejection.isStylusKind(event.kind)) _palm.stylusUpEvent(event.pointer);
+    _rejectedPointers.remove(event.pointer);
+    if (_rulerPointers.remove(event.pointer) != null) {
+      _restartRulerGesture();
+      return;
+    }
+    _touchPointers.remove(event.pointer);
+    if (event.pointer != _drawingPointer) return;
     if (_movingStrokes) {
       _cancelStrokeMove();
       return;
@@ -630,45 +714,114 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       _cancelImageGesture();
       return;
     }
-    if (event.pointer == _drawingPointer) {
+    if (_scalingSelection || _rotatingSelection) {
+      widget.controller.commitTransformSelection(_transformStrokesBefore);
+      _scalingSelection = false;
+      _rotatingSelection = false;
       _drawingPointer = null;
-      _stylusDown = false;
-      widget.controller.cancelStroke();
+      return;
     }
+    _drawingPointer = null;
+    widget.controller.cancelStroke();
   }
 
   // -------------------------------------------------------------------------
-  // Zoom / pan con dos dedos (táctil)
+  // Zoom / pan (dos dedos; o un dedo en modo "solo lápiz")
   // -------------------------------------------------------------------------
 
-  void _onScaleStart(ScaleStartDetails details) {
-    if (details.pointerCount >= 2 && !_stylusDown) {
-      _beginTransform();
+  /// En modo solo lápiz, un dedo desplaza la página (como GoodNotes).
+  bool get _oneFingerPans =>
+      !widget.controller.fingerDrawingEnabled &&
+      widget.controller.tool != ToolType.select;
+
+  bool get _gestureBlocked =>
+      _palm.stylusDown || _rejectedPointers.isNotEmpty || _rulerPointers.isNotEmpty;
+
+  // -------------------------------------------------------------------------
+  // Regla: arrastrar (1 dedo) y rotar (2 dedos)
+  // -------------------------------------------------------------------------
+
+  /// Toma como referencia la posición actual de los dedos y de la regla
+  /// (al entrar o salir un dedo, para que no dé saltos).
+  void _restartRulerGesture() {
+    _rulerGrab = Map.of(_rulerPointers);
+    _rulerGrabCenter = widget.controller.rulerCenter;
+    _rulerGrabAngle = widget.controller.rulerAngle;
+  }
+
+  void _updateRulerGesture() {
+    final c = widget.controller;
+    final ids = _rulerGrab.keys.where(_rulerPointers.containsKey).take(2).toList();
+    if (ids.isEmpty) return;
+    if (ids.length == 1) {
+      final delta = (_rulerPointers[ids[0]]! - _rulerGrab[ids[0]]!) / c.scale;
+      c.setRulerTransform(_rulerGrabCenter + delta, _rulerGrabAngle);
+      return;
     }
+    final a0 = _rulerGrab[ids[0]]!, b0 = _rulerGrab[ids[1]]!;
+    final a1 = _rulerPointers[ids[0]]!, b1 = _rulerPointers[ids[1]]!;
+    final dAngle = (b1 - a1).direction - (b0 - a0).direction;
+    // Gira alrededor del punto medio de los dedos y lo sigue al desplazarse.
+    final m0 = c.viewportToWorld((a0 + b0) / 2, _viewport);
+    final m1 = c.viewportToWorld((a1 + b1) / 2, _viewport);
+    final rel = _rulerGrabCenter - m0;
+    final rotated = Offset(
+      rel.dx * cos(dAngle) - rel.dy * sin(dAngle),
+      rel.dx * sin(dAngle) + rel.dy * cos(dAngle),
+    );
+    c.setRulerTransform(m1 + rotated, _rulerGrabAngle + dAngle);
+  }
+
+  void _onScaleStart(ScaleStartDetails details) {
+    if (_gestureBlocked) return;
+    if (details.pointerCount >= 2 || _oneFingerPans) _beginTransform(details.pointerCount);
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
-    if (details.pointerCount >= 2 && !_stylusDown && !_transforming) {
-      _beginTransform();
+    if (_gestureBlocked) {
+      _transforming = false;
+      return;
     }
-    if (!_transforming) return;
-
+    if (details.pointerCount >= 2 &&
+        ((details.scale - 1).abs() > 0.05 || details.focalPointDelta.distance > 3)) {
+      _twoFingerMoved = true;
+    }
+    if (!_transforming) {
+      if (details.pointerCount >= 2 || _oneFingerPans) {
+        _beginTransform(details.pointerCount);
+      } else {
+        return;
+      }
+    }
+    // Al entrar/salir un dedo el reconocedor reinicia su escala: se toma
+    // como nueva referencia en vez de dar un salto de zoom.
+    if (details.pointerCount != _gesturePointerCount) {
+      _gesturePointerCount = details.pointerCount;
+      _prevGestureScale = details.scale;
+      return;
+    }
     final controller = widget.controller;
-    final newScale = (_startScale * details.scale).clamp(0.1, 6.0);
-    final ratio = newScale / _startScale;
+    final factor = _prevGestureScale == 0 ? 1.0 : details.scale / _prevGestureScale;
+    _prevGestureScale = details.scale;
+    final newScale = (controller.scale * factor).clamp(kMinZoom, kMaxZoom);
+    final ratio = newScale / controller.scale;
     final focal = details.localFocalPoint;
-    // Mantiene fijo el punto del mundo que estaba bajo el foco inicial.
-    final newTranslate = focal - (focal - _startTranslate) * ratio;
+    // Mantiene fijo el punto bajo los dedos y aplica el desplazamiento.
+    final newTranslate =
+        focal - (focal - controller.translate) * ratio + details.focalPointDelta;
     controller.setView(newScale, newTranslate);
   }
 
-  void _beginTransform() {
-    // Si había un trazo de dedo en curso, se cancela al empezar el zoom.
-    if (widget.controller.isDrawing) {
+  void _beginTransform(int pointerCount) {
+    // Si había un trazo de dedo en curso, se cancela al empezar el gesto.
+    if (widget.controller.isDrawing && _touchPointers.contains(_drawingPointer)) {
       widget.controller.cancelStroke();
       _drawingPointer = null;
     }
     _transforming = true;
+    _transformStartTime = DateTime.now();
+    _gesturePointerCount = pointerCount;
+    _prevGestureScale = 1.0;
     _startScale = widget.controller.scale;
     _startTranslate = widget.controller.translate;
   }
@@ -684,15 +837,16 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     final selectedStrokes = controller.selectedStrokes;
     final handleWorld = 30 / controller.scale;
 
-    // 0) ¿Hay trazos seleccionados con lazo? Detectar handles o mover.
-    if (selectedStrokes.isNotEmpty && selectedId == null) {
-      final bounds = _computeSelectionBounds(selectedStrokes);
+    // 0) ¿Hay selección del lazo? Detectar asas o mover.
+    if (controller.hasLassoSelection && selectedId == null) {
+      final bounds = controller.selectionBoundsAll;
       _transformSelectionBounds = bounds;
       final handleSize = handleWorld * 1.5;
+      final hasStrokes = selectedStrokes.isNotEmpty;
 
-      // ¿Toca el handle de rotación (centro superior)?
+      // ¿Toca el asa de rotación (centro superior)? Solo trazos.
       final rotHandle = Offset(bounds.center.dx, bounds.top - handleSize * 2);
-      if ((world - rotHandle).distance <= handleSize) {
+      if (hasStrokes && (world - rotHandle).distance <= handleSize) {
         _rotatingSelection = true;
         _transformStartAngle = (world - bounds.center).direction;
         _transformStrokesBefore = List<Stroke>.from(selectedStrokes);
@@ -700,7 +854,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       }
       // ¿Toca el handle de escala (esquina inferior derecha)?
       final scaleHandle = bounds.bottomRight;
-      if ((world - scaleHandle).distance <= handleSize) {
+      if (hasStrokes && (world - scaleHandle).distance <= handleSize) {
         _scalingSelection = true;
         _transformStartDist = (world - bounds.center).distance;
         _transformStrokesBefore = List<Stroke>.from(selectedStrokes);
@@ -824,6 +978,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     // Mover trazos seleccionados (delta total desde el inicio).
     if (_movingStrokes) {
       final delta = world - _strokeMoveStartWorld;
+      _strokeMoveDelta = delta;
       widget.controller.moveSelectedStrokes(delta, before: _strokesBeforeMove);
       return;
     }
@@ -865,12 +1020,14 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         candidateBounds: original.rect,
         strokes: widget.controller.page.strokes,
         images: widget.controller.page.images,
-        sheetSize: widget.controller.sheetSize,
+        sheetSize: widget.controller.page.template.isFinite
+            ? widget.controller.sheetSize
+            : null,
+        excludeImageId: original.id,
       );
       widget.controller.setSnapGuides(snap.verticalGuides, snap.horizontalGuides);
-      final adjusted = snap.snappedPoint != Offset.zero
-          ? snap.snappedPoint
-          : candidateCenter;
+      // hasSnap (no `!= Offset.zero`): ajustar al centro (0,0) es un snap válido.
+      final adjusted = snap.hasSnap ? snap.snappedPoint : candidateCenter;
       widget.controller.updateImageLive(
         original.copyWith(
           x: adjusted.dx,
@@ -902,7 +1059,9 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     if (current != null && moved) {
       widget.controller.commitImageChange(original, current);
     }
-  }  void _cancelImageGesture() {
+  }
+
+  void _cancelImageGesture() {
     _movingImage = false;
     _resizingImage = false;
     _rotatingImage = false;
@@ -911,44 +1070,24 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
   void _commitStrokeMove() {
-    if (_strokesBeforeMove.isNotEmpty) {
-      // Solo empujar undo si hubo movimiento real.
-      final delta = widget.controller.selectedStrokes.isNotEmpty
-          ? widget.controller.selectedStrokes.first.points.first.offset -
-            _strokesBeforeMove.first.points.first.offset
-          : Offset.zero;
-      if (delta.distance > 0.5) {
-        widget.controller.commitMoveStrokes(_strokesBeforeMove);
-      }
+    // Solo registrar deshacer si hubo movimiento real.
+    if (_strokeMoveDelta.distance > 0.5) {
+      widget.controller.commitMoveStrokes(_strokesBeforeMove);
     }
     _movingStrokes = false;
+    _strokeMoveDelta = Offset.zero;
     _strokesBeforeMove = [];
     _drawingPointer = null;
   }
 
   void _cancelStrokeMove() {
-    if (_strokesBeforeMove.isNotEmpty) {
-      widget.controller.restoreStrokeSelection(_strokesBeforeMove);
-    }
+    widget.controller.restoreStrokeSelection(_strokesBeforeMove);
     _movingStrokes = false;
+    _strokeMoveDelta = Offset.zero;
     _strokesBeforeMove = [];
     _drawingPointer = null;
   }
 
 
-  /// Calcula el rectángulo delimitador de los trazos seleccionados.
-  Rect _computeSelectionBounds(List<Stroke> strokes) {
-    if (strokes.isEmpty) return Rect.zero;
-    var left = double.infinity, top = double.infinity;
-    var right = double.negativeInfinity, bottom = double.negativeInfinity;
-    for (final s in strokes) {
-      for (final p in s.points) {
-        if (p.x < left) left = p.x;
-        if (p.y < top) top = p.y;
-        if (p.x > right) right = p.x;
-        if (p.y > bottom) bottom = p.y;
-      }
-    }
-    return Rect.fromLTRB(left, top, right, bottom);
-  }
+  Rect _computeSelectionBounds(List<Stroke> strokes) => selectionBounds(strokes);
 }

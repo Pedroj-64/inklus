@@ -150,3 +150,9 @@ NOTES.md
 TODO.md
 HACKING.md
 # (mantener README.md, ROADMAP.md, AGENTS.md)
+
+# Binarios de prueba generados localmente (APK, AppImage…)
+/dist/
+
+# Worktrees y datos locales de Claude Code (no versionar)
+/.claude/

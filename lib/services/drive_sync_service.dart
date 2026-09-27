@@ -1,7 +1,6 @@
-import 'dart:math';
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:typed_data';
 
-import 'package:cryptography/cryptography.dart';
 
 import 'package:_discoveryapis_commons/_discoveryapis_commons.dart' as commons;
 import 'package:flutter/foundation.dart';
@@ -12,6 +11,7 @@ import 'package:http/http.dart' as http;
 import '../models/document.dart';
 import '../models/note.dart';
 import 'inklus_format.dart';
+import 'backup_crypto.dart';
 
 /// Estados de sincronización de un cuaderno con Google Drive.
 enum SyncStatus {
@@ -495,101 +495,14 @@ class DriveSyncService extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------------------
-  // Cifrado AES-256-GCM (reemplaza el XOR legacy)
+  // Cifrado AES-256-GCM (ver BackupCrypto)
   // -------------------------------------------------------------------------
 
-  static const _saltLength = 16;
-  static const _nonceLength = 12;
-  static const _tagLength = 16;
-  static const _pbkdf2Iterations = 100000;
+  Future<Uint8List> _encryptBytes(Uint8List data, String password) =>
+      BackupCrypto.encrypt(data, password);
 
-  /// Cifra bytes con AES-256-GCM.
-  ///
-  /// Formato del resultado: [salt (16)] [nonce (12)] [ciphertext] [tag (16)]
-  /// La clave se deriva de la contraseña con PBKDF2 (100k iteraciones, HMAC-SHA256).
-  Future<Uint8List> _encryptBytes(Uint8List data, String password) async {
-    final aes = AesGcm.with256bits();
-    final salt = _randomBytes(_saltLength);
-    final nonce = _randomBytes(_nonceLength);
-
-    // Derivar clave de 256 bits con PBKDF2
-    final pbkdf2 = Pbkdf2(
-      macAlgorithm: Hmac.sha256(),
-      iterations: _pbkdf2Iterations,
-      bits: 256,
-    );
-    final secretKey = await pbkdf2.deriveKey(
-      secretKey: SecretKey(password.codeUnits),
-      nonce: salt,
-    );
-
-    final secretBox = await aes.encrypt(
-      data,
-      secretKey: secretKey,
-      nonce: nonce,
-    );
-
-    // Empaquetar: salt + nonce + ciphertext + tag
-    final result = Uint8List(
-      _saltLength + _nonceLength + secretBox.cipherText.length + _tagLength,
-    );
-    result.setRange(0, _saltLength, salt);
-    result.setRange(_saltLength, _saltLength + _nonceLength, nonce);
-    result.setRange(
-      _saltLength + _nonceLength,
-      _saltLength + _nonceLength + secretBox.cipherText.length,
-      secretBox.cipherText,
-    );
-    result.setRange(
-      result.length - _tagLength,
-      result.length,
-      secretBox.mac.bytes,
-    );
-    return result;
-  }
-
-  /// Descifra bytes cifrados con AES-256-GCM.
-  Future<Uint8List> _decryptBytes(Uint8List data, String password) async {
-    final aes = AesGcm.with256bits();
-
-    if (data.length < _saltLength + _nonceLength + _tagLength) {
-      throw const FormatException('Datos cifrados demasiado cortos');
-    }
-
-    final salt = data.sublist(0, _saltLength);
-    final nonce = data.sublist(_saltLength, _saltLength + _nonceLength);
-    final tag = data.sublist(data.length - _tagLength);
-    final cipherText = data.sublist(
-      _saltLength + _nonceLength,
-      data.length - _tagLength,
-    );
-
-    final pbkdf2 = Pbkdf2(
-      macAlgorithm: Hmac.sha256(),
-      iterations: _pbkdf2Iterations,
-      bits: 256,
-    );
-    final secretKey = await pbkdf2.deriveKey(
-      secretKey: SecretKey(password.codeUnits),
-      nonce: salt,
-    );
-
-    final secretBox = SecretBox(
-      cipherText,
-      nonce: nonce,
-      mac: Mac(tag),
-    );
-    final result = await aes.decrypt(secretBox, secretKey: secretKey);
-    return Uint8List.fromList(result);
-  }
-
-  /// Genera bytes aleatorios criptográficamente seguros.
-  Uint8List _randomBytes(int length) {
-    final rng = Random.secure();
-    return Uint8List.fromList(
-      List.generate(length, (_) => rng.nextInt(256)),
-    );
-  }
+  Future<Uint8List> _decryptBytes(Uint8List data, String password) =>
+      BackupCrypto.decrypt(data, password);
 
   // -------------------------------------------------------------------------
   // Helpers Drive

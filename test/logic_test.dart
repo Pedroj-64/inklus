@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:math';
 import 'dart:ui';
 
@@ -8,6 +9,7 @@ import 'package:inklus/logic/snap_guides.dart';
 import 'package:inklus/logic/undo_stack.dart';
 import 'package:inklus/models/image_item.dart';
 import 'package:inklus/models/stroke.dart';
+import 'package:inklus/models/text_item.dart';
 
 void main() {
   group('StrokeEraser', () {
@@ -201,6 +203,23 @@ void main() {
       );
       expect(item.contains(const Offset(100, 100)), isTrue);
       expect(item.contains(const Offset(500, 500)), isFalse);
+    });
+  });
+
+  group('TextItem formato', () {
+    test('serializa formato y permite quitar el enlace', () {
+      final t = TextItem(
+        id: 't', x: 0, y: 0, width: 200, text: 'Hola',
+        bold: true, italic: true, align: 'center', fontFamily: 'serif',
+        linkToPageId: 'p1',
+      );
+      final back = TextItem.fromJson(t.toJson());
+      expect(back.bold, isTrue);
+      expect(back.italic, isTrue);
+      expect(back.align, 'center');
+      expect(back.fontFamily, 'serif');
+      expect(back.copyWith(clearLink: true).linkToPageId, isNull,
+          reason: 'antes "Quitar enlace" no quitaba nada');
     });
   });
 }

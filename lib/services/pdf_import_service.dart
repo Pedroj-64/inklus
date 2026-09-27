@@ -1,8 +1,11 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
+
+import 'file_utils.dart';
 
 /// Servicio de importación de PDF.
 ///
@@ -79,6 +82,33 @@ class PdfImportService {
     }
   }
 
+  /// Importa **todas** las páginas de un PDF para anotarlas: renderiza cada
+  /// página y la guarda en `inklus/pdf_imports/` de una en una (sin tener
+  /// todo el PDF rasterizado en memoria). Emite (ruta, ancho px, alto px).
+  ///
+  /// [onPage] informa del progreso (páginas procesadas).
+  static Stream<PdfPageImage> importPages(
+    String pdfPath, {
+    double dpi = 150,
+    void Function(int done)? onPage,
+  }) async* {
+    if (!isSupported) return;
+    final bytes = await File(pdfPath).readAsBytes();
+    final dir = await getApplicationSupportDirectory();
+    final out = Directory('${dir.path}/inklus/pdf_imports');
+    await out.create(recursive: true);
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    var i = 0;
+    await for (final raster in Printing.raster(bytes, dpi: dpi)) {
+      final png = await raster.toPng();
+      final file = File('${out.path}/pdf_${stamp}_p${i + 1}.png');
+      await writeAtomic(file, png);
+      i++;
+      onPage?.call(i);
+      yield PdfPageImage(file.path, raster.width, raster.height);
+    }
+  }
+
   /// Guarda una imagen PNG renderizada del PDF en la carpeta de la app
   /// y devuelve la ruta local.
   static Future<String?> saveRenderedPage(
@@ -98,4 +128,12 @@ class PdfImportService {
       return null;
     }
   }
+}
+
+/// Una página de PDF ya rasterizada y guardada en disco.
+class PdfPageImage {
+  const PdfPageImage(this.path, this.widthPx, this.heightPx);
+  final String path;
+  final int widthPx;
+  final int heightPx;
 }

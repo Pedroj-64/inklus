@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import '../../constants.dart';
 import 'dart:io';
 
@@ -9,6 +10,8 @@ import '../../models/template.dart';
 import '../../services/image_service.dart';
 import '../../services/template_library_service.dart';
 import '../../utils/theme_colors.dart';
+import 'dialogs.dart';
+import '../../services/marketplace/marketplace_service.dart';
 
 /// Selector de plantillas de la página actual.
 ///
@@ -67,7 +70,9 @@ class _TemplateSheetState extends State<_TemplateSheet> {
     _lineColor = t.lineColor;
     _sheetWidth = t.customWidth ?? PageTemplate.sheetWidth;
     _sheetHeight = t.customHeight ?? PageTemplate.sheetHeight;
-    _infiniteFill = t.infiniteFill;
+    // Por defecto se conserva el modo de la página actual: si era infinita
+    // (p. ej. en blanco), la plantilla elegida también lo será.
+    _infiniteFill = !t.isFinite;
   }
 
   @override
@@ -78,8 +83,8 @@ class _TemplateSheetState extends State<_TemplateSheet> {
     final isFiniteSheet = current.isFinite;
     // B6: tipos que soportan toggle entre infinito y finito.
     // Todos los tipos excepto blank, sheet soportan toggle infinito/finito.
-    final supportsInfiniteToggle = current.type != TemplateType.blank &&
-        current.type != TemplateType.sheet;
+    final supportsInfiniteToggle =
+        PageTemplate.supportsInfiniteToggle(current.type);
 
     return Padding(
       padding: EdgeInsets.only(
@@ -206,6 +211,35 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                   onTap: _pickCustomTemplate,
                 ),
               ],
+            ),
+
+            // --- Plantillas instaladas desde el marketplace ---
+            FutureBuilder<List<({String name, PageTemplate template})>>(
+              future: MarketplaceService.instance.installedTemplates(),
+              builder: (context, snap) {
+                final list = snap.data ?? const [];
+                if (list.isEmpty) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 16),
+                    const _SectionLabel(label: 'Del marketplace'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final t in list)
+                          ActionChip(
+                            avatar: const Icon(Icons.storefront_outlined, size: 18),
+                            label: Text(t.name),
+                            onPressed: () => _apply(t.template),
+                          ),
+                      ],
+                    ),
+                  ],
+                );
+              },
             ),
 
             // --- Mis plantillas guardadas ---
@@ -415,7 +449,12 @@ class _TemplateSheetState extends State<_TemplateSheet> {
       type: type,
       spacing: _spacing,
       lineColorValue: _lineColor.toARGB32(),
-      infiniteFill: _infiniteFill,
+      // Tipos sin interruptor: blank/music/habit siempre infinitos.
+      infiniteFill: PageTemplate.supportsInfiniteToggle(type)
+          ? _infiniteFill
+          : type != TemplateType.sheet,
+      customWidth: type == TemplateType.sheet || !_infiniteFill ? _sheetWidth : null,
+      customHeight: type == TemplateType.sheet || !_infiniteFill ? _sheetHeight : null,
     ));
   }
 
@@ -592,29 +631,12 @@ class _TemplateSheetState extends State<_TemplateSheet> {
       );
       return;
     }
-    final nameController = TextEditingController(
-      text: 'Mi plantilla',
-    );
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Guardar plantilla'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(labelText: 'Nombre'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, nameController.text),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
+    final name = await showTextPrompt(
+      context,
+      title: 'Guardar plantilla',
+      hint: 'Nombre',
+      initialValue: 'Mi plantilla',
+      confirmLabel: 'Guardar',
     );
     if (name == null || name.trim().isEmpty) return;
 

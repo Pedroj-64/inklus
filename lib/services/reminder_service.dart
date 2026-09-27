@@ -1,8 +1,11 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'file_utils.dart';
+import '../models/id.dart';
 
 /// Un recordatorio vinculado a un cuaderno.
 class Reminder {
@@ -80,7 +83,7 @@ class ReminderService {
     try {
       final f = await _file();
       await f.parent.create(recursive: true);
-      await f.writeAsString(jsonEncode(_reminders.map((r) => r.toJson()).toList()));
+      await writeAtomic(f, jsonEncode(_reminders.map((r) => r.toJson()).toList()));
     } catch (e) {
       debugPrint('ReminderService._save: $e');
     }
@@ -104,7 +107,7 @@ class ReminderService {
     required DateTime dateTime,
     String message = '',
   }) async {
-    final id = 'rem_${DateTime.now().microsecondsSinceEpoch}';
+    final id = newId('rem');
     _reminders.add(Reminder(
       id: id,
       documentId: documentId,

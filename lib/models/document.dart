@@ -1,4 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'page.dart';
+import 'id.dart';
 
 /// Cuaderno completo: metadatos + lista de páginas.
 ///
@@ -28,7 +30,7 @@ class Document {
   })  : tags = tags ?? [];
 
   factory Document.newBlank({String? id, String? title}) => Document(
-        id: id ?? 'doc_${DateTime.now().microsecondsSinceEpoch}',
+        id: id ?? newId('doc'),
         title: title ?? 'Mi cuaderno',
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),

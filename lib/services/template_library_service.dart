@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
 import '../models/template.dart';
+import 'file_utils.dart';
+import '../models/id.dart';
 
 /// Entrada de la biblioteca de plantillas propias.
 class CustomTemplateEntry {
@@ -82,7 +85,7 @@ class TemplateLibraryService {
   }) async {
     if (_dir == null) await init();
 
-    final id = 'tpl_${DateTime.now().microsecondsSinceEpoch}';
+    final id = newId('tpl');
     final ext = sourceImagePath.split('.').last;
     final destPath = '${_dir!.path}/$id.$ext';
 
@@ -130,7 +133,7 @@ class TemplateLibraryService {
 
   Future<void> _saveIndex() async {
     final indexFile = File('${_dir!.path}/index.json');
-    await indexFile.writeAsString(
+    await writeAtomic(indexFile, 
       jsonEncode(_entries.map((e) => e.toJson()).toList()),
     );
   }

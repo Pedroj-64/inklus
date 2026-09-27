@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import '../constants.dart';
 import 'package:flutter/material.dart';
 
 import '../services/reminder_service.dart';
 import '../services/storage_service.dart';
 import '../utils/theme_colors.dart';
+import 'widgets/dialogs.dart';
 
 /// Pantalla de recordatorios.
 ///
@@ -121,30 +123,13 @@ class _ReminderScreenState extends State<ReminderScreen> {
     }
   }
 
-  Future<String?> _promptMessage() async {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Mensaje del recordatorio'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Ej: Revisar apuntes de clase',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, ''),
-            child: const Text('Sin mensaje'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Aceptar'),
-          ),
-        ],
-      ),
+  Future<String?> _promptMessage() {
+    return showTextPrompt(
+      context,
+      title: 'Mensaje del recordatorio',
+      hint: 'Ej: Revisar apuntes de clase',
+      secondaryLabel: 'Sin mensaje',
+      secondaryValue: '',
     );
   }
 

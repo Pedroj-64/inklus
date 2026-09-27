@@ -1,4 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'note.dart';
+import 'id.dart';
 
 /// Un cuaderno que contiene uno o más apuntes (notes).
 ///
@@ -39,7 +41,7 @@ class Notebook {
 
   /// Crea un cuaderno vacío con un note en blanco.
   factory Notebook.newBlank({String? id, String? title}) => Notebook(
-        id: id ?? 'nb_${DateTime.now().microsecondsSinceEpoch}',
+        id: id ?? newId('nb'),
         title: title ?? 'Mi cuaderno',
         notes: [Note.newBlank()],
       );

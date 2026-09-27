@@ -1,0 +1,34 @@
+name: Catálogo
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - run: dart pub get
+
+      # En cada PR: validar los paquetes (id, licencia, rutas, tamaños…).
+      - name: Validar paquetes
+        run: dart run bin/build_catalog.dart --check
+
+      # Al fusionar en main: regenerar catalog.json (con sha256) y publicarlo.
+      - name: Generar catalog.json
+        if: github.event_name == 'push'
+        run: dart run bin/build_catalog.dart
+      - name: Publicar catálogo
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "inklus-bot"
+          git config user.email "inklus-bot@users.noreply.github.com"
+          git add catalog.json
+          git diff --cached --quiet || git commit -m "chore: regenerar catalog.json"
+          git push

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:ui' show Color, Size;
 
 /// Tipo de plantilla de fondo de una página.
@@ -67,9 +68,17 @@ class PageTemplate {
       type == TemplateType.planner;
 
   /// Tamaño efectivo de la hoja de esta plantilla.
-  Size get sheetSize => type == TemplateType.custom
-      ? Size(customWidth ?? sheetWidth, customHeight ?? sheetHeight)
-      : const Size(sheetWidth, sheetHeight);
+  /// Usa [customWidth]/[customHeight] si están (imagen propia, página de PDF
+  /// o preset A4/Carta/B5 elegido en el selector); si no, A4.
+  Size get sheetSize =>
+      Size(customWidth ?? sheetWidth, customHeight ?? sheetHeight);
+
+  /// Tipos cuyo modo infinito/finito se puede cambiar en el selector.
+  static bool supportsInfiniteToggle(TemplateType type) =>
+      type != TemplateType.blank &&
+      type != TemplateType.sheet &&
+      type != TemplateType.music &&
+      type != TemplateType.habit;
 
   /// Si la plantilla es finita (hoja de tamaño fijo).
   /// B6: ruled/grid/dots/planner son infinitos por defecto. El usuario puede

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:ui';
 
 import 'models/stroke.dart';
@@ -17,7 +18,7 @@ import 'models/stroke.dart';
 // ---------------------------------------------------------------------------
 
 /// Color primario de la app (azul Material 3).
-const Color kAccentColor = Color(0xFF3B82F6);
+const Color kAccentColor = Color(0xFF3B6FF6);
 
 /// Variante del primario con opacidad reducida (fondos de chips, badges).
 const Color kAccentLight = Color(0xFFEBF0FF);
@@ -43,13 +44,13 @@ const Color kPaperColorLight = Color(0xFFFEFDF9);
 
 /// Fondo del escritorio en modo claro.
 /// Debe ser lo suficientemente oscuro para que el papel blanco se distinga.
-const Color kDeskColorLight = Color(0xFFD6D3CC);
+const Color kDeskColorLight = Color(0xFFE4E1DA);
 
 /// Fondo de la hoja en modo oscuro.
 const Color kPaperColorDark = Color(0xFF4A4A4A);
 
 /// Fondo del escritorio en modo oscuro.
-const Color kDeskColorDark = Color(0xFF1A1B1E);
+const Color kDeskColorDark = Color(0xFF16171A);
 
 /// Fondo del scaffold en modo claro.
 const Color kScaffoldLight = Color(0xFFEFEDE8);
@@ -218,6 +219,32 @@ const int kMaxUndoDepth = 60;
 
 /// Tipos de regla disponibles.
 enum RulerType { straight, protractor }
+
+/// Cuándo se enderezan las figuras dibujadas a mano.
+enum ShapeMode {
+  /// Nunca: el trazo queda tal cual.
+  off,
+
+  /// Al mantener el lápiz quieto al final del trazo (~0,5 s), como en
+  /// Samsung Notes / Apple Notes. Es el modo por defecto: no convierte
+  /// "sin querer" las líneas casi rectas.
+  hold,
+
+  /// Siempre que el trazo se parezca a una figura.
+  always,
+}
+
+/// Modos del borrador.
+enum EraserMode {
+  /// Borra solo la parte tocada y parte el trazo (goma real).
+  partial,
+
+  /// Borra el trazo completo al tocarlo (rápido para tachar).
+  stroke,
+
+  /// Como [partial] pero solo afecta al resaltador (no borra la tinta).
+  highlighterOnly,
+}
 
 /// Longitud de la regla en unidades de mundo.
 const double kRulerLength = 600;

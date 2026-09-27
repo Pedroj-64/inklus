@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -97,6 +98,10 @@ class ExportService {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     if (factor < 1.0) canvas.scale(factor);
+    // El contenido está en coordenadas de mundo (la hoja va centrada en el
+    // origen, así que [bounds] empieza en negativo): llevar su esquina al
+    // (0,0) de la imagen. Sin esto solo se exportaba el cuadrante positivo.
+    canvas.translate(-bounds.left, -bounds.top);
     paintWorld(
       canvas,
       visibleWorldRect: bounds,
@@ -105,6 +110,7 @@ class ExportService {
       imageCache: imageCache,
       omitTemplate: options.transparentBackground || options.strokesOnly,
       omitImages: options.strokesOnly,
+      viewScale: factor,
     );
     final picture = recorder.endRecording();
 
