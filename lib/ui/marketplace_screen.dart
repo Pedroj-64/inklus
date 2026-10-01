@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 
+import '../models/template.dart';
 import '../services/marketplace/marketplace_models.dart';
 import '../services/marketplace/marketplace_service.dart';
 import 'theme/inklus_colors.dart';
 import 'theme/tokens.dart';
+import '../l10n/l10n.dart';
 
 /// Marketplace: paquetes gratuitos de la comunidad (plantillas, paletas y
 /// stickers). Todo el contenido es libre (licencias CC) y se verifica antes
@@ -36,25 +38,26 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   Future<void> _toggleInstall(MarketplacePack pack) async {
     setState(() => _busy.add(pack.id));
+    final l10n = context.l10n;
     try {
       if (_service.isInstalled(pack.id)) {
         await _service.uninstall(pack.id);
-        _snack('«${pack.name}» desinstalado');
+        _snack(l10n.marketUninstalled(_packName(l10n, pack)));
       } else {
         await _service.install(pack);
-        _snack('«${pack.name}» instalado: ${_whereToFind(pack.type)}');
+        _snack(l10n.marketInstalled(_packName(l10n, pack), _whereToFind(pack.type)));
       }
     } catch (e) {
-      _snack('No se pudo instalar «${pack.name}»: $e');
+      _snack(l10n.marketInstallFailed(_packName(l10n, pack), '$e'));
     } finally {
       if (mounted) setState(() => _busy.remove(pack.id));
     }
   }
 
   String _whereToFind(PackType t) => switch (t) {
-        PackType.template => 'en Plantilla de la página',
-        PackType.palette => 'en los colores de cada pluma',
-        PackType.stickers => 'en Más herramientas → Insertar sticker',
+        PackType.template => context.l10n.marketWhereTemplate,
+        PackType.palette => context.l10n.marketWherePalette,
+        PackType.stickers => context.l10n.marketWhereStickers,
       };
 
   void _snack(String m) {
@@ -62,6 +65,53 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(m)));
+  }
+
+  /// Cabecera con degradado de marca y el buscador integrado.
+  Widget _hero(BuildContext context) {
+    final scheme = context.colors;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, 0),
+      padding: const EdgeInsets.all(Spacing.xl),
+      decoration: BoxDecoration(
+        borderRadius: Radii.xlAll,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [scheme.primary, Color.lerp(scheme.primary, scheme.onSurface, 0.4)!],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.storefront_outlined, color: scheme.onPrimary, size: 28),
+              const SizedBox(width: Spacing.md),
+              Text(context.l10n.marketHeroTitle,
+                  style: context.text.headlineSmall?.copyWith(
+                      color: scheme.onPrimary, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: Spacing.xs),
+          Text(
+            context.l10n.marketHeroSubtitle,
+            style: context.text.bodyMedium?.copyWith(color: scheme.onPrimary.withValues(alpha: 0.9)),
+          ),
+          const SizedBox(height: Spacing.lg),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: SearchBar(
+              hintText: context.l10n.marketSearch,
+              leading: const Icon(Icons.search),
+              elevation: const WidgetStatePropertyAll(0),
+              backgroundColor: WidgetStatePropertyAll(scheme.surface),
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -76,57 +126,53 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             p.tags.any((t) => t.toLowerCase().contains(q)))
         .toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('Marketplace')),
+      appBar: AppBar(title: Text(context.l10n.marketTitle)),
       body: ListenableBuilder(
         listenable: _service,
         builder: (context, _) => CustomScrollView(
           slivers: [
+            SliverToBoxAdapter(child: _hero(context)),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.sm),
+                padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.lg, Spacing.xl, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Plantillas, paletas y stickers creados por la comunidad. '
-                      'Todo es gratis y de licencia libre.',
-                      style: context.text.bodyMedium,
-                    ),
                     if (!_loading && _service.source != CatalogSource.network)
                       Padding(
-                        padding: const EdgeInsets.only(top: Spacing.md),
-                        child: Material(
-                          color: context.colors.secondaryContainer,
-                          borderRadius: Radii.mdAll,
-                          child: ListTile(
-                            leading: const Icon(Icons.cloud_off),
-                            title: Text(_service.source == CatalogSource.cache
-                                ? 'Sin conexión: mostrando el último catálogo descargado'
-                                : 'Sin conexión: mostrando los paquetes incluidos en la app'),
-                          ),
+                        padding: const EdgeInsets.only(bottom: Spacing.md),
+                        child: Row(
+                          children: [
+                            Icon(Icons.cloud_off, size: 16, color: context.colors.onSurfaceVariant),
+                            const SizedBox(width: Spacing.sm),
+                            Expanded(
+                              child: Text(
+                                _service.source == CatalogSource.cache
+                                    ? context.l10n.marketOfflineCache
+                                    : context.l10n.marketOfflineBundled,
+                                style: context.text.labelMedium
+                                    ?.copyWith(color: context.colors.onSurfaceVariant),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    const SizedBox(height: Spacing.md),
-                    SearchBar(
-                      hintText: 'Buscar paquetes',
-                      leading: const Icon(Icons.search),
-                      elevation: const WidgetStatePropertyAll(0),
-                      backgroundColor: WidgetStatePropertyAll(context.colors.surfaceContainerHigh),
-                      onChanged: (v) => setState(() => _query = v),
-                    ),
-                    const SizedBox(height: Spacing.md),
                     Wrap(
                       spacing: Spacing.sm,
+                      runSpacing: Spacing.sm,
                       children: [
-                        for (final (label, type) in [
-                          ('Todo', null),
-                          ('Plantillas', PackType.template),
-                          ('Paletas', PackType.palette),
-                          ('Stickers', PackType.stickers),
+                        for (final (label, icon, type) in [
+                          (context.l10n.marketAll, Icons.apps, null),
+                          (context.l10n.marketTemplates, Icons.dashboard_customize_outlined, PackType.template),
+                          (context.l10n.marketPalettes, Icons.palette_outlined, PackType.palette),
+                          (context.l10n.marketStickers, Icons.emoji_emotions_outlined, PackType.stickers),
                         ])
                           ChoiceChip(
-                            label: Text(label),
+                            avatar: Icon(icon, size: 18),
+                            label: Text(
+                                '$label · ${_service.catalog.where((p) => type == null || p.type == type).length}'),
                             selected: _filter == type,
+                            showCheckmark: false,
                             onSelected: (_) => setState(() => _filter = type),
                           ),
                       ],
@@ -138,14 +184,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             if (_loading)
               const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
             else if (packs.isEmpty)
-              const SliverFillRemaining(child: Center(child: Text('No hay paquetes que coincidan')))
+              SliverFillRemaining(child: Center(child: Text(context.l10n.marketNoResults)))
             else
               SliverPadding(
                 padding: const EdgeInsets.all(Spacing.xl),
                 sliver: SliverGrid.builder(
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 340,
-                    mainAxisExtent: 250,
+                    maxCrossAxisExtent: 360,
+                    mainAxisExtent: 292,
                     crossAxisSpacing: Spacing.lg,
                     mainAxisSpacing: Spacing.lg,
                   ),
@@ -169,6 +215,26 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 }
 
+/// Nombre/descripción traducidos de los paquetes incluidos en la app; los del
+/// catálogo remoto se muestran tal como se publicaron.
+String _packName(AppLocalizations l10n, MarketplacePack p) => switch (p.id) {
+      'cuadernos-clasicos' => l10n.packClassicName,
+      'papel-tecnico' => l10n.packTechName,
+      'paleta-estudio' => l10n.packStudyName,
+      'paleta-pastel' => l10n.packPastelName,
+      'paleta-tierra' => l10n.packEarthName,
+      _ => p.name,
+    };
+
+String _packDescription(AppLocalizations l10n, MarketplacePack p) => switch (p.id) {
+      'cuadernos-clasicos' => l10n.packClassicDesc,
+      'papel-tecnico' => l10n.packTechDesc,
+      'paleta-estudio' => l10n.packStudyDesc,
+      'paleta-pastel' => l10n.packPastelDesc,
+      'paleta-tierra' => l10n.packEarthDesc,
+      _ => p.description,
+    };
+
 class _PackCard extends StatelessWidget {
   const _PackCard({
     required this.pack,
@@ -184,51 +250,95 @@ class _PackCard extends StatelessWidget {
   final bool busy;
   final VoidCallback onToggle;
 
+  (IconData, String) _typeInfo(BuildContext context, PackType t) => switch (t) {
+        PackType.template => (Icons.dashboard_customize_outlined, context.l10n.marketTemplates),
+        PackType.palette => (Icons.palette_outlined, context.l10n.marketPalette),
+        PackType.stickers => (Icons.emoji_emotions_outlined, context.l10n.marketStickers),
+      };
+
   @override
   Widget build(BuildContext context) {
+    final (icon, typeLabel) = _typeInfo(context, pack.type);
+    final scheme = context.colors;
     return Card(
       clipBehavior: Clip.antiAlias,
+      elevation: 0,
+      color: scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: Radii.lgAll,
+        side: BorderSide(color: installed ? scheme.primary : scheme.outlineVariant),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(height: 90, width: double.infinity, child: _preview(context)),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Spacing.md, Spacing.sm, Spacing.md, 0),
-            child: Row(
+          SizedBox(
+            height: 130,
+            width: double.infinity,
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                Icon(switch (pack.type) {
-                  PackType.template => Icons.dashboard_customize_outlined,
-                  PackType.palette => Icons.palette_outlined,
-                  PackType.stickers => Icons.emoji_emotions_outlined,
-                }, size: 18, color: context.colors.primary),
-                const SizedBox(width: Spacing.xs),
-                Expanded(
-                  child: Text(pack.name,
-                      maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.titleSmall),
+                _preview(context),
+                Positioned(
+                  left: Spacing.sm,
+                  top: Spacing.sm,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: scheme.surface.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(Radii.pill),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 3),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(icon, size: 14, color: scheme.primary),
+                        const SizedBox(width: 4),
+                        Text(typeLabel, style: context.text.labelSmall),
+                      ]),
+                    ),
+                  ),
                 ),
+                if (installed)
+                  Positioned(
+                    right: Spacing.sm,
+                    top: Spacing.sm,
+                    child: CircleAvatar(
+                      radius: 12,
+                      backgroundColor: scheme.primary,
+                      child: Icon(Icons.check, size: 16, color: scheme.onPrimary),
+                    ),
+                  ),
               ],
             ),
           ),
           Padding(
+            padding: const EdgeInsets.fromLTRB(Spacing.md, Spacing.md, Spacing.md, 0),
+            child: Text(_packName(context.l10n, pack),
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.titleMedium),
+          ),
+          Padding(
             padding: const EdgeInsets.symmetric(horizontal: Spacing.md, vertical: Spacing.xs),
-            child: Text(pack.description,
+            child: Text(_packDescription(context.l10n, pack),
                 maxLines: 2, overflow: TextOverflow.ellipsis, style: context.text.bodySmall),
           ),
           const Spacer(),
           Padding(
-            padding: const EdgeInsets.fromLTRB(Spacing.md, 0, Spacing.sm, Spacing.sm),
+            padding: const EdgeInsets.fromLTRB(Spacing.md, 0, Spacing.md, Spacing.md),
             child: Row(
               children: [
                 Expanded(
                   child: Text('${pack.author} · ${pack.license}',
                       maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.labelSmall),
                 ),
+                const SizedBox(width: Spacing.sm),
                 busy
                     ? const SizedBox.square(
                         dimension: 24, child: CircularProgressIndicator(strokeWidth: 2))
                     : installed
-                        ? OutlinedButton(onPressed: onToggle, child: const Text('Quitar'))
-                        : FilledButton.tonal(onPressed: onToggle, child: const Text('Instalar')),
+                        ? OutlinedButton(onPressed: onToggle, child: Text(context.l10n.marketRemove))
+                        : FilledButton.icon(
+                            onPressed: onToggle,
+                            icon: const Icon(Icons.download, size: 18),
+                            label: Text(context.l10n.marketInstall),
+                          ),
               ],
             ),
           ),
@@ -237,7 +347,8 @@ class _PackCard extends StatelessWidget {
     );
   }
 
-  /// Vista previa: imagen del paquete, o una generada (colores / icono).
+  /// Vista previa: imagen del paquete, o una generada (plantilla real /
+  /// colores / icono).
   Widget _preview(BuildContext context) {
     if (pack.preview != null) {
       return Image.network(
@@ -258,29 +369,84 @@ class _PackCard extends StatelessWidget {
         ],
       );
     }
+    final t = pack.templates.map((t) => t.toPageTemplate()).whereType<PageTemplate>().firstOrNull;
+    if (t != null) {
+      return ColoredBox(
+        color: context.inklus.paper,
+        child: CustomPaint(painter: _TemplatePreview(t)),
+      );
+    }
     return ColoredBox(
-      color: context.inklus.paper,
-      child: CustomPaint(painter: _LinesPreview(color: context.colors.primary.withValues(alpha: 0.35))),
+      color: context.colors.secondaryContainer,
+      child: Center(
+        child: Icon(Icons.emoji_emotions_outlined,
+            size: 48, color: context.colors.onSecondaryContainer),
+      ),
     );
   }
 }
 
-/// Rayado genérico para la vista previa de paquetes de plantillas.
-class _LinesPreview extends CustomPainter {
-  _LinesPreview({required this.color});
+/// Vista previa de una plantilla con su tipo y color de línea reales.
+class _TemplatePreview extends CustomPainter {
+  _TemplatePreview(this.t);
 
-  final Color color;
+  final PageTemplate t;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
+    final color = Color(t.lineColorValue);
+    final line = Paint()
       ..color = color
       ..strokeWidth = 1;
-    for (var y = 14.0; y < size.height; y += 14) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    // El espaciado real (≈50) se reduce para que se vea el patrón entero.
+    final gap = (t.spacing / 3.4).clamp(9.0, 26.0);
+    switch (t.type) {
+      case TemplateType.grid:
+        for (var y = gap; y < size.height; y += gap) {
+          canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
+        }
+        for (var x = gap; x < size.width; x += gap) {
+          canvas.drawLine(Offset(x, 0), Offset(x, size.height), line);
+        }
+      case TemplateType.dots:
+        final dot = Paint()..color = color;
+        for (var y = gap; y < size.height; y += gap) {
+          for (var x = gap; x < size.width; x += gap) {
+            canvas.drawCircle(Offset(x, y), 1.4, dot);
+          }
+        }
+      case TemplateType.music:
+        for (var g = 0; g < 3; g++) {
+          for (var l = 0; l < 5; l++) {
+            final y = 16 + g * 40 + l * 5.0;
+            canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
+          }
+        }
+      case TemplateType.planner:
+        for (var y = gap; y < size.height; y += gap) {
+          canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
+        }
+        for (var x = size.width / 4; x < size.width; x += size.width / 4) {
+          canvas.drawLine(Offset(x, 0), Offset(x, size.height), line);
+        }
+      case TemplateType.habit:
+        final box = Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke;
+        for (var y = gap; y < size.height - gap / 2; y += gap) {
+          for (var x = gap; x < size.width - gap / 2; x += gap) {
+            canvas.drawRect(Rect.fromCenter(center: Offset(x, y), width: gap * 0.6, height: gap * 0.6), box);
+          }
+        }
+      default: // ruled, sheet, blank, custom
+        if (t.type != TemplateType.blank) {
+          for (var y = gap; y < size.height; y += gap) {
+            canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
+          }
+        }
     }
   }
 
   @override
-  bool shouldRepaint(_LinesPreview old) => old.color != color;
+  bool shouldRepaint(_TemplatePreview old) => old.t != t;
 }

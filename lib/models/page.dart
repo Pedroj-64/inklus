@@ -89,6 +89,27 @@ class Page {
         template: template ?? const PageTemplate(),
       );
 
+  /// Hoja fija con una imagen (página de PDF, foto…) de fondo, del ancho
+  /// estándar de hoja y la proporción de la imagen ([width]×[height] px).
+  factory Page.background({
+    required String name,
+    required String path,
+    required int width,
+    required int height,
+  }) {
+    const w = PageTemplate.sheetWidth;
+    return Page.blank(
+      name: name,
+      template: PageTemplate(
+        type: TemplateType.custom,
+        imagePath: path,
+        infiniteFill: false,
+        customWidth: w,
+        customHeight: width == 0 ? PageTemplate.sheetHeight : w * height / width,
+      ),
+    );
+  }
+
   static String _newId() => newId('pg');
 
   Page copyWith({

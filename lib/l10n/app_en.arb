@@ -65,7 +65,1118 @@
   "driveSignOutBody": "Backups will stop being uploaded to Google Drive. Copies already in Drive are kept.",
   "driveSignedOut": "Signed out",
   "driveUploaded": "{count, plural, =0{No notebooks have sync enabled} =1{1 note uploaded to Drive} other{{count} notes uploaded to Drive}}",
-  "driveRestoreBody": "Notes on this device are only replaced if the Drive copy is newer. Notes missing here are saved in a new notebook \"Recovered from Drive\".",
+  "driveRestoreBody": "Notes on this device are only replaced if the Drive copy is newer. Notes missing here go back to their notebook (or to a new \"Recovered from Drive\" one).",
   "backupSaveTitle": "Save Inklus backup",
-  "backupSaved": "Backup saved"
+  "backupSaved": "Backup saved",
+  "driveSignInIncomplete": "Sign-in did not complete",
+  "driveDetails": "Details",
+  "driveSignInHelpTitle": "Could not sign in",
+  "driveSignInHelpBody": "If you just closed the account picker, nothing is wrong. If you chose an account and it did not connect, the app's signing key (SHA-1) is almost always not registered in Google Cloud for com.inklus.inklus.\n\nTechnical detail:\n{details}",
+  "driveNotebooksTitle": "Notebooks that sync",
+  "driveNotebooksSubtitle": "Each notebook is saved in Drive → Inklus → its own folder. Choose which ones.",
+  "driveNotebooksEmpty": "No notebooks yet.",
+  "driveSyncMenu": "Sync with Drive",
+  "driveSyncEnabled": "Sync enabled",
+  "driveSyncDisabled": "Sync disabled",
+  "textEditHint": "Type here…",
+  "textEditMove": "Move box",
+  "textEditWidth": "Box width",
+  "textEditSmaller": "Smaller",
+  "textEditLarger": "Larger",
+  "textEditBold": "Bold",
+  "textEditItalic": "Italic",
+  "textEditUnderline": "Underline",
+  "textEditStrike": "Strikethrough",
+  "textEditColor": "Text color",
+  "textEditHighlight": "Highlight",
+  "textEditAlign": "Alignment",
+  "textEditSpacing": "Line spacing",
+  "textEditLinkActive": "Page link (active)",
+  "textEditLink": "Link to page",
+  "textEditDelete": "Delete box",
+  "textEditDone": "Done",
+  "textEditWholeBox": "Whole box",
+  "textEditNoHighlight": "No highlight",
+  "textEditUnlink": "Remove link",
+  "commonPageN": "Page {n}",
+  "@commonPageN": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "marketWhereTemplate": "in the page's Template menu",
+  "marketWherePalette": "in each pen's colors",
+  "marketWhereStickers": "in More tools → Insert sticker",
+  "marketHeroTitle": "Discover and customize",
+  "marketHeroSubtitle": "Community templates, palettes and stickers. Free and openly licensed.",
+  "marketSearch": "Search packs",
+  "marketTitle": "Marketplace",
+  "marketOfflineCache": "Offline: showing the last downloaded catalog",
+  "marketOfflineBundled": "Offline: showing packs bundled with the app",
+  "marketAll": "All",
+  "marketTemplates": "Templates",
+  "marketPalettes": "Palettes",
+  "marketStickers": "Stickers",
+  "marketPalette": "Palette",
+  "marketNoResults": "No matching packs",
+  "marketRemove": "Remove",
+  "marketInstall": "Install",
+  "marketUninstalled": "“{name}” uninstalled",
+  "@marketUninstalled": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "marketInstalled": "“{name}” installed: {where}",
+  "@marketInstalled": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "where": {
+        "type": "String"
+      }
+    }
+  },
+  "marketInstallFailed": "Could not install “{name}”: {error}",
+  "@marketInstallFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "createTplBlank": "Blank",
+  "createTplRuled": "Ruled",
+  "createTplGrid": "Grid",
+  "createTplDots": "Dots",
+  "createTplMusic": "Staff",
+  "createTplPlanner": "Planner",
+  "createTplHabit": "Habits",
+  "createTplSheet": "A4 sheet",
+  "createTitle": "New notebook",
+  "createName": "Name",
+  "createNameHint": "My notebook",
+  "createCover": "Cover",
+  "createDesign": "Design",
+  "createYourImage": "Your image",
+  "createChangeImage": "Change image",
+  "createColor": "Color",
+  "createNext": "Next",
+  "createStep2": "Step 2: choose a template",
+  "createBackToStep1": "Back to step 1",
+  "createTemplate": "Template",
+  "createMoreTemplates": "Show more templates",
+  "createFewer": "Show fewer",
+  "createInfinite": "Infinite canvas",
+  "createInfiniteOn": "The canvas grows as you write",
+  "createInfiniteOff": "Fixed-size sheet (A4)",
+  "createAction": "Create notebook",
+  "createDefaultName": "Notebook {n}",
+  "@createDefaultName": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "createCoverSemantics": "Cover {name}",
+  "@createCoverSemantics": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "libRenameTitle": "Rename notebook",
+  "libDeleteTitle": "Delete notebook",
+  "libDelete": "Delete",
+  "libCoverColor": "Cover color",
+  "commonSave": "Save",
+  "libSortTitle": "Sort notebooks",
+  "libSortNewestFirst": "Newest first",
+  "libSortOldestFirst": "Oldest first",
+  "libSortTitleAZ": "Title A → Z",
+  "libSortTitleZA": "Title Z → A",
+  "libNavAll": "All",
+  "libNavRecent": "Recent",
+  "libNavFavorites": "Favorites",
+  "libNavFolders": "Folders",
+  "libImport": "Import .inklus",
+  "libTrash": "Trash",
+  "libLightMode": "Light mode",
+  "libDarkMode": "Dark mode",
+  "libMoreOptions": "More options",
+  "libMyNotebooks": "My notebooks",
+  "libClearFilter": "Clear filter",
+  "libSearchHint": "Search by name or tag",
+  "libSearchInNotes": "Search inside notes (text and handwriting)",
+  "libSearchContent": "In content",
+  "libSortNewest": "Newest",
+  "libSortOldest": "Oldest",
+  "libSortNameAZ": "Name A–Z",
+  "libSortNameZA": "Name Z–A",
+  "libGrid": "Grid",
+  "libList": "List",
+  "libNoResults": "No notebooks found",
+  "libEmptyTitle": "Start writing",
+  "libNoResultsHint": "Try another name or tag.",
+  "libUnfavorite": "Remove from favorites",
+  "libFavorite": "Add to favorites",
+  "libRename": "Rename",
+  "libDuplicate": "Duplicate",
+  "libCoverAndColor": "Cover and color",
+  "libTags": "Tags",
+  "libSyncOff": "Stop syncing with Drive",
+  "libMoveToTrash": "Move to trash",
+  "libNotebookOptions": "Notebook options",
+  "libSyncWillSync": "“{title}” will sync with Drive",
+  "@libSyncWillSync": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "libSyncStopped": "“{title}” no longer syncs",
+  "@libSyncStopped": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "libDeleteBody": "\"{title}\" will be moved to the trash. You can restore it from there.",
+  "@libDeleteBody": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "libImportError": "Import error: {error}",
+  "@libImportError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "libCountAll": "{total, plural, =1{1 notebook} other{{total} notebooks}}",
+  "@libCountAll": {
+    "placeholders": {
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "libCountOf": "{shown} of {total} notebooks",
+  "@libCountOf": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "libNotebookSemantics": "Notebook {title}, {when}",
+  "@libNotebookSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "libEmptyHint": "Create a new notebook or import an existing one\\nto get started.",
+  "noteRenameTitle": "Rename note",
+  "noteDeleteTitle": "Delete note",
+  "noteNew": "New note",
+  "noteNameHint": "My note",
+  "noteCreate": "Create",
+  "noteEmptyTitle": "No notes",
+  "noteEmptyHint": "Create your first note to start writing.",
+  "noteCreateAction": "Create note",
+  "noteOptions": "Options",
+  "timeNow": "just now",
+  "noteTplInfinite": "Infinite",
+  "noteTplSheet": "Fixed sheet",
+  "noteTplPlanner": "Planner",
+  "tplInfiniteHint": "Infinite ones grow as you write",
+  "tplNormalSheet": "Regular sheet",
+  "tplOwn": "Your own template",
+  "tplFromMarket": "From the marketplace",
+  "tplMine": "My templates",
+  "tplSaveCurrent": "Save current",
+  "tplCustomize": "Customize",
+  "tplLineColor": "Line color",
+  "tplSpacing": "Spacing",
+  "tplFixedSheet": "Fixed-size sheet",
+  "tplSheetSize": "Sheet size",
+  "tplLetter": "Letter",
+  "tplHowTitle": "How should the template be used?",
+  "tplHowBody": "The image will be used as a background to write on.",
+  "tplAsSheet": "As a fixed sheet",
+  "tplAsFill": "Infinite fill",
+  "tplOnlyImage": "Only templates with an image can be saved",
+  "tplSaveTitle": "Save template",
+  "tplDefaultName": "My template",
+  "tplSaved": "Template saved",
+  "tplDeleteTitle": "Delete template",
+  "tplDeleteBody": "Delete this saved template?",
+  "colorCustomTitle": "Custom color",
+  "colorCurrent": "Current",
+  "colorNew": "New",
+  "colorWheel": "Wheel",
+  "colorHue": "Hue",
+  "colorSaturation": "Saturation",
+  "colorBrightness": "Brightness",
+  "colorUse": "Use",
+  "timeMinAgo": "{n} min ago",
+  "@timeMinAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "timeHoursAgo": "{n} h ago",
+  "@timeHoursAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "timeDaysAgo": "{n} d ago",
+  "@timeDaysAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "timeDeletedNow": "deleted just now",
+  "timeDeletedMin": "deleted {n} min ago",
+  "@timeDeletedMin": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "timeDeletedHours": "deleted {n} h ago",
+  "@timeDeletedHours": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "timeDeletedDays": "deleted {n} days ago",
+  "@timeDeletedDays": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "timeDeletedOn": "deleted {date}",
+  "@timeDeletedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "noteDeleteBody": "\"{title}\" will be removed from this notebook.",
+  "@noteDeleteBody": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "noteDefaultName": "Note {n}",
+  "@noteDefaultName": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "noteCount": "{count, plural, =1{1 note} other{{count} notes}}",
+  "@noteCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "notePageCount": "{count, plural, =1{1 page} other{{count} pages}} · {when}",
+  "@notePageCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "tplImageLoadFailed": "Could not load the image: {error}",
+  "@tplImageLoadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tplSaveFailed": "Save error: {error}",
+  "@tplSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "colorSliders": "Sliders",
+  "selPaste": "Paste",
+  "selCopy": "Copy",
+  "selCopied": "Copied",
+  "selThinner": "Thinner",
+  "selThicker": "Thicker",
+  "selToText": "Convert to text",
+  "selDeselect": "Deselect",
+  "selNoText": "No text recognized in the selection",
+  "selConvert": "Convert",
+  "popPenType": "Pen type",
+  "popThickness": "Thickness",
+  "popStraighten": "Straighten shapes",
+  "popNo": "No",
+  "popOnHold": "On hold",
+  "popAlways": "Always",
+  "popShapeOffHint": "Strokes stay as drawn.",
+  "popShapeHoldHint": "Hold the pen still for half a second after finishing a line, circle, triangle or rectangle.",
+  "popShapeAlwaysHint": "Every recognizable shape is straightened when you lift the pen.",
+  "popAdvanced": "Advanced stroke settings",
+  "popMode": "Mode",
+  "popPartial": "Partial",
+  "popStroke": "Stroke",
+  "popHighlighter": "Highlighter",
+  "popEraseOff": "Erases only what you touch, like a rubber.",
+  "popEraseStroke": "Erases the whole stroke when touched.",
+  "popEraseHighlighter": "Only erases highlighter; ink is untouched.",
+  "popSize": "Size",
+  "tbBackToLibrary": "Back to library",
+  "tbHidePages": "Hide pages",
+  "tbPages": "Pages",
+  "tbHideLayers": "Hide layers",
+  "tbLayers": "Layers",
+  "tbInsertImage": "Insert image",
+  "tbRuler": "Ruler",
+  "tbRulerNext": "Ruler (tap: protractor)",
+  "tbProtractorNext": "Protractor (tap: hide)",
+  "tbMoveSelect": "Move / select images and strokes",
+  "tbFill": "Fill area",
+  "tbHideMagnifier": "Hide magnifier",
+  "tbMagnifier": "Magnifier",
+  "tbLaserOff": "Turn off laser pointer",
+  "tbLaser": "Laser pointer",
+  "tbInsertSticker": "Insert sticker",
+  "tbPageTemplate": "Page template",
+  "tbMoreTools": "More tools",
+  "tbUndo": "Undo",
+  "tbRedo": "Redo",
+  "pgUnbookmark": "Remove bookmark",
+  "pgBookmark": "Bookmark page",
+  "pgShowAll": "Show all",
+  "pgOnlyBookmarked": "Bookmarked only",
+  "commonClose": "Close",
+  "pgOptions": "Page options",
+  "pgNew": "New page",
+  "tagTitle": "Notebook tags",
+  "tagSubtitle": "To find it and group it in smart folders",
+  "tagActive": "Active tags",
+  "tagOthers": "Other tags",
+  "tagNew": "New tag…",
+  "tagAdd": "Add tag",
+  "tagSave": "Save tags",
+  "trashDeleteForever": "Delete permanently",
+  "trashEmptyTitle": "Empty trash",
+  "trashEmpty": "Empty",
+  "trashSubtitleEmpty": "Anything you delete stays here for 30 days",
+  "trashEmptyState": "Trash is empty",
+  "trashLegacy": "Notebook (old format)",
+  "trashNote": "Note",
+  "trashReturn": "Return to its notebook",
+  "strokeSubtitle": "Pressure, smoothing and stroke fluidity",
+  "strokeNone": "The eraser and selection have no stroke options.",
+  "strokeQuickSize": "Quick size",
+  "strokePressure": "Pressure variation",
+  "strokePressureDesc": "How much thickness changes when you press",
+  "strokeSmoothing": "Smoothing",
+  "strokeSmoothingDesc": "Rounds the stroke's curves",
+  "strokeStabilizer": "Stabilizer",
+  "strokeStabilizerDesc": "Reduces hand tremor",
+  "sizeThin": "Thin",
+  "sizeMedium": "Medium",
+  "sizeThick": "Thick",
+  "sizeExtra": "Extra",
+  "sizeSmall": "Small",
+  "sizeLarge": "Large",
+  "toolPen": "Ballpoint pen",
+  "toolPencil": "Pencil",
+  "toolCalligraphy": "Calligraphy pen",
+  "toolBrush": "Brush",
+  "toolMarker": "Marker",
+  "toolSpray": "Spray",
+  "toolEraser": "Eraser",
+  "toolSelect": "Move / select",
+  "toolLasso": "Lasso",
+  "toolFill": "Fill",
+  "toolText": "Text",
+  "selRecognizeFailed": "Could not recognize: {error}",
+  "@selRecognizeFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tbPenSlot": "{tool} {n}",
+  "@tbPenSlot": {
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      },
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "tbPageOf": "Page {n} of {total}",
+  "@tbPageOf": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "pgPagesCount": "Pages ({n})",
+  "@pgPagesCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "strokeOptionsOf": "{tool} options",
+  "@strokeOptionsOf": {
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "trashRestoredMsg": "\"{title}\" restored",
+  "@trashRestoredMsg": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "trashPurgeBody": "\"{title}\" will be permanently deleted. This cannot be undone.",
+  "@trashPurgeBody": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "trashEmptyBody": "{count, plural, =1{1 item} other{{count} items}} will be permanently deleted. This cannot be undone.",
+  "@trashEmptyBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "trashSubtitleCount": "{count, plural, =1{1 item} other{{count} items}} · deleted automatically after 30 days",
+  "@trashSubtitleCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "trashEmptyStateBody": "Notebooks and notes you delete are kept here for 30 days before being permanently removed.",
+  "trashNotebookKind": "Notebook · {count, plural, =1{1 note} other{{count} notes}}",
+  "@trashNotebookKind": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "trashNoteOf": "Note from “{title}”",
+  "@trashNoteOf": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "trashLeftTomorrow": "deleted tomorrow",
+  "trashLeftDays": "{n} days left",
+  "@trashLeftDays": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "trashInfoLine": "{what} · {deleted} · {left}",
+  "@trashInfoLine": {
+    "placeholders": {
+      "what": {
+        "type": "String"
+      },
+      "deleted": {
+        "type": "String"
+      },
+      "left": {
+        "type": "String"
+      }
+    }
+  },
+  "edLayerLocked": "Layer locked — unlock it to edit",
+  "expTitle": "Export options",
+  "expLow": "Low (1024 px)",
+  "expMedium": "Medium (2048 px)",
+  "expHigh": "High (4096 px)",
+  "expMax": "Maximum (8192 px)",
+  "expTransparent": "Transparent background",
+  "expTransparentHint": "No template or paper",
+  "expStrokesOnly": "Strokes only",
+  "expStrokesOnlyHint": "No images or template",
+  "expExport": "Export",
+  "ocrUnsupported": "OCR is only available on Android and iOS",
+  "ocrWorking": "Recognizing text…",
+  "ocrNoText": "No text recognized on this page",
+  "ocrResultTitle": "Recognized text",
+  "ocrCopied": "Text copied to the clipboard",
+  "edGoogleAccount": "Google account",
+  "edSyncedCloud": "Synced with the cloud",
+  "edRestoreCloud": "Restore from the cloud",
+  "edRestoreCloudHint": "Latest version (last-write-wins)",
+  "edDriveVersions": "View versions in Drive",
+  "edUploadInklus": "Upload .inklus file",
+  "edSyncOnForNotebook": "Sync: on for this notebook",
+  "edSyncOffForNotebook": "Sync: off for this notebook",
+  "edSyncDisabledMsg": "Sync turned off for this notebook",
+  "edSyncEnabledMsg": "Sync turned on for this notebook",
+  "edNoteSynced": "Note synced with Google Drive",
+  "edPasswordHint": "Password (leave empty if not encrypted)",
+  "edNoCloudCopy": "There is no copy of this note in Google Drive yet",
+  "edNoteRestored": "Note restored from Google Drive",
+  "edIsFullBackup": "That file is a full backup, not a .inklus notebook",
+  "edNoPassword": "No password",
+  "edNotebookTitle": "Notebook title",
+  "pdfUnsupported": "Importing PDFs is only available on Android/iOS for now",
+  "pdfReadFailed": "Could not read the PDF",
+  "verRestoreTitle": "Restore version",
+  "verRestored": "Version restored",
+  "verEncrypted": "Encrypted copy",
+  "verPasswordHint": "Copy password",
+  "verDecrypt": "Decrypt",
+  "inkUnsupported": "Handwriting recognition is only available on Android and iOS",
+  "edDeleteImage": "Delete image",
+  "edExitPresent": "Exit presentation",
+  "edLaserOff": "Turn off laser",
+  "edGoToPage": "Go to page",
+  "edGo": "Go",
+  "edNoStickers": "You have no stickers installed yet.",
+  "edOpenMarket": "Open the marketplace",
+  "edSyncing": "Syncing…",
+  "edSyncToDrive": "Sync with Google Drive",
+  "edSynced": "Synced",
+  "edSyncError": "Sync error",
+  "menuPagePng": "Page as image (PNG)",
+  "menuPagePdf": "Page as PDF",
+  "menuNotePdf": "Whole note (PDF)",
+  "menuStrokesSvg": "Strokes (SVG)",
+  "menuPptx": "Presentation (PowerPoint)",
+  "menuInklusCopy": "Copy as .inklus",
+  "menuShareImage": "Share image",
+  "menuSharePdf": "Share PDF",
+  "menuShareInklus": "Share .inklus",
+  "menuExportShare": "Export and share",
+  "menuTemplate": "Template…",
+  "menuGoToPage": "Go to page…",
+  "menuImportPdf": "Import PDF to annotate",
+  "menuClearPage": "Clear page",
+  "menuPage": "Page",
+  "menuSearchNote": "Search in note",
+  "menuIndexInk": "Index handwriting (to search it)",
+  "menuIndexInkUnsupported": "Index handwriting (Android/iOS only)",
+  "menuOcr": "Recognize text (OCR)",
+  "menuOcrUnsupported": "OCR (Android/iOS only)",
+  "menuVersions": "Version history",
+  "menuReminder": "Create reminder",
+  "menuNightOff": "Turn off night mode",
+  "menuNightOn": "Writing night mode",
+  "menuPresent": "Presentation mode",
+  "menuHapticsOn": "Writing vibration: on",
+  "menuHapticsOff": "Writing vibration: off",
+  "menuContinuousScroll": "Continuous scroll between sheets",
+  "menuView": "View",
+  "menuBackup": "Export full backup",
+  "menuRestoreBackup": "Import .inklus or backup",
+  "menuData": "Data",
+  "menuStats": "Writing statistics",
+  "clearPageBody": "All the page's content will be erased. You can undo it afterwards.",
+  "clearPageAction": "Clear",
+  "pgPrev": "Previous page",
+  "pgNext": "Next page",
+  "zoomOut": "Zoom out",
+  "zoomFit": "Fit to view",
+  "zoomIn": "Zoom in",
+  "shareTextPage": "Inklus page",
+  "shareTextNotebook": "Inklus notebook",
+  "edInsertImageFailed": "Could not insert the image: {error}",
+  "@edInsertImageFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "expSvgFailed": "SVG export error: {error}",
+  "@expSvgFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "ocrFailed": "Text recognition error: {error}",
+  "@ocrFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "expFailed": "Export error: {error}",
+  "@expFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "expPreview": "Preview: {name}",
+  "@expPreview": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "expSaveDialog": "Save {name}",
+  "@expSaveDialog": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "expDone": "Exported: {path}",
+  "@expDone": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "expSaveFailed": "Could not save the file: {error}",
+  "@expSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "shareFailed": "Share error: {error}",
+  "@shareFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "edSignInIncomplete": "Sign-in did not complete. Detail: {detail}",
+  "@edSignInIncomplete": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadFailed": "Upload error: {error}",
+  "@uploadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "restoreFailed": "Restore error: {error}",
+  "@restoreFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "edFileUploaded": "File \"{name}\" uploaded to Google Drive",
+  "@edFileUploaded": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pdfImported": "PDF imported: {count, plural, =1{1 page} other{{count} pages}} to annotate",
+  "@pdfImported": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pdfImportFailed": "PDF import error: {error}",
+  "@pdfImportFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "verRestoreBody": "The note will go back to how it was on {date}.\\n\\nThe current state is saved first as a local version, so you can undo the restore from this same history.",
+  "@verRestoreBody": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "verRestoreFailed": "Could not restore the version: {error}",
+  "@verRestoreFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "pptxFailed": "PowerPoint export error: {error}",
+  "@pptxFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "reminderCreated": "Reminder created for {date} at {time}",
+  "@reminderCreated": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "inkIndexed": "Handwriting indexed on {count, plural, =1{1 page} other{{count} pages}}: you can now search it",
+  "@inkIndexed": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inkFailed": "Could not recognize the handwriting: {error}",
+  "@inkFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "backupFailed": "Backup export error: {error}",
+  "@backupFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "importDoneOpen": "{message}. Open it from the library.",
+  "@importDoneOpen": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "noteHasPages": "The note has {count, plural, =1{1 page} other{{count} pages}}",
+  "@noteHasPages": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stickerInsertFailed": "Could not insert the sticker: {error}",
+  "@stickerInsertFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "remNoNotebooks": "No notebooks to link",
+  "remPickNotebook": "Select notebook",
+  "remPickHint": "The reminder will open this notebook",
+  "remCreated": "Reminder created",
+  "remMessageTitle": "Reminder message",
+  "remMessageHint": "E.g. Review class notes",
+  "remNoMessage": "No message",
+  "remTitle": "Reminders",
+  "remSubtitle": "Alerts linked to your notebooks",
+  "remEmptyTitle": "No reminders",
+  "remPending": "Pending",
+  "remDone": "Completed",
+  "statsTitle": "Statistics",
+  "statsSubtitle": "Your writing activity on this device",
+  "statsEmptyTitle": "No data yet",
+  "statsStrokes": "Strokes",
+  "statsMinutes": "Minutes",
+  "statsActiveDays": "Active days",
+  "statsStreaks": "Streaks",
+  "statsCurrentStreak": "Current streak",
+  "statsRecord": "Record",
+  "statsActivity": "Activity — last 30 days",
+  "statsDaysWithPages": "Days with new pages",
+  "smartTitle": "Smart folders",
+  "smartSubtitle": "Organize your notebooks automatically",
+  "smartByColor": "By color",
+  "smartByTag": "By tag",
+  "onbSkip": "Skip",
+  "onbStart": "Get started",
+  "onb1Title": "Write with your pen",
+  "onb2Title": "Move with your fingers",
+  "onb3Title": "Tools on top",
+  "onb4Title": "Your notes are yours",
+  "layerAdd": "Add layer",
+  "layerRename": "Rename layer",
+  "verSubtitle": "When restoring, the current state is saved first",
+  "verOnDevice": "On this device",
+  "verNoLocal": "There are no local copies of this note yet.",
+  "verOnDrive": "On Google Drive",
+  "verNotUploaded": "This note has not been uploaded to Drive yet.",
+  "smartThisWeek": "This week",
+  "smartNoTags": "No tags",
+  "smartOther": "Other",
+  "colorNone": "No color",
+  "colorBlue": "Blue",
+  "colorGreen": "Green",
+  "colorRed": "Red",
+  "colorOrange": "Orange",
+  "colorPurple": "Purple",
+  "colorPink": "Pink",
+  "colorTurquoise": "Turquoise",
+  "colorGray": "Gray",
+  "onb1Body": "Rest your hand without worry: Inklus recognizes the pen and ignores your palm. The pen's eraser end or side button erases.",
+  "onb2Body": "With the pen, one finger scrolls the page and two fingers zoom. You can go back to drawing with your finger from the toolbar.",
+  "onb3Body": "Tap a tool to use it and tap it again to see its options: thickness, color, partial eraser, shapes…",
+  "onb4Body": "Everything is saved on this device, with no accounts or ads. If you want, you can back up to your Google Drive.",
+  "remEmptyBody": "Create reminders linked to your notebooks so you never forget anything.",
+  "statsEmptyBody": "Start writing in your notebooks and your statistics will appear here.",
+  "remOverdue": " · overdue",
+  "statsDays": "{count, plural, =1{1 day} other{{count} days}}",
+  "@statsDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statsDayTooltip": "{date}: {strokes} strokes, {pages} pages",
+  "@statsDayTooltip": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "strokes": {
+        "type": "int"
+      },
+      "pages": {
+        "type": "int"
+      }
+    }
+  },
+  "searchInNote": "Search in this note",
+  "searchInAll": "Search in all notes",
+  "searchPrompt": "Type to search",
+  "searchMatches": "{count, plural, =1{1 match} other{{count} matches}}",
+  "@searchMatches": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchInfo": "Includes text boxes and handwriting that has already been recognized (Note menu → Index handwriting).",
+  "searchTitleMatch": "Title",
+  "pgDuplicate": "Duplicate page",
+  "pgDelete": "Delete page",
+  "verDriveFailed": "Could not query Drive: {error}",
+  "@verDriveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "colorSemantics": "Color #{hex}",
+  "@colorSemantics": {
+    "placeholders": {
+      "hex": {
+        "type": "String"
+      }
+    }
+  },
+  "errNotInklus": "The file is not an .inklus notebook or an Inklus backup.",
+  "errNotInklusFile": "Not a valid .inklus notebook",
+  "errNotInklusV2": "Not a valid .inklus v2 notebook",
+  "errCatalogTooLarge": "Catalog is too large",
+  "errCatalogVersion": "Unsupported catalog version: {version}",
+  "@errCatalogVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "errOcrUnsupported": "OCR is only available on Android and iOS.",
+  "errNotSignedIn": "Sign in with Google first.",
+  "errEncrypted": "The copy is encrypted: a password is required",
+  "driveConfigBody": "Google configuration error (clientConfigurationError).\\n\\nLikely cause: this app's signing SHA-1 is not registered in Google Cloud Console for the package com.inklus.inklus.\\n\\nFix:\\n1. Go to Google Cloud Console → APIs & Services → Credentials\\n2. Create or edit the Android OAuth client ID with package com.inklus.inklus and your signing SHA-1\\n3. Enable Google Sign-In on the consent screen\\n\\nOriginal error: {details}",
+  "@driveConfigBody": {
+    "placeholders": {
+      "details": {
+        "type": "String"
+      }
+    }
+  },
+  "noticeStylus": "Pen detected: your finger now scrolls the page (turn it on in the toolbar if you want to draw with your finger)",
+  "noticePageDeleted": "Page deleted",
+  "noticeFileUploaded": "File uploaded to Google Drive",
+  "importBackupRestored": "Backup restored: {count, plural, =1{1 notebook} other{{count} notebooks}}",
+  "@importBackupRestored": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importNotebookDone": "Notebook \"{title}\" imported ({count, plural, =1{1 note} other{{count} notes}})",
+  "@importNotebookDone": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importNotebookSimple": "Notebook \"{title}\" imported",
+  "@importNotebookSimple": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "driveRestoreNone": "There are no Inklus copies in your Google Drive",
+  "driveRestoreUpToDate": "Everything is up to date: nothing to restore",
+  "driveRestoreUpdated": "{count, plural, =1{1 note updated} other{{count} notes updated}}",
+  "@driveRestoreUpdated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "driveRestoreAdded": "{count, plural, =1{1 recovered} other{{count} recovered}}",
+  "@driveRestoreAdded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "driveRecovered": "Recovered from Drive",
+  "packClassicName": "Classic notebooks",
+  "packClassicDesc": "Wide and narrow ruling, 5 mm grid, dots and staff.",
+  "packTechName": "Technical paper",
+  "packTechDesc": "Fine graph-paper grid and column planner, in soft tones.",
+  "packStudyName": "Study palette",
+  "packStudyDesc": "Blue and black ink, correction red, green and orange for emphasis.",
+  "packPastelName": "Pastel palette",
+  "packPastelDesc": "Soft tones for pretty notes and diagrams.",
+  "packEarthName": "Earth palette",
+  "packEarthDesc": "Ochres, olive and terracotta, with good contrast on paper.",
+  "coverSimple": "Gradient",
+  "coverClassic": "Classic",
+  "coverAurora": "Aurora",
+  "coverWaves": "Waves",
+  "coverGeometric": "Geometric",
+  "coverSun": "Sun",
+  "coverDots": "Dots",
+  "coverLines": "Lines",
+  "untitled": "Untitled",
+  "defaultNotebookTitle": "My notebook",
+  "createFromFile": "Or start from a file",
+  "createFromFileHint": "Upload a PDF or photos and write on top of each page.",
+  "createFromPdf": "From a PDF",
+  "createFromImages": "From images",
+  "createFromFileRemove": "Remove file",
+  "createFromFilePages": "{count, plural, =1{1 page} other{{count} pages}}",
+  "@createFromFilePages": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

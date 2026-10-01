@@ -48,6 +48,8 @@ import 'writing_stats_screen.dart';
 import '../services/marketplace/marketplace_service.dart';
 import 'marketplace_screen.dart';
 import '../services/app_paths.dart';
+import '../l10n/l10n.dart';
+import '../services/app_errors.dart';
 
 /// Editor de un cuaderno (pantalla principal de escritura).
 ///
@@ -72,6 +74,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+
+  /// Textos traducidos (atajo seguro tras `await`: el `context` del State vive mientras esté montado).
+  AppLocalizations get _l10n => context.l10n;
   final StorageService _storage = StorageService.instance;
   final ImageService _imageService = ImageService();
   final DriveSyncService _syncService = DriveSyncService.instance;
@@ -129,16 +134,16 @@ class _HomeScreenState extends State<HomeScreen> {
     // Replica automática a Drive en cada guardado local (solo si hay sesión
     // y el scope ya está autorizado; nunca muestra UI).
     // A8: ahora se sincroniza cada Note individualmente (no el Document).
-    _controller.onNotice = (msg) {
-      if (mounted) _snack(msg);
+    _controller.onNotice = (notice) {
+      if (mounted) _snack(_noticeText(notice));
     };
-    _controller.onUndoableNotice = (msg, undo) {
+    _controller.onUndoableNotice = (notice, undo) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
-          content: Text(msg),
-          action: SnackBarAction(label: 'Deshacer', onPressed: undo),
+          content: Text(_noticeText(notice)),
+          action: SnackBarAction(label: context.l10n.tbUndo, onPressed: undo),
         ));
     };
     _controller.onLayerBlocked = () {
@@ -146,8 +151,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
-            const SnackBar(
-              content: Text('Capa bloqueada — desbloquea para editar'),
+            SnackBar(
+              content: Text(context.l10n.edLayerLocked),
               duration: Duration(milliseconds: 1500),
             ),
           );
@@ -184,9 +189,18 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _remoteSyncPending = false;
   late final Listenable _topBarListenable;
 
-  void _onSyncComplete(String msg) {
-    if (mounted) _snack(msg);
+  void _onSyncComplete(SyncNotice notice) {
+    if (!mounted) return;
+    _snack(switch (notice) {
+      SyncNotice.fileUploaded => _l10n.noticeFileUploaded,
+      SyncNotice.noteSynced => _l10n.edNoteSynced,
+    });
   }
+
+  String _noticeText(ControllerNotice notice) => switch (notice) {
+        ControllerNotice.stylusDetected => _l10n.noticeStylus,
+        ControllerNotice.pageDeleted => _l10n.noticePageDeleted,
+      };
 
   /// Sube la nota a Drive si hay sesión y el cuaderno tiene sync activa.
   /// Silencioso: el guardado local ya protege los datos.
@@ -201,7 +215,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final metas = await _storage.loadIndex();
       final meta = metas.where((m) => m.id == widget.notebookId).firstOrNull;
       if (meta != null && !meta.isSyncEnabled) return;
-      await _syncService.backupNote(_controller.note);
+      await _syncService.backupNote(
+        _controller.note,
+        notebookId: widget.notebookId,
+        notebookTitle: meta?.title,
+      );
     } catch (e) {
       debugPrint('HomeScreen: sync automático falló: $e');
     }
@@ -248,7 +266,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       _c.setTool(ToolType.select);
     } catch (e) {
-      _snack('No se pudo insertar la imagen: $e');
+      _snack(_l10n.edInsertImageFailed('$e'));
     }
   }
 
@@ -294,7 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Opciones de exportación'),
+          title: Text(context.l10n.expTitle),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -302,11 +320,11 @@ class _HomeScreenState extends State<HomeScreen> {
               DropdownButton<int>(
                 value: maxDimension,
                 isExpanded: true,
-                items: const [
-                  DropdownMenuItem(value: 1024, child: Text('Baja (1024 px)')),
-                  DropdownMenuItem(value: 2048, child: Text('Media (2048 px)')),
-                  DropdownMenuItem(value: 4096, child: Text('Alta (4096 px)')),
-                  DropdownMenuItem(value: 8192, child: Text('Máxima (8192 px)')),
+                items: [
+                  DropdownMenuItem(value: 1024, child: Text(context.l10n.expLow)),
+                  DropdownMenuItem(value: 2048, child: Text(context.l10n.expMedium)),
+                  DropdownMenuItem(value: 4096, child: Text(context.l10n.expHigh)),
+                  DropdownMenuItem(value: 8192, child: Text(context.l10n.expMax)),
                 ],
                 onChanged: (v) {
                   if (v != null) setDialogState(() => maxDimension = v);
@@ -315,8 +333,8 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 12),
               // Fondo transparente
               SwitchListTile(
-                title: const Text('Fondo transparente'),
-                subtitle: const Text('Sin plantilla ni papel'),
+                title: Text(context.l10n.expTransparent),
+                subtitle: Text(context.l10n.expTransparentHint),
                 value: transparentBg,
                 onChanged: (v) =>
                     setDialogState(() => transparentBg = v),
@@ -326,8 +344,8 @@ class _HomeScreenState extends State<HomeScreen> {
               // Solo trazos
               if (showStrokesOnly)
                 SwitchListTile(
-                  title: const Text('Solo trazos'),
-                  subtitle: const Text('Sin imágenes ni plantilla'),
+                  title: Text(context.l10n.expStrokesOnly),
+                  subtitle: Text(context.l10n.expStrokesOnlyHint),
                   value: strokesOnly,
                   onChanged: (v) =>
                       setDialogState(() => strokesOnly = v),
@@ -339,7 +357,7 @@ class _HomeScreenState extends State<HomeScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
+              child: Text(context.l10n.commonCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(
@@ -350,7 +368,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   strokesOnly: strokesOnly,
                 ),
               ),
-              child: const Text('Exportar'),
+              child: Text(context.l10n.expExport),
             ),
           ],
         ),
@@ -417,7 +435,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final name = 'inklus_pagina_${_c.pageIndex + 1}.svg';
       await _saveBytes(bytes, name);
     } catch (e) {
-      _snack('Error al exportar SVG: $e');
+      _snack(_l10n.expSvgFailed('$e'));
     }
   }
 
@@ -427,13 +445,13 @@ class _HomeScreenState extends State<HomeScreen> {
   /// principal, con fallback a bitmap si no hay trazos.
   Future<void> _recognizeText() async {
     if (!OcrService.isSupported) {
-      _snack('OCR solo está disponible en Android e iOS');
+      _snack(context.l10n.ocrUnsupported);
       return;
     }
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(
+      builder: (_) => Center(
         child: Card(
           child: Padding(
             padding: EdgeInsets.all(Spacing.xl),
@@ -442,7 +460,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 CircularProgressIndicator(),
                 SizedBox(height: Spacing.lg),
-                Text('Reconociendo texto…'),
+                Text(context.l10n.ocrWorking),
               ],
             ),
           ),
@@ -459,7 +477,7 @@ class _HomeScreenState extends State<HomeScreen> {
       Navigator.of(context, rootNavigator: true).pop();
 
       if (result.isEmpty) {
-        _snack('No se reconoció texto en esta página');
+        _snack(context.l10n.ocrNoText);
         return;
       }
       // Lo reconocido queda buscable.
@@ -469,7 +487,7 @@ class _HomeScreenState extends State<HomeScreen> {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Texto reconocido'),
+          title: Text(context.l10n.ocrResultTitle),
           content: SingleChildScrollView(
             child: SelectableText(
               result.text,
@@ -479,15 +497,15 @@ class _HomeScreenState extends State<HomeScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar'),
+              child: Text(context.l10n.commonClose),
             ),
             FilledButton(
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: result.text));
                 Navigator.pop(context);
-                _snack('Texto copiado al portapapeles');
+                _snack(context.l10n.ocrCopied);
               },
-              child: const Text('Copiar'),
+              child: Text(context.l10n.selCopy),
             ),
           ],
         ),
@@ -495,7 +513,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
-      _snack('Error al reconocer texto: $e');
+      _snack(_l10n.ocrFailed('$e'));
     }
   }
 
@@ -525,7 +543,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       await _saveBytes(bytes, fileName);
     } catch (e) {
-      _snack('Error al exportar: $e');
+      _snack(_l10n.expFailed('$e'));
     }
   }
 
@@ -534,18 +552,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Previsualización: $fileName'),
+        title: Text(_l10n.expPreview(fileName)),
         content: SingleChildScrollView(
           child: Image.memory(bytes, fit: BoxFit.contain),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Guardar'),
+            child: Text(context.l10n.commonSave),
           ),
         ],
       ),
@@ -555,12 +573,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _saveBytes(Uint8List bytes, String fileName) async {
     try {
       final saved = await FilePicker.saveFile(
-        dialogTitle: 'Guardar $fileName',
+        dialogTitle: _l10n.expSaveDialog(fileName),
         fileName: fileName,
         bytes: bytes,
       );
       if (saved != null) {
-        _snack('Exportado: ${saved.path}');
+        _snack(_l10n.expDone(saved.path));
       }
     } catch (_) {
       // Fallback: carpeta de datos de la app.
@@ -569,9 +587,9 @@ class _HomeScreenState extends State<HomeScreen> {
         await folder.create(recursive: true);
         final file = File('${folder.path}/$fileName');
         await file.writeAsBytes(bytes);
-        _snack('Exportado: ${file.path}');
+        _snack(_l10n.expDone(file.path));
       } catch (e) {
-        _snack('No se pudo guardar el archivo: $e');
+        _snack(_l10n.expSaveFailed('$e'));
       }
     }
   }
@@ -590,9 +608,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/inklus_pagina_${_c.pageIndex + 1}.png');
       await file.writeAsBytes(bytes);
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Página de Inklus'));
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: _l10n.shareTextPage));
     } catch (e) {
-      _snack('Error al compartir: $e');
+      _snack(_l10n.shareFailed('$e'));
     }
   }
 
@@ -606,9 +624,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/inklus_pagina_${_c.pageIndex + 1}.pdf');
       await file.writeAsBytes(bytes);
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Página de Inklus'));
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: _l10n.shareTextPage));
     } catch (e) {
-      _snack('Error al compartir: $e');
+      _snack(_l10n.shareFailed('$e'));
     }
   }
 
@@ -619,9 +637,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final name = '${_safeName(_c.note.title)}.inklus';
       final file = File('${dir.path}/$name');
       await file.writeAsBytes(bytes);
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Cuaderno de Inklus'));
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: _l10n.shareTextNotebook));
     } catch (e) {
-      _snack('Error al compartir: $e');
+      _snack(_l10n.shareFailed('$e'));
     }
   }
 
@@ -646,49 +664,49 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.account_circle),
-              title: Text(_syncService.email ?? 'Cuenta Google'),
-              subtitle: const Text('Sincronizado con la nube'),
+              title: Text(_syncService.email ?? context.l10n.edGoogleAccount),
+              subtitle: Text(context.l10n.edSyncedCloud),
               dense: true,
             ),
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.cloud_upload_outlined),
-              title: const Text('Subir ahora'),
+              title: Text(context.l10n.driveUploadNow),
               onTap: () => Navigator.pop(context, 'upload'),
             ),
             ListTile(
               leading: const Icon(Icons.cloud_download_outlined),
-              title: const Text('Restaurar desde la nube'),
-              subtitle: const Text('Última versión (last-write-wins)'),
+              title: Text(context.l10n.edRestoreCloud),
+              subtitle: Text(context.l10n.edRestoreCloudHint),
               onTap: () => Navigator.pop(context, 'restore'),
             ),
             ListTile(
               leading: const Icon(Icons.history),
-              title: const Text('Ver versiones en Drive'),
+              title: Text(context.l10n.edDriveVersions),
               onTap: () => Navigator.pop(context, 'versions'),
             ),
             ListTile(
               leading: const Icon(Icons.upload_file),
-              title: const Text('Subir archivo .inklus'),
+              title: Text(context.l10n.edUploadInklus),
               onTap: () => Navigator.pop(context, 'uploadFile'),
             ),
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.sync),
               title: Text(_syncEnabledForCurrent
-                  ? 'Sync: activada para este cuaderno'
-                  : 'Sync: desactivada para este cuaderno'),
+                  ? context.l10n.edSyncOnForNotebook
+                  : context.l10n.edSyncOffForNotebook),
               onTap: () => Navigator.pop(context, 'toggleSync'),
             ),
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.switch_account),
-              title: const Text('Cambiar de cuenta'),
+              title: Text(context.l10n.driveSwitchAccount),
               onTap: () => Navigator.pop(context, 'switchAccount'),
             ),
             ListTile(
               leading: const Icon(Icons.logout),
-              title: const Text('Cerrar sesión'),
+              title: Text(context.l10n.driveSignOut),
               onTap: () => Navigator.pop(context, 'signout'),
             ),
           ],
@@ -711,7 +729,7 @@ class _HomeScreenState extends State<HomeScreen> {
         await _switchAccount();
       case 'signout':
         await _syncService.signOut();
-        if (mounted) _snack('Sesión cerrada');
+        if (mounted) _snack(context.l10n.driveSignedOut);
     }
   }
 
@@ -733,8 +751,8 @@ class _HomeScreenState extends State<HomeScreen> {
     await _loadSyncEnabled();
     if (mounted) {
       _snack(currentEnabled
-          ? 'Sync desactivada para este cuaderno'
-          : 'Sync activada para este cuaderno');
+          ? context.l10n.edSyncDisabledMsg
+          : context.l10n.edSyncEnabledMsg);
     }
   }
 
@@ -742,8 +760,13 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _syncing = true);
     try {
       final ok = await _syncService.signIn();
-      if (!ok) return;
-      if (mounted) _snack('Conectado como ${_syncService.email}');
+      if (!ok) {
+        if (mounted) {
+          _snack(_l10n.edSignInIncomplete(_syncService.lastSignInIssue ?? '—'));
+        }
+        return;
+      }
+      if (mounted) _snack(_l10n.driveConnectedAs(_syncService.email ?? ''));
       await _backupNow();
     } catch (e) {
       if (mounted) _snack('$e');
@@ -756,13 +779,17 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _syncing = true);
     try {
       // A8: backup individual por Note (no el Document completo).
+      final metas = await _storage.loadIndex();
+      final meta = metas.where((m) => m.id == widget.notebookId).firstOrNull;
       await _syncService.backupNote(
         _c.note,
+        notebookId: widget.notebookId,
+        notebookTitle: meta?.title,
         promptForConsent: true,
       );
-      if (mounted) _snack('Nota sincronizada con Google Drive');
+      if (mounted) _snack(context.l10n.edNoteSynced);
     } catch (e) {
-      if (mounted) _snack('Error al subir: $e');
+      if (mounted) _snack(_l10n.uploadFailed('$e'));
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
@@ -773,8 +800,8 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       // Pedir contraseña si el usuario quiere descifrar.
       final password = await _promptPassword(
-        titulo: 'Restaurar desde Drive',
-        hint: 'Contraseña (dejar vacío si no está cifrado)',
+        titulo: context.l10n.driveRestore,
+        hint: context.l10n.edPasswordHint,
       );
       // A8: restore individual por Note (no el Document completo).
       final restored = await _syncService.restoreNote(
@@ -783,15 +810,15 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       if (!mounted) return;
       if (restored == null) {
-        _snack('Todavía no hay ninguna copia de esta nota en Google Drive');
+        _snack(context.l10n.edNoCloudCopy);
       } else {
         _c.replaceNote(restored, notebookId: widget.notebookId);
         // Persistir la nota restaurada en disco local.
         await _storage.saveNote(widget.notebookId, restored, touch: false);
-        _snack('Nota restaurada desde Google Drive');
+        _snack(_l10n.edNoteRestored);
       }
     } catch (e) {
-      if (mounted) _snack('Error al restaurar: $e');
+      if (mounted) _snack(_l10n.restoreFailed('$e'));
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
@@ -804,16 +831,16 @@ class _HomeScreenState extends State<HomeScreen> {
       if (file == null) return;
       final bytes = await file.xFile.readAsBytes();
       if (await ImportService.detect(bytes) == ImportKind.fullBackup) {
-        _snack('Ese archivo es un respaldo completo, no un cuaderno .inklus');
+        _snack(_l10n.edIsFullBackup);
         return;
       }
       // Android puede haberlo renombrado a .zip: en Drive siempre .inklus.
       final name = file.name.replaceFirst(RegExp(r'(\.inklus)?\.zip$'), '.inklus');
       setState(() => _syncing = true);
       await _syncService.uploadInklusFile(bytes, name, promptForConsent: true);
-      if (mounted) _snack('Archivo "$name" subido a Google Drive');
+      if (mounted) _snack(_l10n.edFileUploaded(name));
     } catch (e) {
-      if (mounted) _snack('Error al subir: $e');
+      if (mounted) _snack(_l10n.uploadFailed('$e'));
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
@@ -824,7 +851,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final ok = await _syncService.switchAccount();
       if (ok && mounted) {
-        _snack('Conectado como ${_syncService.email}');
+        _snack(_l10n.driveConnectedAs(_syncService.email ?? ''));
       }
     } catch (e) {
       if (mounted) _snack('$e');
@@ -843,7 +870,7 @@ class _HomeScreenState extends State<HomeScreen> {
       title: titulo,
       hint: hint,
       obscure: true,
-      secondaryLabel: 'Sin contraseña',
+      secondaryLabel: context.l10n.edNoPassword,
       secondaryValue: '',
     );
   }
@@ -851,10 +878,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _editTitle() async {
     final result = await showTextPrompt(
       context,
-      title: 'Título del cuaderno',
-      hint: 'Nombre',
+      title: context.l10n.edNotebookTitle,
+      hint: context.l10n.createName,
       initialValue: _c.note.title,
-      confirmLabel: 'Guardar',
+      confirmLabel: context.l10n.commonSave,
     );
     if (result != null && result.trim().isNotEmpty) {
       _c.setTitle(result.trim());
@@ -947,7 +974,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// con el PDF de fondo), como en GoodNotes/Notability.
   Future<void> _importPdfAsBackground() async {
     if (!PdfImportService.isSupported) {
-      _snack('Importar PDF por ahora solo está disponible en Android/iOS');
+      _snack(context.l10n.pdfUnsupported);
       return;
     }
     try {
@@ -966,14 +993,14 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       if (!mounted) return;
       if (pages.isEmpty) {
-        _snack('No se pudo leer el PDF');
+        _snack(context.l10n.pdfReadFailed);
         return;
       }
       _c.insertPdfPages(pages);
       _c.fitView(_c.viewportSize);
-      _snack('PDF importado: ${pages.length} página(s) para anotar');
+      _snack(_l10n.pdfImported(pages.length));
     } catch (e) {
-      _snack('Error al importar PDF: $e');
+      _snack(_l10n.pdfImportFailed('$e'));
     }
   }
 
@@ -997,11 +1024,9 @@ class _HomeScreenState extends State<HomeScreen> {
     };
     final ok = await showConfirmDialog(
       context,
-      title: 'Restaurar versión',
-      message: 'La nota volverá a como estaba el ${formatVersionDate(date)}.\n\n'
-          'El estado actual se guarda antes como una versión local, así que '
-          'puedes deshacer la restauración desde este mismo historial.',
-      confirmLabel: 'Restaurar',
+      title: context.l10n.verRestoreTitle,
+      message: _l10n.verRestoreBody(formatVersionDate(date)),
+      confirmLabel: context.l10n.commonRestore,
     );
     if (!ok || !mounted) return;
     try {
@@ -1016,9 +1041,9 @@ class _HomeScreenState extends State<HomeScreen> {
       if (restored == null || !mounted) return;
       _c.replaceNote(restored, notebookId: widget.notebookId);
       await _controller.flush();
-      _snack('Versión restaurada');
+      _snack(_l10n.verRestored);
     } catch (e) {
-      if (mounted) _snack('No se pudo restaurar la versión: $e');
+      if (mounted) _snack(_l10n.verRestoreFailed('$e'));
     }
   }
 
@@ -1031,10 +1056,10 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return null;
       final password = await showTextPrompt(
         context,
-        title: 'Copia cifrada',
-        hint: 'Contraseña de la copia',
+        title: context.l10n.verEncrypted,
+        hint: context.l10n.verPasswordHint,
         obscure: true,
-        confirmLabel: 'Descifrar',
+        confirmLabel: context.l10n.verDecrypt,
       );
       if (password == null || password.isEmpty) return null;
       return _syncService.downloadRevision(r, password: password);
@@ -1055,7 +1080,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       await _saveBytes(bytes, '${_safeName(_c.note.title)}.pptx');
     } catch (e) {
-      _snack('Error al exportar PowerPoint: $e');
+      _snack(_l10n.pptxFailed('$e'));
     }
   }
 
@@ -1085,7 +1110,7 @@ class _HomeScreenState extends State<HomeScreen> {
       documentTitle: _c.note.title,
       dateTime: dateTime,
     );
-    _snack('Recordatorio creado para ${date.day}/${date.month} a las ${time.hour}:${time.minute.toString().padLeft(2, '0')}');
+    _snack(_l10n.reminderCreated('${date.day}/${date.month}', '${time.hour}:${time.minute.toString().padLeft(2, '0')}'));
   }
 
   // --- Estadísticas ---
@@ -1118,7 +1143,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// de búsqueda (Android/iOS, ML Kit en el dispositivo).
   Future<void> _indexHandwriting() async {
     if (!OcrService.isSupported) {
-      _snack('Reconocer escritura solo está disponible en Android e iOS');
+      _snack(context.l10n.inkUnsupported);
       return;
     }
     try {
@@ -1136,9 +1161,9 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         return n;
       });
-      _snack('Escritura indexada en $count página(s): ya puedes buscarla');
+      _snack(_l10n.inkIndexed(count));
     } catch (e) {
-      _snack('No se pudo reconocer la escritura: $e');
+      _snack(_l10n.inkFailed('$e'));
     }
   }
 
@@ -1153,7 +1178,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       await _saveBytes(bytes, 'inklus_respaldo_completo.zip');
     } catch (e) {
-      _snack('Error al exportar respaldo: $e');
+      _snack(_l10n.backupFailed('$e'));
     }
   }
 
@@ -1166,10 +1191,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final result =
           await runWithLoading(context, () => ImportService.importBytes(bytes));
       if (!mounted) return;
-      _snack('${result.message}. Ábrelo desde la biblioteca.');
+      _snack(_l10n.importDoneOpen(result.message(_l10n)));
     } catch (e) {
       if (mounted) {
-        _snack(e is FormatException ? e.message : 'Error al importar: $e');
+        _snack(e is FormatException ? userError(_l10n, e) : _l10n.libImportError('$e'));
       }
     }
   }
@@ -1279,7 +1304,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 right: Spacing.md,
                                 child: FloatingActionButton.small(
                                   heroTag: 'deleteImage',
-                                  tooltip: 'Eliminar imagen',
+                                  tooltip: context.l10n.edDeleteImage,
                                   backgroundColor: context.colors.errorContainer,
                                   foregroundColor: context.colors.onErrorContainer,
                                   onPressed: _deleteSelectedImage,
@@ -1311,7 +1336,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: Row(
                                   children: [
                                     IconButton.filledTonal(
-                                      tooltip: 'Salir de presentación',
+                                      tooltip: context.l10n.edExitPresent,
                                       onPressed: controller.togglePresentationMode,
                                       icon: const Icon(Icons.fullscreen_exit),
                                     ),
@@ -1320,7 +1345,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       listenable: controller,
                                       selector: (c) => c.laserMode,
                                       builder: (context, on) => IconButton.filledTonal(
-                                        tooltip: on ? 'Desactivar láser' : 'Puntero láser',
+                                        tooltip: on ? context.l10n.edLaserOff : context.l10n.tbLaser,
                                         isSelected: on,
                                         onPressed: controller.toggleLaser,
                                         icon: const Icon(Icons.flashlight_on),
@@ -1362,15 +1387,15 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _goToPageDialog() async {
     final value = await showTextPrompt(
       context,
-      title: 'Ir a página',
+      title: context.l10n.edGoToPage,
       hint: '1 – ${_c.pageCount}',
-      confirmLabel: 'Ir',
+      confirmLabel: context.l10n.edGo,
       keyboardType: TextInputType.number,
     );
     final n = int.tryParse(value?.trim() ?? '');
     if (n == null) return;
     if (n < 1 || n > _c.pageCount) {
-      _snack('La nota tiene ${_c.pageCount} página(s)');
+      _snack(_l10n.noteHasPages(_c.pageCount));
       return;
     }
     _c.goToPage(n - 1);
@@ -1391,11 +1416,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     const Icon(Icons.emoji_emotions_outlined, size: 48),
                     const SizedBox(height: Spacing.md),
-                    const Text('Aún no tienes stickers instalados.'),
+                    Text(context.l10n.edNoStickers),
                     const SizedBox(height: Spacing.md),
                     FilledButton.icon(
                       icon: const Icon(Icons.storefront_outlined),
-                      label: const Text('Abrir el marketplace'),
+                      label: Text(context.l10n.edOpenMarket),
                       onPressed: () {
                         Navigator.pop(context);
                         Navigator.of(context).push(
@@ -1447,7 +1472,7 @@ class _HomeScreenState extends State<HomeScreen> {
         height: h * fit / _c.scale,
       ));
     } catch (e) {
-      _snack('No se pudo insertar el sticker: $e');
+      _snack(_l10n.stickerInsertFailed('$e'));
     }
   }
 
@@ -1472,15 +1497,15 @@ class _HomeScreenState extends State<HomeScreen> {
         final status = _syncService.statusFor(controller.note.id);
         final scheme = context.colors;
         final (IconData icon, Color? color, String tooltip) = _syncing
-            ? (Icons.sync, null, 'Sincronizando…')
+            ? (Icons.sync, null, context.l10n.edSyncing)
             : !_syncService.isSignedIn
-                ? (Icons.cloud_upload_outlined, null, 'Sincronizar con Google Drive')
+                ? (Icons.cloud_upload_outlined, null, context.l10n.edSyncToDrive)
                 : switch (status) {
-                    SyncStatus.synced => (Icons.cloud_done, scheme.primary, 'Sincronizado'),
-                    SyncStatus.syncing => (Icons.sync, null, 'Sincronizando…'),
-                    SyncStatus.error => (Icons.cloud_off, scheme.error, 'Error de sincronización'),
-                    SyncStatus.disabled => (Icons.cloud_queue, scheme.outline, 'Sync desactivada para este cuaderno'),
-                    SyncStatus.pending => (Icons.cloud_upload_outlined, null, 'Sincronizar con Google Drive'),
+                    SyncStatus.synced => (Icons.cloud_done, scheme.primary, context.l10n.edSynced),
+                    SyncStatus.syncing => (Icons.sync, null, context.l10n.edSyncing),
+                    SyncStatus.error => (Icons.cloud_off, scheme.error, context.l10n.edSyncError),
+                    SyncStatus.disabled => (Icons.cloud_queue, scheme.outline, context.l10n.edSyncDisabledMsg),
+                    SyncStatus.pending => (Icons.cloud_upload_outlined, null, context.l10n.edSyncToDrive),
                   };
         return IconButton(
           tooltip: tooltip,
@@ -1509,18 +1534,18 @@ class _HomeScreenState extends State<HomeScreen> {
         SubmenuButton(
           leadingIcon: const Icon(Icons.ios_share),
           menuChildren: [
-            item('png', Icons.image_outlined, 'Página como imagen (PNG)'),
-            item('pdf', Icons.picture_as_pdf_outlined, 'Página como PDF'),
-            item('pdfAll', Icons.menu_book_outlined, 'Nota completa (PDF)'),
-            item('svg', Icons.code_outlined, 'Trazos (SVG)'),
-            item('pptx', Icons.slideshow_outlined, 'Presentación (PowerPoint)'),
-            item('inklus', Icons.save_alt, 'Copia .inklus'),
+            item('png', Icons.image_outlined, context.l10n.menuPagePng),
+            item('pdf', Icons.picture_as_pdf_outlined, context.l10n.menuPagePdf),
+            item('pdfAll', Icons.menu_book_outlined, context.l10n.menuNotePdf),
+            item('svg', Icons.code_outlined, context.l10n.menuStrokesSvg),
+            item('pptx', Icons.slideshow_outlined, context.l10n.menuPptx),
+            item('inklus', Icons.save_alt, context.l10n.menuInklusCopy),
             const Divider(),
-            item('sharePng', Icons.share_outlined, 'Compartir imagen'),
-            item('sharePdf', Icons.share_outlined, 'Compartir PDF'),
-            item('shareInklus', Icons.share_outlined, 'Compartir .inklus'),
+            item('sharePng', Icons.share_outlined, context.l10n.menuShareImage),
+            item('sharePdf', Icons.share_outlined, context.l10n.menuSharePdf),
+            item('shareInklus', Icons.share_outlined, context.l10n.menuShareInklus),
           ],
-          child: const Text('Exportar y compartir'),
+          child: Text(context.l10n.menuExportShare),
         ),
         SubmenuButton(
           leadingIcon: const Icon(Icons.description_outlined),
@@ -1528,70 +1553,70 @@ class _HomeScreenState extends State<HomeScreen> {
             MenuItemButton(
               leadingIcon: const Icon(Icons.dashboard_customize_outlined),
               onPressed: _openTemplates,
-              child: const Text('Plantilla…'),
+              child: Text(context.l10n.menuTemplate),
             ),
             MenuItemButton(
               leadingIcon: Icon(_c.page.bookmarked ? Icons.bookmark_remove : Icons.bookmark_add_outlined),
               shortcut: const SingleActivator(LogicalKeyboardKey.keyB, control: true),
               onPressed: _c.toggleBookmark,
-              child: Text(_c.page.bookmarked ? 'Quitar marcador' : 'Marcar página'),
+              child: Text(_c.page.bookmarked ? context.l10n.pgUnbookmark : context.l10n.pgBookmark),
             ),
             MenuItemButton(
               leadingIcon: const Icon(Icons.format_list_numbered),
               shortcut: const SingleActivator(LogicalKeyboardKey.keyG, control: true),
               onPressed: _goToPageDialog,
-              child: const Text('Ir a página…'),
+              child: Text(context.l10n.menuGoToPage),
             ),
-            item('importPdf', Icons.picture_as_pdf_outlined, 'Importar PDF para anotar'),
-            item('clear', Icons.cleaning_services_outlined, 'Limpiar página'),
+            item('importPdf', Icons.picture_as_pdf_outlined, context.l10n.menuImportPdf),
+            item('clear', Icons.cleaning_services_outlined, context.l10n.menuClearPage),
           ],
-          child: const Text('Página'),
+          child: Text(context.l10n.menuPage),
         ),
         SubmenuButton(
           leadingIcon: const Icon(Icons.sticky_note_2_outlined),
           menuChildren: [
-            item('searchContent', Icons.search, 'Buscar en la nota'),
+            item('searchContent', Icons.search, context.l10n.menuSearchNote),
             item('indexInk', Icons.manage_search,
-                OcrService.isSupported ? 'Indexar escritura (para buscarla)' : 'Indexar escritura (solo Android/iOS)',
+                OcrService.isSupported ? context.l10n.menuIndexInk : context.l10n.menuIndexInkUnsupported,
                 enabled: OcrService.isSupported),
             item('ocr', Icons.text_snippet_outlined,
-                OcrService.isSupported ? 'Reconocer texto (OCR)' : 'OCR (solo Android/iOS)',
+                OcrService.isSupported ? context.l10n.menuOcr : context.l10n.menuOcrUnsupported,
                 enabled: OcrService.isSupported),
-            item('versions', Icons.history, 'Historial de versiones'),
-            item('reminder', Icons.alarm_add_outlined, 'Crear recordatorio'),
+            item('versions', Icons.history, context.l10n.menuVersions),
+            item('reminder', Icons.alarm_add_outlined, context.l10n.menuReminder),
           ],
-          child: const Text('Nota'),
+          child: Text(context.l10n.trashNote),
         ),
         SubmenuButton(
           leadingIcon: const Icon(Icons.visibility_outlined),
           menuChildren: [
             item('nightMode', _nightMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                _nightMode ? 'Desactivar modo nocturno' : 'Modo nocturno de escritura'),
-            item('present', Icons.fullscreen, 'Modo presentación'),
+                _nightMode ? context.l10n.menuNightOff : context.l10n.menuNightOn),
+            item('present', Icons.fullscreen, context.l10n.menuPresent),
             item('haptics', _c.hapticEnabled ? Icons.vibration : Icons.mobile_off,
-                _c.hapticEnabled ? 'Vibración al escribir: sí' : 'Vibración al escribir: no'),
+                _c.hapticEnabled ? context.l10n.menuHapticsOn : context.l10n.menuHapticsOff),
             CheckboxMenuButton(
               value: _c.continuousScroll,
               onChanged: (v) => _c.setContinuousScroll(v ?? true),
-              child: const Text('Desplazamiento continuo entre hojas'),
+              child: Text(context.l10n.menuContinuousScroll),
             ),
           ],
-          child: const Text('Ver'),
+          child: Text(context.l10n.menuView),
         ),
         SubmenuButton(
           leadingIcon: const Icon(Icons.backup_outlined),
           menuChildren: [
-            item('backup', Icons.backup_outlined, 'Exportar respaldo completo'),
-            item('restoreBackup', Icons.file_download_outlined, 'Importar .inklus o respaldo'),
+            item('backup', Icons.backup_outlined, context.l10n.menuBackup),
+            item('restoreBackup', Icons.file_download_outlined, context.l10n.menuRestoreBackup),
           ],
-          child: const Text('Datos'),
+          child: Text(context.l10n.menuData),
         ),
         const Divider(),
-        item('stats', Icons.analytics_outlined, 'Estadísticas de escritura'),
-        item('settings', Icons.settings_outlined, 'Configuración'),
+        item('stats', Icons.analytics_outlined, context.l10n.menuStats),
+        item('settings', Icons.settings_outlined, context.l10n.settingsTitle),
       ],
       builder: (context, menu, _) => IconButton(
-        tooltip: 'Más opciones',
+        tooltip: context.l10n.libMoreOptions,
         icon: const Icon(Icons.more_vert),
         onPressed: () => menu.isOpen ? menu.close() : menu.open(),
       ),
@@ -1618,18 +1643,18 @@ class _HomeScreenState extends State<HomeScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Limpiar página'),
-        content: const Text(
-          'Se borrará todo el contenido de la página. Puedes deshacerlo después.',
+        title: Text(context.l10n.menuClearPage),
+        content: Text(
+          context.l10n.clearPageBody,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Limpiar'),
+            child: Text(context.l10n.clearPageAction),
           ),
         ],
       ),
@@ -1662,12 +1687,12 @@ class _PageNavPill extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                tooltip: 'Página anterior',
+                tooltip: context.l10n.pgPrev,
                 icon: const Icon(Icons.chevron_left),
                 onPressed: index > 0 ? controller.previousPage : null,
               ),
               Tooltip(
-                message: 'Ir a página…',
+                message: context.l10n.menuGoToPage,
                 child: InkWell(
                   borderRadius: Radii.smAll,
                   onTap: onGoToPage,
@@ -1688,7 +1713,7 @@ class _PageNavPill extends StatelessWidget {
                 ),
               ),
               IconButton(
-                tooltip: 'Página siguiente',
+                tooltip: context.l10n.pgNext,
                 icon: const Icon(Icons.chevron_right),
                 onPressed: index < count - 1 ? controller.nextPage : null,
               ),
@@ -1720,12 +1745,12 @@ class _ZoomPill extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              tooltip: 'Alejar',
+              tooltip: context.l10n.zoomOut,
               icon: const Icon(Icons.remove),
               onPressed: () => controller.zoomAt(0.8, _center, controller.viewportSize),
             ),
             Tooltip(
-              message: 'Ajustar a la vista',
+              message: context.l10n.zoomFit,
               child: InkWell(
                 borderRadius: Radii.smAll,
                 onTap: () => controller.fitView(controller.viewportSize),
@@ -1736,7 +1761,7 @@ class _ZoomPill extends StatelessWidget {
               ),
             ),
             IconButton(
-              tooltip: 'Acercar',
+              tooltip: context.l10n.zoomIn,
               icon: const Icon(Icons.add),
               onPressed: () => controller.zoomAt(1.25, _center, controller.viewportSize),
             ),

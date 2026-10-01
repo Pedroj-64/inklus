@@ -622,7 +622,12 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
             widget.controller,
             onGoToPage: widget.onGoToPage,
           ),
-          child: Listener(
+          // El overlay de texto es HERMANO del Listener (no hijo): si no, los
+          // toques en su barra/campo llegarían también al lienzo.
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+          Listener(
           behavior: HitTestBehavior.opaque,
           onPointerDown: _onPointerDown,
           onPointerHover: _onPointerHover,
@@ -674,13 +679,14 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                       ),
                     ),
                   )),
-                  // Overlay de edición de texto.
-                  TextEditOverlay(controller: widget.controller),
                 ],
               ),  // Stack
             ),    // ClipRect
           ),      // GestureDetector
           ),      // Listener
+              ClipRect(child: TextEditOverlay(controller: widget.controller)),
+            ],
+          ),      // Stack
         );        // Focus + return
       },
     );
@@ -782,7 +788,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     }
     if (c.tool == ToolType.select) {
       _handleSelectDown(event.localPosition, world, event.pointer);
-    } else if (c.fingerDrawingEnabled) {
+    } else if (c.fingerDrawingEnabled || c.tool == ToolType.text) {
+      // (la herramienta de texto responde al dedo aunque sea "solo lápiz")
       _drawingPointer = event.pointer;
       c.beginStroke(world, event.pressure, tool: c.tool);
     }

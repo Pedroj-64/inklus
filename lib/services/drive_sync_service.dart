@@ -8,12 +8,16 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 
+import '../l10n/l10n.dart';
 import '../models/id.dart';
 import '../models/note.dart';
 import '../models/notebook.dart';
 import 'inklus_format.dart';
 import 'backup_crypto.dart';
 import 'storage_service.dart';
+
+/// Avisos de Drive que la UI traduce y muestra.
+enum SyncNotice { fileUploaded, noteSynced }
 
 /// Estados de sincronización de un cuaderno con Google Drive.
 enum SyncStatus {
@@ -54,7 +58,7 @@ class DriveRevision {
 class EncryptedBackupException implements Exception {
   const EncryptedBackupException();
   @override
-  String toString() => 'La copia está cifrada: hace falta la contraseña';
+  String toString() => 'EncryptedBackupException';
 }
 
 /// Sincronización con **Google Drive** (respaldo opcional).
@@ -110,7 +114,7 @@ class DriveSyncService extends ChangeNotifier {
   final Map<String, SyncStatus> _syncStatus = {};
 
   /// Callback notificado cuando termina un backup/restore (para toast).
-  void Function(String message)? onSyncComplete;
+  void Function(SyncNotice notice)? onSyncComplete;
 
   bool get isSignedIn => _account != null;
   String? get email => _account?.email;
@@ -122,12 +126,6 @@ class DriveSyncService extends ChangeNotifier {
   /// Estado de sincronización de un cuaderno.
   SyncStatus statusFor(String documentId) =>
       _syncStatus[documentId] ?? SyncStatus.pending;
-
-  /// Actualiza el estado de un cuaderno y notifica a los listeners.
-  void _setStatus(String documentId, SyncStatus status) {
-    _syncStatus[documentId] = status;
-    notifyListeners();
-  }
 
   // -------------------------------------------------------------------------
   // Sesión
@@ -153,33 +151,33 @@ class DriveSyncService extends ChangeNotifier {
     }
   }
 
+  /// Detalle técnico del último inicio de sesión que no terminó (código y
+  /// descripción de Google). Android informa como "cancelado" tanto el cierre
+  /// del selector como un cliente OAuth mal registrado (SHA-1 de la firma de
+  /// este APK que no está en Google Cloud): la UI lo muestra para distinguirlos.
+  String? lastSignInIssue;
+
   /// Inicia sesión interactiva. Devuelve false si el usuario canceló.
   Future<bool> signIn() async {
     GoogleSignInAccount account;
+    lastSignInIssue = null;
     try {
       await _ensureInitialized();
       account = await GoogleSignIn.instance.authenticate(
         scopeHint: const [_driveScope],
       );
     } on GoogleSignInException catch (e) {
-      if (e.code == GoogleSignInExceptionCode.canceled) return false;
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        lastSignInIssue = '${e.code.name}: ${e.description ?? 'sin descripción'}';
+        debugPrint('DriveSyncService.signIn: $lastSignInIssue');
+        return false;
+      }
       // clientConfigurationError: el OAuth client ID no coincide con
       // la SHA-1 del keystore o no está habilitado en Google Cloud.
       if (e.code ==
           // ignore: lines_longer_than_80_chars
           GoogleSignInExceptionCode.clientConfigurationError) {
-        throw GoogleConfigException(
-          'Error de configuración Google (clientConfigurationError).\n\n'
-          'Causa probable: la SHA-1 del keystore de firma no está registrada '
-          'en Google Cloud Console para el package com.inklus.inklus.\n\n'
-          'Solución:\n'
-          '1. Obtén la SHA-1: keytool -list -v -alias androiddebugkey \\\n' '             -keystore ~/.android/debug.keystore -storepass android\n'
-          '2. Ve a Google Cloud Console → APIs y servicios → Credenciales\n'
-          '3. Crea/edita el OAuth client ID Android con package '
-          'com.inklus.inklus y la SHA-1 obtenida\n'
-          '4. Habilita Google Sign-In en la pantalla de consentimiento\n\n'
-          'Error original: ${e.description}',
-        );
+        throw GoogleConfigException(e.description ?? '');
       }
       rethrow;
     }
@@ -276,7 +274,7 @@ class DriveSyncService extends ChangeNotifier {
     } finally {
       client.close();
     }
-    onSyncComplete?.call('Archivo subido a Google Drive');
+    onSyncComplete?.call(SyncNotice.fileUploaded);
   }
 
   /// Elimina un archivo de Drive por fileId.
@@ -306,8 +304,13 @@ class DriveSyncService extends ChangeNotifier {
   // Helpers Drive
   // -------------------------------------------------------------------------
 
-  /// Busca (o crea) la carpeta "Inklus" y devuelve su id.
+  /// Carpetas ya resueltas en esta sesión (evita una búsqueda por subida).
+  final Map<String, String> _folderIds = {};
+
+  /// Busca (o crea) la carpeta raíz "Inklus" y devuelve su id.
   Future<String> _ensureFolder(drive.DriveApi api) async {
+    final cached = _folderIds[_folderName];
+    if (cached != null) return cached;
     final existing = await api.files.list(
       q: "name = '$_folderName' and "
           "mimeType = '$_folderMimeType' and trashed = false",
@@ -315,12 +318,62 @@ class DriveSyncService extends ChangeNotifier {
     );
     final files = existing.files ?? [];
     if (files.isNotEmpty && files.first.id != null) {
-      return files.first.id!;
+      return _folderIds[_folderName] = files.first.id!;
     }
     final folder = await api.files.create(
       drive.File(name: _folderName, mimeType: _folderMimeType),
     );
-    return folder.id!;
+    return _folderIds[_folderName] = folder.id!;
+  }
+
+  /// Carpeta de un cuaderno dentro de "Inklus" (se identifica por su id, no
+  /// por el nombre: renombrar el cuaderno solo renombra la carpeta).
+  Future<String> _ensureNotebookFolder(
+    drive.DriveApi api,
+    String rootId,
+    String notebookId,
+    String title,
+  ) async {
+    final name = _cleanName(title, fallback: 'Cuaderno');
+    final cached = _folderIds['nb:$notebookId'];
+    if (cached != null && _folderTitles['nb:$notebookId'] == name) return cached;
+    final found = await api.files.list(
+      q: "'$rootId' in parents and mimeType = '$_folderMimeType' and "
+          "appProperties has { key='notebookId' and value='$notebookId' } "
+          "and trashed = false",
+      $fields: 'files(id,name)',
+    );
+    final hit = (found.files ?? const <drive.File>[]).firstOrNull;
+    String id;
+    if (hit?.id != null) {
+      id = hit!.id!;
+      if (hit.name != name) {
+        await api.files.update(drive.File(name: name), id);
+      }
+    } else {
+      final created = await api.files.create(drive.File(
+        name: name,
+        mimeType: _folderMimeType,
+        parents: [rootId],
+        appProperties: {'notebookId': notebookId},
+      ));
+      id = created.id!;
+    }
+    _folderTitles['nb:$notebookId'] = name;
+    return _folderIds['nb:$notebookId'] = id;
+  }
+
+  final Map<String, String> _folderTitles = {};
+
+  /// Nombre de archivo/carpeta apto para Drive (sin separadores ni
+  /// caracteres que algunos sistemas rechazan).
+  static String _cleanName(String raw, {required String fallback}) {
+    final cleaned = raw
+        .replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1f]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (cleaned.isEmpty) return fallback;
+    return cleaned.length > 80 ? cleaned.substring(0, 80).trim() : cleaned;
   }
 
   /// Busca un archivo por nombre dentro de la carpeta.
@@ -332,10 +385,28 @@ class DriveSyncService extends ChangeNotifier {
     final result = await api.files.list(
       q: "'$folderId' in parents and "
           "name = '$name' and trashed = false",
-      $fields: 'files(id)',
+      $fields: 'files(id,name,parents)',
     );
     final files = result.files ?? [];
     return files.isEmpty ? null : files.first;
+  }
+
+  /// Archivo de la nota en Drive: por su `appProperties.noteId` (esté en la
+  /// carpeta que esté) y, si no, por el nombre antiguo `<id>.inklus` en la
+  /// raíz (copias subidas por versiones anteriores).
+  Future<drive.File?> _findNoteFile(
+    drive.DriveApi api,
+    String rootId,
+    String noteId,
+  ) async {
+    final result = await api.files.list(
+      q: "appProperties has { key='noteId' and value='$noteId' } "
+          "and trashed = false",
+      $fields: 'files(id,name,parents)',
+    );
+    final hit = (result.files ?? const <drive.File>[]).firstOrNull;
+    if (hit != null) return hit;
+    return _findFile(api, rootId, '$noteId.inklus');
   }
 
   // -------------------------------------------------------------------------
@@ -345,18 +416,32 @@ class DriveSyncService extends ChangeNotifier {
   /// Sube un Note individual a Drive como archivo .inklus.
   ///
   /// Cada Note se sincroniza por separado para minimizar tráfico y conflictos.
+  /// Organización en Drive: `Inklus/<Cuaderno>/<Nota>.inklus`. Si se pasa
+  /// [notebookId], el estado ☁️ de ese cuaderno sigue a esta subida.
   Future<void> backupNote(
     Note note, {
+    String? notebookId,
+    String? notebookTitle,
     bool promptForConsent = false,
     String? password,
   }) async {
     if (_account == null) throw const NotSignedInException();
-    _setStatus(note.id, SyncStatus.syncing);
-    final token = promptForConsent
-        ? await _interactiveToken()
-        : await _silentToken();
+    void status(SyncStatus s) {
+      _syncStatus[note.id] = s;
+      if (notebookId != null) _syncStatus[notebookId] = s;
+      notifyListeners();
+    }
+
+    status(SyncStatus.syncing);
+    final String? token;
+    try {
+      token = promptForConsent ? await _interactiveToken() : await _silentToken();
+    } catch (e) {
+      status(SyncStatus.error);
+      rethrow;
+    }
     if (token == null) {
-      _setStatus(note.id, SyncStatus.pending);
+      status(SyncStatus.pending);
       return;
     }
 
@@ -369,37 +454,46 @@ class DriveSyncService extends ChangeNotifier {
       final client = _authClient(token);
       try {
         final api = drive.DriveApi(client);
-        final folderId = await _ensureFolder(api);
-        final name = '${note.id}.inklus';
-        final existing = await _findFile(api, folderId, name);
+        final rootId = await _ensureFolder(api);
+        final targetId = notebookId == null
+            ? rootId
+            : await _ensureNotebookFolder(
+                api, rootId, notebookId, notebookTitle ?? 'Cuaderno');
+        final name = '${_cleanName(note.title, fallback: 'Nota')}.inklus';
+        final existing = await _findNoteFile(api, rootId, note.id);
         final media = commons.Media(
           Stream<List<int>>.value(bytes),
           bytes.length,
           contentType: _inklusMimeType,
         );
+        final meta = drive.File(
+          name: name,
+          mimeType: _inklusMimeType,
+          appProperties: {'noteId': note.id, 'notebookId': ?notebookId},
+        );
         if (existing == null) {
-          await api.files.create(
-            drive.File(
-              name: name,
-              mimeType: _inklusMimeType,
-              parents: [folderId],
-            ),
-            uploadMedia: media,
-          );
+          meta.parents = [targetId];
+          await api.files.create(meta, uploadMedia: media);
         } else {
+          // Si el cuaderno se renombró/movió o la copia es de una versión
+          // antigua (raíz), se recoloca en su carpeta actual.
+          final parents = existing.parents ?? const <String>[];
+          final misplaced = !parents.contains(targetId);
           await api.files.update(
-            drive.File(name: name, mimeType: _inklusMimeType),
+            meta,
             existing.id!,
             uploadMedia: media,
+            addParents: misplaced ? targetId : null,
+            removeParents: misplaced && parents.isNotEmpty ? parents.join(',') : null,
           );
         }
-        _setStatus(note.id, SyncStatus.synced);
-        onSyncComplete?.call('Nota sincronizada con Google Drive');
+        status(SyncStatus.synced);
+        onSyncComplete?.call(SyncNotice.noteSynced);
       } finally {
         client.close();
       }
     } catch (e) {
-      _setStatus(note.id, SyncStatus.error);
+      status(SyncStatus.error);
       rethrow;
     }
   }
@@ -415,8 +509,7 @@ class DriveSyncService extends ChangeNotifier {
     try {
       final api = drive.DriveApi(client);
       final folderId = await _ensureFolder(api);
-      final name = '$noteId.inklus';
-      final file = await _findFile(api, folderId, name);
+      final file = await _findNoteFile(api, folderId, noteId);
       if (file == null) return null;
 
       final response = await api.files.get(
@@ -447,7 +540,7 @@ class DriveSyncService extends ChangeNotifier {
     try {
       final api = drive.DriveApi(client);
       final folderId = await _ensureFolder(api);
-      final file = await _findFile(api, folderId, '$noteId.inklus');
+      final file = await _findNoteFile(api, folderId, noteId);
       if (file?.id == null) return const [];
       final list = await api.revisions.list(
         file!.id!,
@@ -504,40 +597,76 @@ class DriveSyncService extends ChangeNotifier {
     }
   }
 
-  /// Descarga **todas** las notas `.inklus` de la carpeta "Inklus" de Drive
-  /// (las imágenes embebidas se extraen a local). Las copias ilegibles se
-  /// omiten.
-  Future<List<Note>> downloadAllNotes({String? password}) async {
+  /// Descarga **todas** las notas `.inklus` que la app tiene en Drive
+  /// (carpeta "Inklus" y sus subcarpetas por cuaderno; las imágenes
+  /// embebidas se extraen a local). Las copias ilegibles se omiten.
+  Future<List<Note>> downloadAllNotes({String? password}) async =>
+      [for (final r in await _downloadAll(password: password)) r.note];
+
+  Future<List<_RemoteNote>> _downloadAll({String? password}) async {
     if (_account == null) throw const NotSignedInException();
     final token = await _interactiveToken();
     final client = _authClient(token);
     try {
       final api = drive.DriveApi(client);
-      final folderId = await _ensureFolder(api);
-      final list = await api.files.list(
-        q: "'$folderId' in parents and trashed = false",
-        $fields: 'files(id,name)',
-      );
-      final notes = <Note>[];
-      for (final file in list.files ?? const <drive.File>[]) {
-        final id = file.id;
-        final name = file.name ?? '';
-        if (id == null || !name.endsWith('.inklus')) continue;
-        try {
-          final resp = await client.get(
-            Uri.parse('https://www.googleapis.com/drive/v3/files/$id?alt=media'),
-          );
-          if (resp.statusCode != 200) continue;
-          var bytes = resp.bodyBytes;
-          if (password != null && password.isNotEmpty) {
-            bytes = await _decryptBytes(bytes, password);
+      await _ensureFolder(api);
+
+      // Carpetas de cuaderno: id de carpeta → (id del cuaderno, nombre).
+      final folders = <String, (String?, String)>{};
+      String? pageToken;
+      do {
+        final page = await api.files.list(
+          q: "mimeType = '$_folderMimeType' and trashed = false",
+          $fields: 'nextPageToken,files(id,name,appProperties)',
+          pageSize: 200,
+          pageToken: pageToken,
+        );
+        for (final f in page.files ?? const <drive.File>[]) {
+          if (f.id != null) {
+            folders[f.id!] = (f.appProperties?['notebookId'], f.name ?? '');
           }
-          notes.add(await InklusFormat.importNoteBytes(bytes));
-        } catch (e) {
-          debugPrint('DriveSyncService.downloadAllNotes: copia no legible ($name): $e');
         }
-      }
-      return notes;
+        pageToken = page.nextPageToken;
+      } while (pageToken != null);
+
+      final out = <_RemoteNote>[];
+      pageToken = null;
+      do {
+        final page = await api.files.list(
+          q: "mimeType = '$_inklusMimeType' and trashed = false",
+          $fields: 'nextPageToken,files(id,name,parents)',
+          pageSize: 100,
+          pageToken: pageToken,
+        );
+        for (final file in page.files ?? const <drive.File>[]) {
+          final id = file.id;
+          final name = file.name ?? '';
+          if (id == null) continue;
+          try {
+            final resp = await client.get(
+              Uri.parse('https://www.googleapis.com/drive/v3/files/$id?alt=media'),
+            );
+            if (resp.statusCode != 200) continue;
+            var bytes = resp.bodyBytes;
+            if (password != null && password.isNotEmpty) {
+              bytes = await _decryptBytes(bytes, password);
+            }
+            final folder = [
+              for (final p in file.parents ?? const <String>[])
+                if (folders[p] != null) folders[p]!,
+            ].firstOrNull;
+            out.add(_RemoteNote(
+              await InklusFormat.importNoteBytes(bytes),
+              notebookId: folder?.$1,
+              notebookTitle: folder?.$2,
+            ));
+          } catch (e) {
+            debugPrint('DriveSyncService.downloadAllNotes: copia no legible ($name): $e');
+          }
+        }
+        pageToken = page.nextPageToken;
+      } while (pageToken != null);
+      return out;
     } finally {
       client.close();
     }
@@ -546,44 +675,73 @@ class DriveSyncService extends ChangeNotifier {
   /// Restaura la biblioteca desde Drive (**last-write-wins** por nota):
   /// - si la nota existe en local y la de Drive es más reciente, se actualiza
   ///   en su cuaderno;
-  /// - si no existe (p. ej. en un dispositivo nuevo), se reúne en un cuaderno
-  ///   "Recuperado de Drive" (Drive guarda notas sueltas, no los cuadernos).
-  Future<LibraryRestoreResult> restoreLibrary(StorageService storage) async {
-    final remote = await downloadAllNotes();
+  /// - si no existe (p. ej. en un dispositivo nuevo), vuelve a su cuaderno
+  ///   (la carpeta de Drive lo nombra); si no se sabe cuál era, va a
+  ///   "Recuperado de Drive".
+  Future<LibraryRestoreResult> restoreLibrary(
+    StorageService storage, {
+    required String fallbackTitle,
+  }) async {
+    final remote = await _downloadAll();
     // noteId → (cuaderno, nota local)
     final local = <String, (String, Note)>{};
+    final localNotebooks = <String>{};
     for (final meta in await storage.loadIndex()) {
       final nb = await storage.loadNotebook(meta.id);
       if (nb == null) continue;
+      localNotebooks.add(nb.id);
       for (final n in nb.notes) {
         local[n.id] = (nb.id, n);
       }
     }
     var updated = 0;
-    final missing = <Note>[];
-    for (final note in remote) {
+    var added = 0;
+    // cuaderno remoto → (título, notas que faltan)
+    final missing = <String, (String?, List<Note>)>{};
+    for (final r in remote) {
+      final note = r.note;
       final hit = local[note.id];
       if (hit == null) {
-        missing.add(note);
+        final key = r.notebookId ?? '';
+        final entry = missing.putIfAbsent(
+            key, () => (r.notebookTitle, <Note>[]));
+        entry.$2.add(note);
+        added++;
       } else if (note.updatedAt.isAfter(hit.$2.updatedAt)) {
         await storage.saveNote(hit.$1, note, touch: false);
         updated++;
       }
     }
-    if (missing.isNotEmpty) {
-      missing.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      await storage.saveNotebook(Notebook(
-        id: newId('nb'),
-        title: 'Recuperado de Drive',
-        notes: missing,
-      ));
+    for (final entry in missing.entries) {
+      final notes = entry.value.$2
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      final nbId = entry.key;
+      if (nbId.isNotEmpty && localNotebooks.contains(nbId)) {
+        for (final n in notes) {
+          await storage.attachNote(nbId, n);
+        }
+      } else {
+        await storage.saveNotebook(Notebook(
+          id: nbId.isNotEmpty ? nbId : newId('nb'),
+          title: entry.value.$1 ?? fallbackTitle,
+          notes: notes,
+        ));
+      }
     }
     return LibraryRestoreResult(
       found: remote.length,
       updated: updated,
-      added: missing.length,
+      added: added,
     );
   }
+}
+
+/// Nota descargada de Drive con el cuaderno al que pertenecía.
+class _RemoteNote {
+  const _RemoteNote(this.note, {this.notebookId, this.notebookTitle});
+  final Note note;
+  final String? notebookId;
+  final String? notebookTitle;
 }
 
 /// Resumen de [DriveSyncService.restoreLibrary].
@@ -600,15 +758,15 @@ class LibraryRestoreResult {
   /// Notas locales reemplazadas por una versión más reciente de Drive.
   final int updated;
 
-  /// Notas que no existían en local (van a "Recuperado de Drive").
+  /// Notas que no existían en local (vuelven a su cuaderno).
   final int added;
 
-  String get message {
-    if (found == 0) return 'No hay copias de Inklus en tu Google Drive';
-    if (updated == 0 && added == 0) return 'Todo está al día: nada que restaurar';
+  String message(AppLocalizations l10n) {
+    if (found == 0) return l10n.driveRestoreNone;
+    if (updated == 0 && added == 0) return l10n.driveRestoreUpToDate;
     return [
-      if (updated > 0) '$updated nota(s) actualizada(s)',
-      if (added > 0) '$added recuperada(s) en "Recuperado de Drive"',
+      if (updated > 0) l10n.driveRestoreUpdated(updated),
+      if (added > 0) l10n.driveRestoreAdded(added),
     ].join(' · ');
   }
 }
@@ -641,12 +799,13 @@ class NotSignedInException implements Exception {
   const NotSignedInException();
 
   @override
-  String toString() => 'Inicia sesión con Google primero.';
+  String toString() => 'NotSignedInException';
 }
 
 /// Error de configuración OAuth de Google (SHA-1 no registrada, etc.).
 ///
-/// Propaga un mensaje de ayuda al usuario en lugar de un stack trace críptico.
+/// [message] es el detalle técnico original; la UI lo muestra dentro de un
+/// texto de ayuda traducido (`driveConfigBody`).
 class GoogleConfigException implements Exception {
   final String message;
   const GoogleConfigException(this.message);

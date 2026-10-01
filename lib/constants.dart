@@ -17,8 +17,8 @@ import 'models/stroke.dart';
 /// lo comprueba `test/app_version_test.dart`).
 const String kAppVersion = '1.7.0';
 
-/// Idioma de la interfaz. Cuando todos los textos estén en los ARB
-/// (lib/l10n), quitar `locale:` de MaterialApp para seguir al sistema.
+/// Idioma fijo SOLO para las capturas de pantalla (`tool/screenshots`) y los
+/// tests; la app real sigue el idioma del sistema.
 const Locale kAppLocale = Locale('es');
 
 /// Repositorio del proyecto y política de privacidad (enlazada desde

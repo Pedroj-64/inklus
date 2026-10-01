@@ -11,6 +11,9 @@ import '../../models/page.dart';
 import '../../models/stroke.dart';
 import '../../models/template.dart';
 import '../../models/text_item.dart';
+import '../../models/text_layout.dart';
+
+export '../../models/text_layout.dart' show textItemAlign, textItemStyle;
 
 // Re-exportar constantes para compatibilidad con archivos que importan world_painter.
 const paperColor = kPaperColorLight;
@@ -500,33 +503,9 @@ void _drawArrowHead(Canvas canvas, Stroke stroke) {
   canvas.drawPath(arrowPath, _fillPaint);
 }
 
-/// Estilo de una caja de texto. **Única fuente** para el lienzo, la
-/// exportación y el campo de edición (lo que editas es lo que se pinta).
-/// [scale] convierte el tamaño de mundo a pantalla (1 en el mundo).
-TextStyle textItemStyle(TextItem item, {double scale = 1}) => TextStyle(
-      color: item.color,
-      fontSize: item.fontSize * scale,
-      height: 1.3,
-      fontWeight: item.bold ? FontWeight.w700 : FontWeight.w400,
-      fontStyle: item.italic ? FontStyle.italic : FontStyle.normal,
-      decoration: item.underline ? TextDecoration.underline : TextDecoration.none,
-      decorationColor: item.color,
-      fontFamily: switch (item.fontFamily) {
-        'serif' => 'serif',
-        'mono' => 'monospace',
-        _ => null, // fuente por defecto del sistema
-      },
-    );
-
-TextAlign textItemAlign(TextItem item) => switch (item.align) {
-      'center' => TextAlign.center,
-      'right' => TextAlign.right,
-      _ => TextAlign.left,
-    };
-
 void _paintTextItem(Canvas canvas, TextItem item) {
   final textPainter = TextPainter(
-    text: TextSpan(text: item.text, style: textItemStyle(item)),
+    text: buildTextItemSpan(item, item.text, item.runs, textItemStyle(item)),
     textAlign: textItemAlign(item),
     textDirection: TextDirection.ltr,
   );
@@ -535,6 +514,7 @@ void _paintTextItem(Canvas canvas, TextItem item) {
     canvas,
     Offset(item.x - item.width / 2, item.y - item.height / 2),
   );
+  textPainter.dispose();
 }
 
 /// Pentagrama musical (5 líneas por grupo, infinito).

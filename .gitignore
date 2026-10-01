@@ -158,3 +158,13 @@ HACKING.md
 
 # Worktrees y datos locales de Claude Code (no versionar)
 /.claude/
+
+# --- Credenciales de Google / Firebase / certificados (nunca al repo) ---
+client_secret*.json
+**/client_secret*.json
+*serviceAccount*.json
+*firebase-adminsdk*.json
+*.p12
+*.pfx
+*.pem
+*.p8

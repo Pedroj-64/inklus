@@ -25,11 +25,18 @@ class ShapeDetector {
 
   static const double _minPoints = 10;
   static const double _lineTolerance = 0.12; // 12% de la longitud
+  static const double _highlighterLineTolerance = 0.2;
+  static const double _axisSnap = 4 * pi / 180; // ±4° a horizontal/vertical
+  static const double _highlighterAxisSnap = 8 * pi / 180;
   static const double _circleTolerance = 0.09;
   static const double _rectAngleThreshold = pi / 8; // ~22.5°
 
   /// Analiza un trazo y devuelve la forma detectada o null.
-  static DetectedShape? detect(List<StrokePoint> points) {
+  ///
+  /// Con [lineOnly] (resaltador) solo se reconocen rectas: el marcador se
+  /// usa para subrayar/resaltar renglones, no para dibujar figuras, y sale
+  /// más tembloroso (trazo ancho), así que la tolerancia es mayor.
+  static DetectedShape? detect(List<StrokePoint> points, {bool lineOnly = false}) {
     if (points.length < _minPoints) return null;
 
     final first = points.first.offset;
@@ -37,8 +44,8 @@ class ShapeDetector {
     final totalLength = pathLength(points);
 
     // ¿Es una línea recta o flecha?
-    final lineResult = _detectLine(points, first, last, totalLength);
-    if (lineResult != null) return lineResult;
+    final lineResult = _detectLine(points, first, last, totalLength, lineOnly: lineOnly);
+    if (lineResult != null || lineOnly) return lineResult;
 
     // ¿Es un rectángulo?
     final rectResult = _detectRectangle(points, totalLength);
@@ -102,19 +109,22 @@ class ShapeDetector {
     List<StrokePoint> points,
     Offset first,
     Offset last,
-    double totalLength,
-  ) {
+    double totalLength, {
+    bool lineOnly = false,
+  }) {
     final lineLength = (last - first).distance;
     if (lineLength < 30) return null;
 
+    final tolerance = lineOnly ? _highlighterLineTolerance : _lineTolerance;
+
     // La distancia recorrida no debería ser mucho mayor que la distancia
     // en línea recta (indicaría curvas).
-    if (totalLength > lineLength * (1 + _lineTolerance)) return null;
+    if (totalLength > lineLength * (1 + tolerance)) return null;
 
     // Todos los puntos deberían estar cerca de la línea recta.
     final dir = (last - first) / lineLength;
     final normal = Offset(-dir.dy, dir.dx);
-    final maxDeviation = lineLength * _lineTolerance;
+    final maxDeviation = lineLength * tolerance;
     for (final p in points) {
       final d = p.offset - first;
       final dev = (normal * (normal.dx * d.dx + normal.dy * d.dy)).distance;
@@ -122,12 +132,27 @@ class ShapeDetector {
     }
 
     // Detecta si es una flecha: si los últimos puntos forman una punta.
-    final isArrow = _detectArrowHead(points, first, last);
+    final isArrow = !lineOnly && _detectArrowHead(points, first, last);
     final type = isArrow ? ShapeType.arrow : ShapeType.line;
+
+    // Casi horizontal/vertical → exactamente horizontal/vertical (subrayar
+    // un renglón sin que quede torcido). La flecha se deja como está.
+    var end = last;
+    if (!isArrow) {
+      final snap = lineOnly ? _highlighterAxisSnap : _axisSnap;
+      final angle = dir.direction; // -π..π
+      final toHorizontal = min((angle).abs(), (pi - angle.abs()).abs());
+      final toVertical = (angle.abs() - pi / 2).abs();
+      if (toHorizontal < snap) {
+        end = Offset(last.dx, first.dy);
+      } else if (toVertical < snap) {
+        end = Offset(first.dx, last.dy);
+      }
+    }
 
     return DetectedShape(
       type,
-      [StrokePoint.fromOffset(first, 0.5), StrokePoint.fromOffset(last, 0.5)],
+      [StrokePoint.fromOffset(first, 0.5), StrokePoint.fromOffset(end, 0.5)],
     );
   }
 

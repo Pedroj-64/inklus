@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import '../models/document.dart';
 import '../models/note.dart';
 import '../models/notebook.dart';
+import '../models/page.dart';
 import '../models/template.dart';
 import '../models/id.dart';
 import 'file_utils.dart';
@@ -753,9 +754,14 @@ class StorageService {
     String? coverImagePath,
     List<String>? tags,
     PageTemplate? template,
+    List<Page>? pages,
   }) async {
     final note = Note.newBlank();
-    if (template != null && note.pages.isNotEmpty) {
+    if (pages != null && pages.isNotEmpty) {
+      note.pages
+        ..clear()
+        ..addAll(pages);
+    } else if (template != null && note.pages.isNotEmpty) {
       note.pages.first.template = template;
     }
     final notebook = Notebook(
@@ -933,6 +939,18 @@ class StorageService {
       throw StateError('Notebook no encontrado: $notebookId');
     }
     return note;
+  }
+
+  /// Guarda [note] tal cual (conserva su fecha) y la añade a [notebookId] si
+  /// aún no está. Para recuperar notas de Drive en su cuaderno.
+  Future<void> attachNote(String notebookId, Note note) async {
+    await _saveNoteRaw(await _baseDir(), note);
+    await _editNotebook(notebookId, (json) {
+      final ids = _noteIdsOf(json);
+      if (ids.contains(note.id)) return false;
+      json['noteIds'] = [...ids, note.id];
+      return true;
+    }, touch: false);
   }
 
   /// Renombra un Note.

@@ -6,6 +6,7 @@ import '../../constants.dart';
 import '../../logic/canvas_controller.dart';
 import '../../models/page.dart';
 import 'dialogs.dart';
+import '../../l10n/l10n.dart';
 
 /// Sidebar docked para gestión de capas.
 ///
@@ -49,9 +50,9 @@ class LayersSidebar extends StatelessWidget {
                   children: [
                     Icon(Icons.layers, size: 18, color: context.colors.primary),
                     const SizedBox(width: 8),
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'Capas',
+                        context.l10n.tbLayers,
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -60,12 +61,12 @@ class LayersSidebar extends StatelessWidget {
                     ),
                     IconButton(
                       icon: const Icon(Icons.add_circle_outline, size: 20),
-                      tooltip: 'Añadir capa',
+                      tooltip: context.l10n.layerAdd,
                       onPressed: () => controller.addLayer(),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, size: 20),
-                      tooltip: 'Cerrar',
+                      tooltip: context.l10n.commonClose,
                       onPressed: onClose,
                     ),
                   ],
@@ -109,10 +110,10 @@ class LayersSidebar extends StatelessWidget {
   Future<void> _renameLayer(BuildContext context, int index) async {
     final name = await showTextPrompt(
       context,
-      title: 'Renombrar capa',
-      hint: 'Nombre',
+      title: context.l10n.layerRename,
+      hint: context.l10n.createName,
       initialValue: controller.page.layers[index].name,
-      confirmLabel: 'Renombrar',
+      confirmLabel: context.l10n.libRename,
     );
     if (name != null && name.trim().isNotEmpty) {
       controller.renameLayer(index, name.trim());

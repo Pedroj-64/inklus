@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/inklus_colors.dart';
 import '../../logic/canvas_controller.dart';
 import 'color_wheel_picker.dart';
+import '../../l10n/l10n.dart';
 
 /// Diálogo de color personalizado (rueda HSV + hex), compartido por los
 /// popovers de herramienta y la barra de selección.
@@ -44,7 +45,7 @@ Future<void> showCustomColorDialog(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
-        title: const Text('Color personalizado'),
+        title: Text(context.l10n.colorCustomTitle),
         content: SizedBox(
           width: 340,
           child: Column(
@@ -56,7 +57,7 @@ Future<void> showCustomColorDialog(
                   // Color actual
                   Column(
                     children: [
-                      Text('Actual',
+                      Text(context.l10n.colorCurrent,
                           style: TextStyle(fontSize: 11, color: context.colors.onSurfaceVariant)),
                       const SizedBox(height: 4),
                       Container(
@@ -77,7 +78,7 @@ Future<void> showCustomColorDialog(
                   // Color nuevo
                   Column(
                     children: [
-                      Text('Nuevo',
+                      Text(context.l10n.colorNew,
                           style: TextStyle(fontSize: 11, color: context.colors.onSurfaceVariant)),
                       const SizedBox(height: 4),
                       Container(
@@ -130,7 +131,7 @@ Future<void> showCustomColorDialog(
                     Expanded(
                       child: _ModeButton(
                         icon: Icons.circle,
-                        label: 'Rueda',
+                        label: context.l10n.colorWheel,
                         selected: mode == 0,
                         onTap: () => setState(() => mode = 0),
                       ),
@@ -138,7 +139,7 @@ Future<void> showCustomColorDialog(
                     Expanded(
                       child: _ModeButton(
                         icon: Icons.tune,
-                        label: 'Sliders',
+                        label: context.l10n.colorSliders,
                         selected: mode == 1,
                         onTap: () => setState(() => mode = 1),
                       ),
@@ -166,7 +167,7 @@ Future<void> showCustomColorDialog(
                 Column(
                   children: [
                     _HsvSliderWithGradient(
-                      label: 'Matiz',
+                      label: context.l10n.colorHue,
                       value: hsv.hue,
                       min: 0,
                       max: 360,
@@ -186,7 +187,7 @@ Future<void> showCustomColorDialog(
                     ),
                     const SizedBox(height: 4),
                     _HsvSliderWithGradient(
-                      label: 'Saturación',
+                      label: context.l10n.colorSaturation,
                       value: hsv.saturation,
                       min: 0,
                       max: 1,
@@ -204,7 +205,7 @@ Future<void> showCustomColorDialog(
                     ),
                     const SizedBox(height: 4),
                     _HsvSliderWithGradient(
-                      label: 'Brillo',
+                      label: context.l10n.colorBrightness,
                       value: hsv.value,
                       min: 0,
                       max: 1,
@@ -228,11 +229,11 @@ Future<void> showCustomColorDialog(
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, hsv.toColor()),
-            child: const Text('Usar'),
+            child: Text(context.l10n.colorUse),
           ),
         ],
       ),

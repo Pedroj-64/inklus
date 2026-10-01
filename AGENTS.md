@@ -83,8 +83,10 @@ ui/
                              page_scaffold (InklusPage, PageHeader, SectionCard, SettingsTile,
                              EmptyState, SheetHeader: base de las pantallas secundarias)…
 l10n/ (lib/l10n)           ARB (app_es = fuente, app_en) → AppLocalizations; `context.l10n.clave`.
-                             Texto nuevo → a los ARB (test/l10n_test.dart exige paridad). App fija
-                             en español (`kAppLocale`) hasta migrar todos los textos.
+                             Texto nuevo → a los ARB (test/l10n_test.dart exige paridad). La app sigue el idioma
+                             del sistema (`kAppLocale` solo para capturas/tests). Errores visibles: lanzar
+                             `AppError(código)` y mostrar con `userError(l10n, e)`; servicios nunca devuelven texto
+                             de UI (usar enums/`message(l10n)`). Tras `await`, en un State usar `_l10n`.
 integration_test/          flujos de punta a punta (`flutter test integration_test -d linux|tablet`)
 docs/                      privacy.md (política, enlazada en la app), testing.md (guion en dispositivo)
 tool/screenshots/          capturas de la UI real sin dispositivo (fuera de la suite de tests)
@@ -154,6 +156,12 @@ marketplace/               plantilla del repo inklus-marketplace (validador + CI
   sueltas), notas sueltas (marca `_trash.notebookId` → vuelven a su cuaderno) y legacy; `_trash.deletedAt`
   (o la fecha del archivo) y purga automática a los 30 días.
 
+### 5b. Texto enriquecido (cajas de texto)
+- `TextItem.runs` (`TextRun` en `models/text_item.dart`): formato por tramos `[start,end)` sobre el de la caja; `applyRunStyle`/`adjustRunsForEdit` son puras (testeadas). `models/text_layout.dart` = **única fuente** de estilo/altura (`textItemStyle`, `buildTextItemSpan`, `measureTextItemHeight`): lienzo, exportación y editor la comparten. Fuentes empaquetadas en `assets/fonts` (OFL en `third_party_licenses/`).
+- `TextEditOverlay` es **hermano** (no hijo) del `Listener` del lienzo en `DrawingCanvas`: si se hace hijo, tocar su barra llega a la página (bug original). Es un `TextField` real con `RichTextController` (reajusta tramos en cada cambio de texto); la barra actúa sobre la selección (o toda la caja sin selección) y vive en `TextFieldTapRegion` + `ExcludeFocus`. Borde superior fijo mientras se teclea (`_topWorld`).
+- Deshacer: `addTextItem` no empuja acción; `commitEditingText()` (idempotente) empuja UNA (añadir/reemplazar/quitar). Con la herramienta texto, tocar una caja existente la edita (`textItemAt`).
+- Figuras: el resaltador solo endereza rectas (`ShapeDetector.detect(lineOnly:)`, tolerancia mayor); toda recta casi horizontal/vertical se ajusta al eje (±4°, resaltador ±8°).
+
 ### 6. Marketplace y búsqueda
 - `MarketplaceService.validatePack` = reglas de `marketplace/bin/build_catalog.dart` (mantener iguales).
 - Instalar: descargar → comprobar tamaño y sha256 → `writeAtomic`; si algo falla se borra el paquete.
@@ -166,11 +174,16 @@ marketplace/               plantilla del repo inklus-marketplace (validador + CI
 - Toda llamada a `GoogleSignIn.instance` va precedida de `await _ensureInitialized()` (`initialize(serverClientId:)` una sola vez; reintentable si falla).
 - `restoreSession()` (silenciosa, One Tap) se llama al arrancar en `NotebookLibraryScreen`.
 - `restoreLibrary(storage)` (Configuración → "Restaurar desde Drive"): last-write-wins por nota; las que no existen en local van a un cuaderno nuevo "Recuperado de Drive". `_BearerClient` aplica timeout de 60 s.
-- Backup: carpeta 'Inklus' en Drive, un archivo `<note.id>.inklus` por nota (upsert, no duplica) en el formato propio `InklusFormat` (documento + **imágenes embebidas** → el backup es autocontenido). Restore: lista la carpeta, importa cada `.inklus` (extrae imágenes a `<appSupport>/inklus/restored/<id>/`) y elige la más reciente por `updatedAt`. `googleapis` 16 (`drive/v3.dart`): `files.create/update` con `uploadMedia: commons.Media`; descarga con GET `alt=media` vía `_BearerClient` (http).
+- Backup: `Inklus/<Cuaderno>/<Nota>.inklus` en Drive (carpeta por cuaderno y archivo por nota, ambos identificados por `appProperties` `notebookId`/`noteId`, no por nombre: renombrar solo renombra; las copias antiguas `<id>.inklus` de la raíz se localizan y se recolocan al subir). `restoreLibrary` devuelve cada nota a su cuaderno según la carpeta. Estado ☁️ por nota **y** por cuaderno. `lastSignInIssue` guarda el detalle cuando Android informa "cancelado" (suele ser SHA-1 sin registrar) y la UI lo muestra. Upsert, no duplica en el formato propio `InklusFormat` (documento + **imágenes embebidas** → el backup es autocontenido). Restore: lista la carpeta, importa cada `.inklus` (extrae imágenes a `<appSupport>/inklus/restored/<id>/`) y elige la más reciente por `updatedAt`. `googleapis` 16 (`drive/v3.dart`): `files.create/update` con `uploadMedia: commons.Media`; descarga con GET `alt=media` vía `_BearerClient` (http).
 - Backup automático = silencioso (si el scope no está autorizado se omite, el local ya protege); 'Subir ahora' usa `promptForConsent: true` (puede mostrar consentimiento).
 - La UI se entera vía `controller.onRemoteSync` (callback en cada guardado local; `HomeScreen` lo agrupa: máx. una subida cada 20 s + al salir) y `controller.replaceNote(note)` tras restaurar.
 - Salir del editor: `_goBack()`/`PopScope` hacen `await controller.flush()` antes del `pop` (la biblioteca lee el índice ya actualizado); `HomeScreen.dispose` hace `controller.dispose()`.
 - Exportación (menú ⋮ del editor): página PNG/PDF, **cuaderno PDF** (`renderNotebookPdf`) y **copia .inklus** (`InklusFormat.exportBytes` → `FilePicker.saveFile`).
+
+## 🔐 Secretos (no romper)
+
+- Nunca leer/imprimir/escribir contraseñas de `android/key.properties`, ni `client_secret*.json`. Para huellas usar `keytool -list` pasando la contraseña por sustitución de comandos y filtrando solo `SHA1`.
+- Client IDs OAuth y SHA-1 son públicos. El Manifest fija `allowBackup=false` y `usesCleartextTraffic=false` (todo es https). La CI tiene el job `secret-scan` (gitleaks).
 
 ## 🚨 Gotchas de versiones (ya resueltas, no revertir)
 

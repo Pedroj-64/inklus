@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
+
+import '../l10n/l10n.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme/inklus_colors.dart';
@@ -33,32 +35,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _controller = PageController();
   int _page = 0;
 
-  static const _pages = <_OnboardingPage>[
-    _OnboardingPage(
-      icon: Icons.edit_outlined,
-      title: 'Escribe con tu lápiz',
-      description: 'Apoya la mano sin miedo: Inklus reconoce el lápiz y '
-          'descarta la palma. La goma del lápiz o el botón lateral borran.',
-    ),
-    _OnboardingPage(
-      icon: Icons.pan_tool_outlined,
-      title: 'Muévete con los dedos',
-      description: 'Con el lápiz, un dedo desplaza la página y dos dedos '
-          'acercan o alejan. Puedes volver a dibujar con el dedo desde la barra.',
-    ),
-    _OnboardingPage(
-      icon: Icons.construction_outlined,
-      title: 'Herramientas arriba',
-      description: 'Toca una herramienta para usarla y tócala otra vez para '
-          'ver sus opciones: grosor, color, borrador parcial, figuras…',
-    ),
-    _OnboardingPage(
-      icon: Icons.lock_outline,
-      title: 'Tus notas son tuyas',
-      description: 'Todo se guarda en este dispositivo, sin cuentas ni '
-          'anuncios. Si quieres, puedes hacer copia en tu Google Drive.',
-    ),
-  ];
+  List<_OnboardingPage> _pages(BuildContext context) {
+    final l10n = context.l10n;
+    return [
+      _OnboardingPage(icon: Icons.edit_outlined, title: l10n.onb1Title, description: l10n.onb1Body),
+      _OnboardingPage(icon: Icons.pan_tool_outlined, title: l10n.onb2Title, description: l10n.onb2Body),
+      _OnboardingPage(icon: Icons.construction_outlined, title: l10n.onb3Title, description: l10n.onb3Body),
+      _OnboardingPage(icon: Icons.lock_outline, title: l10n.onb4Title, description: l10n.onb4Body),
+    ];
+  }
 
   /// Color de cada página y su color de texto encima (roles del tema:
   /// funciona en claro y oscuro).
@@ -78,7 +63,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _next() {
-    if (_page < _pages.length - 1) {
+    if (_page < _pages(context).length - 1) {
       _controller.nextPage(duration: Motion.slow, curve: Curves.easeInOut);
     } else {
       _finish();
@@ -94,7 +79,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     final isSmall = MediaQuery.sizeOf(context).height < 600;
     final accent = _accent(context, _page);
-    final last = _page == _pages.length - 1;
+    final last = _page == _pages(context).length - 1;
 
     return Scaffold(
       body: SafeArea(
@@ -104,16 +89,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               alignment: Alignment.topRight,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(0, Spacing.sm, Spacing.lg, 0),
-                child: TextButton(onPressed: _finish, child: const Text('Saltar')),
+                child: TextButton(onPressed: _finish, child: Text(context.l10n.onbSkip)),
               ),
             ),
             Expanded(
               child: PageView.builder(
                 controller: _controller,
-                itemCount: _pages.length,
+                itemCount: _pages(context).length,
                 onPageChanged: (i) => setState(() => _page = i),
                 itemBuilder: (context, i) {
-                  final p = _pages[i];
+                  final p = _pages(context)[i];
                   final color = _accent(context, i);
                   return Center(
                     child: SingleChildScrollView(
@@ -159,7 +144,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   Spacing.xxl, 0, Spacing.xxl, isSmall ? Spacing.lg : Spacing.xxl),
               child: Row(
                 children: [
-                  for (var i = 0; i < _pages.length; i++)
+                  for (var i = 0; i < _pages(context).length; i++)
                     AnimatedContainer(
                       duration: Motion.normal,
                       margin: const EdgeInsets.only(right: Spacing.sm),
@@ -180,7 +165,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                     iconAlignment: IconAlignment.end,
                     icon: Icon(last ? Icons.check : Icons.arrow_forward),
-                    label: Text(last ? 'Empezar' : 'Siguiente'),
+                    label: Text(last ? context.l10n.onbStart : context.l10n.createNext),
                   ),
                 ],
               ),

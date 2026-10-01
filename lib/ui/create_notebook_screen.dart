@@ -7,7 +7,11 @@ import 'theme/inklus_colors.dart';
 
 import '../constants.dart';
 import '../models/template.dart';
+import '../services/image_service.dart';
+import '../services/pdf_import_service.dart';
+import 'widgets/dialogs.dart';
 import 'widgets/notebook_covers.dart';
+import '../l10n/l10n.dart';
 
 /// Resultado de la pantalla de creación de cuaderno.
 class CreateNotebookResult {
@@ -17,12 +21,16 @@ class CreateNotebookResult {
   final int? coverColorValue;
   final String? coverImagePath;
 
+  /// Páginas de fondo (PDF o imágenes) para crear el cuaderno ya con ellas.
+  final List<({String path, int width, int height})> backgrounds;
+
   const CreateNotebookResult({
     required this.name,
     required this.template,
     required this.coverStyle,
     this.coverColorValue,
     this.coverImagePath,
+    this.backgrounds = const [],
   });
 }
 
@@ -49,6 +57,8 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
   TemplateType _templateType = TemplateType.blank;
   bool _infinite = true;
   bool _showAllTemplates = false;
+  List<({String path, int width, int height})> _backgrounds = [];
+  String? _backgroundsName;
   final double _spacing = 52;
 
   // Colores de portada disponibles
@@ -57,30 +67,41 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
 
   /// Plantillas favoritas (las más usadas, se muestran primero).
   static const _favoriteTemplates = <(TemplateType, IconData, String)>[
-    (TemplateType.blank, Icons.crop_free, 'Blanco'),
-    (TemplateType.ruled, Icons.subject, 'Rayas'),
-    (TemplateType.grid, Icons.grid_on, 'Cuadrícula'),
-    (TemplateType.sheet, Icons.description, 'Hoja A4'),
+    (TemplateType.blank, Icons.crop_free, ''),
+    (TemplateType.ruled, Icons.subject, ''),
+    (TemplateType.grid, Icons.grid_on, ''),
+    (TemplateType.sheet, Icons.description, ''),
   ];
 
   /// Todas las plantillas disponibles.
   static const _allTemplates = <(TemplateType, IconData, String)>[
-    (TemplateType.blank, Icons.crop_free, 'Blanco'),
-    (TemplateType.ruled, Icons.subject, 'Rayas'),
-    (TemplateType.grid, Icons.grid_on, 'Cuadrícula'),
-    (TemplateType.dots, Icons.grain, 'Puntos'),
-    (TemplateType.music, Icons.music_note, 'Pentagrama'),
-    (TemplateType.planner, Icons.view_week, 'Agenda'),
-    (TemplateType.habit, Icons.check_box_outlined, 'Hábitos'),
-    (TemplateType.sheet, Icons.description, 'Hoja A4'),
+    (TemplateType.blank, Icons.crop_free, ''),
+    (TemplateType.ruled, Icons.subject, ''),
+    (TemplateType.grid, Icons.grid_on, ''),
+    (TemplateType.dots, Icons.grain, ''),
+    (TemplateType.music, Icons.music_note, ''),
+    (TemplateType.planner, Icons.view_week, ''),
+    (TemplateType.habit, Icons.check_box_outlined, ''),
+    (TemplateType.sheet, Icons.description, ''),
   ];
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: 'Cuaderno ${widget.notebookCount}');
+    _nameController = TextEditingController();
     _coverColorValue = _coverColors[0].$2;
     _nameController.addListener(() => setState(() {}));
+  }
+
+  bool _nameInitialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_nameInitialized) {
+      _nameInitialized = true;
+      _nameController.text = context.l10n.createDefaultName(widget.notebookCount);
+    }
   }
 
   @override
@@ -108,6 +129,28 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
   List<(TemplateType, IconData, String)> get _visibleTemplates =>
       _showAllTemplates ? _allTemplates : _favoriteTemplates;
 
+  /// Elige una imagen del dispositivo como portada.
+  Future<void> _pickCoverImage() async {
+    final files = await FilePicker.pickFiles(type: FileType.image);
+    if (files.isNotEmpty && files.first.path != null && mounted) {
+      setState(() {
+        _coverStyle = CoverStyle.custom;
+        _coverImagePath = files.first.path;
+      });
+    }
+  }
+
+  static String _tplLabel(BuildContext context, TemplateType t) => switch (t) {
+        TemplateType.blank => context.l10n.createTplBlank,
+        TemplateType.ruled => context.l10n.createTplRuled,
+        TemplateType.grid => context.l10n.createTplGrid,
+        TemplateType.dots => context.l10n.createTplDots,
+        TemplateType.music => context.l10n.createTplMusic,
+        TemplateType.planner => context.l10n.createTplPlanner,
+        TemplateType.habit => context.l10n.createTplHabit,
+        _ => context.l10n.createTplSheet,
+      };
+
   void _nextStep() {
     if (_nameController.text.trim().isEmpty) return;
     setState(() => _currentStep = 1);
@@ -128,8 +171,65 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
         coverStyle: _coverStyle,
         coverColorValue: _coverColorValue,
         coverImagePath: _coverStyle == CoverStyle.custom ? _coverImagePath : null,
+        backgrounds: _backgrounds,
       ),
     );
+  }
+
+  void _setBackgrounds(List<({String path, int width, int height})> pages, String name) {
+    if (pages.isEmpty || !mounted) return;
+    setState(() {
+      _backgrounds = pages;
+      _backgroundsName = name;
+    });
+  }
+
+  /// Cuaderno a partir de un PDF: una página por hoja del PDF.
+  Future<void> _pickPdf() async {
+    if (!PdfImportService.isSupported) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.pdfUnsupported)));
+      return;
+    }
+    final file = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    final path = file?.path;
+    if (path == null || !mounted) return;
+    final l10n = context.l10n;
+    final pages = await runWithLoading(context, () async => [
+          await for (final p in PdfImportService.importPages(path))
+            (path: p.path, width: p.widthPx, height: p.heightPx),
+        ]);
+    if (!mounted) return;
+    if (pages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.pdfReadFailed)));
+      return;
+    }
+    _setBackgrounds(pages, file!.name);
+  }
+
+  /// Cuaderno a partir de imágenes: una página por imagen.
+  Future<void> _pickImages() async {
+    final files = await FilePicker.pickFiles(
+      type: FileType.image,
+      // ignore: deprecated_member_use (multi-selección requiere allowMultiple)
+      allowMultiple: true,
+    );
+    if (files.isEmpty || !mounted) return;
+    final service = ImageService();
+    final pages = await runWithLoading(context, () async {
+      final list = <({String path, int width, int height})>[];
+      for (final f in files) {
+        if (f.path == null) continue;
+        final local = await service.importToApp(f.path!);
+        final img = await service.decode(local);
+        list.add((path: local, width: img.width, height: img.height));
+        img.dispose();
+      }
+      return list;
+    });
+    _setBackgrounds(pages, files.first.name);
   }
 
   @override
@@ -138,8 +238,8 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Nuevo cuaderno',
+        title: Text(
+          context.l10n.createTitle,
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: false,
@@ -191,7 +291,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
         children: [
           // ---- Nombre ----
           Text(
-            'Nombre',
+            context.l10n.createName,
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -203,7 +303,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
             controller: _nameController,
             autofocus: true,
             decoration: InputDecoration(
-              hintText: 'Mi cuaderno',
+              hintText: context.l10n.createNameHint,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -219,7 +319,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
 
           // ---- Portada ----
           Text(
-            'Portada',
+            context.l10n.createCover,
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -270,73 +370,59 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Selector de estilo de portada
-          SizedBox(
-            height: 56,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: CoverStyle.values.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final style = CoverStyle.values[index];
-                final isSelected = style == _coverStyle;
-                return GestureDetector(
-                  onTap: () async {
-                    if (style == CoverStyle.custom) {
-                      // Seleccionar imagen del dispositivo.
-                      final files = await FilePicker.pickFiles(
-                        type: FileType.image,
-                      );
-                      if (files.isNotEmpty && files.first.path != null) {
-                        setState(() {
-                          _coverStyle = style;
-                          _coverImagePath = files.first.path;
-                        });
-                      }
-                    } else {
-                      setState(() => _coverStyle = style);
-                    }
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isSelected ? context.colors.primary : context.colors.outline,
-                        width: isSelected ? 2 : 1,
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(9),
-                      child: style == CoverStyle.custom && _coverImagePath != null
-                          ? Image.file(
-                              File(_coverImagePath!),
-                              fit: BoxFit.cover,
-                              gaplessPlayback: true,
-                              errorBuilder: (_, _, _) => CustomPaint(
-                                painter: NotebookCoverPainter(
-                                  style: CoverStyle.simple,
-                                  color: _effectiveCoverColor,
-                                  isDark: isDark,
-                                ),
-                              ),
-                            )
-                          : CustomPaint(
-                              painter: NotebookCoverPainter(
-                                style: style,
-                                color: _effectiveCoverColor,
-                                isDark: isDark,
-                              ),
-                            ),
-                            ),
-                  ),
-                );
-              },
+          // Diseños de portada (con su nombre) + "Tu imagen" bien visible.
+          Text(
+            context.l10n.createDesign,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: context.colors.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final style in kPaintedCoverStyles)
+                _CoverTile(
+                  label: coverStyleName(context.l10n, style),
+                  selected: style == _coverStyle,
+                  onTap: () => setState(() => _coverStyle = style),
+                  child: CustomPaint(
+                    painter: NotebookCoverPainter(
+                      style: style,
+                      color: _effectiveCoverColor,
+                      isDark: isDark,
+                    ),
+                  ),
+                ),
+              _CoverTile(
+                label: _coverImagePath == null ? context.l10n.createYourImage : context.l10n.createChangeImage,
+                selected: _coverStyle == CoverStyle.custom && _coverImagePath != null,
+                dashed: _coverImagePath == null,
+                onTap: _pickCoverImage,
+                child: _coverImagePath != null
+                    ? Image.file(
+                        File(_coverImagePath!),
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                        errorBuilder: (_, _, _) => const _AddImagePlaceholder(),
+                      )
+                    : const _AddImagePlaceholder(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            context.l10n.createColor,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: context.colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
 
           // Selector de color de portada
           SizedBox(
@@ -346,12 +432,12 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
               itemCount: _coverColors.length,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
-                final (name, colorValue) = _coverColors[index];
+                final (_, colorValue) = _coverColors[index];
                 final isSelected = colorValue == _coverColorValue;
                 return GestureDetector(
                   onTap: () => setState(() => _coverColorValue = colorValue),
                   child: Tooltip(
-                    message: name,
+                    message: coverColorName(context.l10n, colorValue),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       width: 36,
@@ -395,11 +481,11 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    'Siguiente',
+                    context.l10n.createNext,
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   SizedBox(width: 8),
@@ -469,7 +555,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Paso 2: Elige una plantilla',
+                        context.l10n.createStep2,
                         style: TextStyle(
                           fontSize: 12,
                           color: context.colors.onSurfaceVariant,
@@ -479,7 +565,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Volver al paso 1',
+                  tooltip: context.l10n.createBackToStep1,
                   icon: const Icon(Icons.edit_outlined, size: 20),
                   onPressed: _prevStep,
                   padding: const EdgeInsets.all(8),
@@ -490,65 +576,114 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
           ),
           const SizedBox(height: 24),
 
-          // ---- Plantilla ----
-          Text(
-            'Plantilla',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: context.colors.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Grid de plantillas
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final (type, icon, label) in _visibleTemplates)
-                _templateTile(type, icon, label),
-            ],
-          ),
-
-          // Botón ver más / ver menos
-          if (!_showAllTemplates)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: TextButton.icon(
-                onPressed: () => setState(() => _showAllTemplates = true),
-                icon: const Icon(Icons.expand_more, size: 18),
-                label: const Text('Ver más plantillas'),
+          // ---- Empezar desde un archivo (PDF / imágenes) ----
+          if (_backgrounds.isNotEmpty)
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: const Icon(Icons.picture_as_pdf_outlined),
+                title: Text(_backgroundsName ?? ''),
+                subtitle: Text(context.l10n.createFromFilePages(_backgrounds.length)),
+                trailing: IconButton(
+                  tooltip: context.l10n.createFromFileRemove,
+                  icon: const Icon(Icons.close),
+                  onPressed: () => setState(() => _backgrounds = []),
+                ),
               ),
             )
-          else
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: TextButton.icon(
-                onPressed: () => setState(() => _showAllTemplates = false),
-                icon: const Icon(Icons.expand_less, size: 18),
-                label: const Text('Ver menos'),
+          else ...[
+          // ---- Plantilla ----
+            Text(
+              context.l10n.createTemplate,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: context.colors.onSurfaceVariant,
               ),
             ),
+            const SizedBox(height: 12),
+  
+            // Grid de plantillas
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final (type, icon, label) in _visibleTemplates)
+                  _templateTile(type, icon, label),
+              ],
+            ),
+  
+            // Botón ver más / ver menos
+            if (!_showAllTemplates)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _showAllTemplates = true),
+                  icon: const Icon(Icons.expand_more, size: 18),
+                  label: Text(context.l10n.createMoreTemplates),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _showAllTemplates = false),
+                  icon: const Icon(Icons.expand_less, size: 18),
+                  label: Text(context.l10n.createFewer),
+                ),
+              ),
+  
+            // Toggle infinito/finito para tipos que lo soportan
+            if (_showInfiniteToggle) ...[
+              const SizedBox(height: 16),
+              SwitchListTile(
+                title: Text(
+                  context.l10n.createInfinite,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  _infinite
+                      ? context.l10n.createInfiniteOn
+                      : context.l10n.createInfiniteOff,
+                  style: TextStyle(fontSize: 12, color: context.colors.onSurfaceVariant),
+                ),
+                value: _infinite,
+                onChanged: (v) => setState(() => _infinite = v),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+            ],
 
-          // Toggle infinito/finito para tipos que lo soportan
-          if (_showInfiniteToggle) ...[
-            const SizedBox(height: 16),
-            SwitchListTile(
-              title: const Text(
-                'Lienzo infinito',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            const SizedBox(height: 24),
+            Text(
+              context.l10n.createFromFile,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: context.colors.onSurfaceVariant,
               ),
-              subtitle: Text(
-                _infinite
-                    ? 'El lienzo se alarga al escribir'
-                    : 'Hoja de tamaño fijo (A4)',
-                style: TextStyle(fontSize: 12, color: context.colors.onSurfaceVariant),
-              ),
-              value: _infinite,
-              onChanged: (v) => setState(() => _infinite = v),
-              contentPadding: EdgeInsets.zero,
-              dense: true,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              context.l10n.createFromFileHint,
+              style: TextStyle(fontSize: 12, color: context.colors.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _pickPdf,
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
+                  label: Text(context.l10n.createFromPdf),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _pickImages,
+                  icon: const Icon(Icons.image_outlined),
+                  label: Text(context.l10n.createFromImages),
+                ),
+              ],
             ),
           ],
 
@@ -565,8 +700,8 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Text(
-                'Crear cuaderno',
+              child: Text(
+                context.l10n.createAction,
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
             ),
@@ -577,7 +712,8 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
     );
   }
 
-  Widget _templateTile(TemplateType type, IconData icon, String label) {
+  Widget _templateTile(TemplateType type, IconData icon, String _) {
+    final label = _tplLabel(context, type);
     final isSelected = _templateType == type;
     return GestureDetector(
       onTap: () => setState(() => _templateType = type),
@@ -641,4 +777,116 @@ class _StepIndicator extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Miniatura de un diseño de portada con su nombre. Con [dashed] (la de
+/// "Tu imagen" sin imagen aún) el borde es discontinuo para que se lea como
+/// un botón de añadir.
+class _CoverTile extends StatelessWidget {
+  const _CoverTile({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.child,
+    this.dashed = false,
+  });
+
+  final String label;
+  final bool selected;
+  final bool dashed;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: context.l10n.createCoverSemantics(label),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: 88,
+          child: Column(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 88,
+                height: 118,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected ? scheme.primary : scheme.outlineVariant,
+                    width: selected ? 2.5 : 1,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: dashed
+                      ? CustomPaint(
+                          foregroundPainter: _DashedBorderPainter(scheme.primary),
+                          child: child,
+                        )
+                      : child,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected ? scheme.primary : scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddImagePlaceholder extends StatelessWidget {
+  const _AddImagePlaceholder();
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+        color: context.colors.primaryContainer.withAlpha(110),
+        child: Center(
+          child: Icon(Icons.add_photo_alternate_outlined,
+              size: 34, color: context.colors.primary),
+        ),
+      );
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  _DashedBorderPainter(this.color);
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+    final rrect = RRect.fromRectAndRadius(
+        (Offset.zero & size).deflate(3), const Radius.circular(8));
+    final path = Path()..addRRect(rrect);
+    for (final metric in path.computeMetrics()) {
+      var d = 0.0;
+      while (d < metric.length) {
+        canvas.drawPath(metric.extractPath(d, d + 6), paint);
+        d += 11;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedBorderPainter old) => old.color != color;
 }

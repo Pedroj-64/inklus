@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 
-import '../../constants.dart';
+import '../../l10n/l10n.dart';
+import 'notebook_covers.dart';
 import '../../services/storage_service.dart';
 import '../theme/inklus_colors.dart';
 import '../theme/tokens.dart';
@@ -9,16 +10,25 @@ import 'page_scaffold.dart';
 
 /// Tipo de carpeta dinámica.
 enum SmartFolderType {
-  all('Todos', Icons.folder_outlined),
-  recent('Recientes', Icons.access_time),
-  thisWeek('Esta semana', Icons.date_range),
-  byColor('Por color', Icons.palette_outlined),
-  byTag('Por etiqueta', Icons.label_outline),
-  noTags('Sin etiquetas', Icons.label_off_outlined);
+  all(Icons.folder_outlined),
+  recent(Icons.access_time),
+  thisWeek(Icons.date_range),
+  byColor(Icons.palette_outlined),
+  byTag(Icons.label_outline),
+  noTags(Icons.label_off_outlined);
 
-  final String label;
   final IconData icon;
-  const SmartFolderType(this.label, this.icon);
+  const SmartFolderType(this.icon);
+
+  /// Nombre traducido del tipo de carpeta.
+  String label(AppLocalizations l10n) => switch (this) {
+        all => l10n.libNavAll,
+        recent => l10n.libNavRecent,
+        thisWeek => l10n.smartThisWeek,
+        byColor => l10n.smartByColor,
+        byTag => l10n.smartByTag,
+        noTags => l10n.smartNoTags,
+      };
 }
 
 /// Carpeta dinámica con su filtro aplicado.
@@ -33,26 +43,13 @@ class SmartFolder {
     this.colorFilter,
   });
 
-  String get displayName {
-    switch (type) {
-      case SmartFolderType.all:
-        return 'Todos';
-      case SmartFolderType.recent:
-        return 'Recientes';
-      case SmartFolderType.thisWeek:
-        return 'Esta semana';
-      case SmartFolderType.byColor:
-        return colorFilter != null ? _colorName(colorFilter!) : 'Por color';
-      case SmartFolderType.byTag:
-        return tagFilter ?? 'Por etiqueta';
-      case SmartFolderType.noTags:
-        return 'Sin etiquetas';
-    }
-  }
-
-  static String _colorName(int color) => kCoverColors
-      .firstWhere((c) => c.$2 == color, orElse: () => ('Otro', null))
-      .$1;
+  String displayName(AppLocalizations l10n) => switch (type) {
+        SmartFolderType.byColor => colorFilter != null
+            ? coverColorName(l10n, colorFilter!)
+            : l10n.smartByColor,
+        SmartFolderType.byTag => tagFilter ?? l10n.smartByTag,
+        _ => type.label(l10n),
+      };
 
   /// Filtra la lista de metas según el criterio de esta carpeta.
   List<NotebookMeta> apply(List<NotebookMeta> metas) {
@@ -145,10 +142,10 @@ class _SmartFoldersSheet extends StatelessWidget {
         controller: scrollController,
         padding: const EdgeInsets.fromLTRB(Spacing.lg, 0, Spacing.lg, Spacing.xl),
         children: [
-          const SheetHeader(
+          SheetHeader(
             icon: Icons.auto_awesome_outlined,
-            title: 'Carpetas inteligentes',
-            subtitle: 'Organiza tus cuadernos automáticamente',
+            title: context.l10n.smartTitle,
+            subtitle: context.l10n.smartSubtitle,
           ),
           for (final type in const [
             SmartFolderType.all,
@@ -162,7 +159,7 @@ class _SmartFoldersSheet extends StatelessWidget {
             const SizedBox(height: Spacing.md),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Spacing.sm),
-              child: Text('Por color', style: labelStyle),
+              child: Text(context.l10n.smartByColor, style: labelStyle),
             ),
             const SizedBox(height: Spacing.sm),
             Wrap(
@@ -188,7 +185,7 @@ class _SmartFoldersSheet extends StatelessWidget {
             const SizedBox(height: Spacing.lg),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Spacing.sm),
-              child: Text('Por etiqueta', style: labelStyle),
+              child: Text(context.l10n.smartByTag, style: labelStyle),
             ),
             const SizedBox(height: Spacing.sm),
             Wrap(
@@ -212,7 +209,7 @@ class _SmartFoldersSheet extends StatelessWidget {
   Widget _chip(BuildContext context, SmartFolder folder, {required Widget avatar}) {
     return FilterChip(
       avatar: avatar,
-      label: Text('${folder.displayName} · ${folder.apply(metas).length}'),
+      label: Text('${folder.displayName(context.l10n)} · ${folder.apply(metas).length}'),
       selected: _isSelected(folder),
       showCheckmark: false,
       onSelected: (_) => Navigator.pop(context, folder),
@@ -227,7 +224,7 @@ class _SmartFoldersSheet extends StatelessWidget {
       selected: selected,
       selectedTileColor: context.colors.secondaryContainer,
       leading: Icon(folder.type.icon, color: accent),
-      title: Text(folder.displayName, style: context.text.titleMedium),
+      title: Text(folder.displayName(context.l10n), style: context.text.titleMedium),
       trailing: Text(
         '$count',
         style: context.text.labelLarge?.copyWith(color: accent),

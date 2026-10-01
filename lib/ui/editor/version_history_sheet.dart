@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import '../../l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/drive_sync_service.dart';
@@ -31,14 +32,14 @@ Future<Object?> showVersionHistorySheet(
         controller: scroll,
         padding: const EdgeInsets.fromLTRB(Spacing.lg, 0, Spacing.lg, Spacing.xl),
         children: [
-          const SheetHeader(
+          SheetHeader(
             icon: Icons.history,
-            title: 'Historial de versiones',
-            subtitle: 'Al restaurar, el estado actual se guarda antes',
+            title: context.l10n.menuVersions,
+            subtitle: context.l10n.verSubtitle,
           ),
-          const _Label('En este dispositivo'),
+          _Label(context.l10n.verOnDevice),
           if (local.isEmpty)
-            const _Hint('Aún no hay copias locales de esta nota.')
+            _Hint(context.l10n.verNoLocal)
           else
             for (final v in local)
               _VersionTile(
@@ -48,7 +49,7 @@ Future<Object?> showVersionHistorySheet(
                 onTap: () => Navigator.pop(context, v),
               ),
           if (driveRevisions != null) ...[
-            const _Label('En Google Drive'),
+            _Label(context.l10n.verOnDrive),
             FutureBuilder<List<DriveRevision>>(
               future: driveRevisions,
               builder: (context, snap) {
@@ -59,11 +60,11 @@ Future<Object?> showVersionHistorySheet(
                   );
                 }
                 if (snap.hasError) {
-                  return _Hint('No se pudo consultar Drive: ${snap.error}');
+                  return _Hint(context.l10n.verDriveFailed('${snap.error}'));
                 }
                 final revs = snap.data ?? const [];
                 if (revs.isEmpty) {
-                  return const _Hint('Esta nota aún no se ha subido a Drive.');
+                  return _Hint(context.l10n.verNotUploaded);
                 }
                 return Column(
                   children: [
@@ -110,7 +111,7 @@ class _VersionTile extends StatelessWidget {
         leading: Icon(icon, color: context.colors.onSurfaceVariant),
         title: Text(formatVersionDate(date), style: context.text.titleSmall),
         subtitle: Text(
-          '${relativeTime(date)}'
+          '${relativeTime(context.l10n, date)}'
           '${sizeBytes > 0 ? ' · ${(sizeBytes / 1024).toStringAsFixed(0)} KB' : ''}',
           style: context.text.bodySmall
               ?.copyWith(color: context.colors.onSurfaceVariant),

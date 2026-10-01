@@ -12,6 +12,19 @@ env:
   FLUTTER_VERSION: '3.47.x'
 
 jobs:
+  # Falla si algún commit (o su historial) contiene claves, tokens o
+  # credenciales. Los client IDs de OAuth y las SHA-1 son públicos y no cuentan.
+  secret-scan:
+    name: Escaneo de secretos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   analyze-and-test:
     name: Analyze + Test
     runs-on: ubuntu-latest

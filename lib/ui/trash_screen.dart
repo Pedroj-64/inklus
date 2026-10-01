@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import '../l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 import '../services/storage_service.dart';
@@ -41,7 +42,7 @@ class _TrashScreenState extends State<TrashScreen> {
     await widget.storage.restoreFromTrash(meta.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('"${meta.title}" restaurado')),
+      SnackBar(content: Text(context.l10n.trashRestoredMsg(meta.title))),
     );
     await _loadTrash();
   }
@@ -49,10 +50,9 @@ class _TrashScreenState extends State<TrashScreen> {
   Future<void> _purge(TrashEntry meta) async {
     final ok = await showConfirmDialog(
       context,
-      title: 'Eliminar definitivamente',
-      message: 'Se eliminará "${meta.title}" permanentemente. '
-          'Esta acción no se puede deshacer.',
-      confirmLabel: 'Eliminar',
+      title: context.l10n.trashDeleteForever,
+      message: context.l10n.trashPurgeBody(meta.title),
+      confirmLabel: context.l10n.libDelete,
       destructive: true,
     );
     if (!ok) return;
@@ -64,10 +64,9 @@ class _TrashScreenState extends State<TrashScreen> {
     if (_trashMetas == null || _trashMetas!.isEmpty) return;
     final ok = await showConfirmDialog(
       context,
-      title: 'Vaciar papelera',
-      message: 'Se eliminarán permanentemente ${_trashMetas!.length} '
-          'elemento(s). Esta acción no se puede deshacer.',
-      confirmLabel: 'Vaciar',
+      title: context.l10n.trashEmptyTitle,
+      message: context.l10n.trashEmptyBody(_trashMetas!.length),
+      confirmLabel: context.l10n.trashEmpty,
       destructive: true,
     );
     if (!ok) return;
@@ -79,17 +78,17 @@ class _TrashScreenState extends State<TrashScreen> {
   Widget build(BuildContext context) {
     final metas = _trashMetas;
     return InklusPage(
-      title: 'Papelera',
+      title: context.l10n.libTrash,
       subtitle: metas == null || metas.isEmpty
-          ? 'Lo que elimines se guarda aquí 30 días'
-          : '${metas.length} elemento(s) · se borran solos a los 30 días',
+          ? context.l10n.trashSubtitleEmpty
+          : context.l10n.trashSubtitleCount(metas.length),
       icon: Icons.delete_outline,
       maxWidth: 820,
       headerTrailing: metas != null && metas.isNotEmpty
           ? TextButton.icon(
               onPressed: _emptyTrash,
               icon: const Icon(Icons.delete_sweep_outlined),
-              label: const Text('Vaciar'),
+              label: Text(context.l10n.trashEmpty),
               style: TextButton.styleFrom(foregroundColor: context.inklus.danger),
             )
           : null,
@@ -100,13 +99,12 @@ class _TrashScreenState extends State<TrashScreen> {
             child: Center(child: CircularProgressIndicator()),
           )
         else if (metas.isEmpty)
-          const SliverFillRemaining(
+          SliverFillRemaining(
             hasScrollBody: false,
             child: EmptyState(
               icon: Icons.delete_sweep_outlined,
-              title: 'Papelera vacía',
-              message: 'Los cuadernos y notas que elimines se guardarán aquí '
-                  'durante 30 días antes de borrarse definitivamente.',
+              title: context.l10n.trashEmptyState,
+              message: context.l10n.trashEmptyStateBody,
             ),
           )
         else
@@ -122,11 +120,11 @@ class _TrashScreenState extends State<TrashScreen> {
   Widget _tile(TrashEntry meta) {
     final what = switch (meta.kind) {
       TrashKind.notebook =>
-        'Cuaderno · ${meta.noteCount} nota${meta.noteCount == 1 ? '' : 's'}',
+        context.l10n.trashNotebookKind(meta.noteCount),
       TrashKind.note => meta.notebookTitle == null
-          ? 'Nota'
-          : 'Nota de «${meta.notebookTitle}»',
-      TrashKind.legacyDocument => 'Cuaderno (formato antiguo)',
+          ? context.l10n.trashNote
+          : context.l10n.trashNoteOf(meta.notebookTitle!),
+      TrashKind.legacyDocument => context.l10n.trashLegacy,
     };
     final left = meta.daysLeft;
     return ListTile(
@@ -140,8 +138,11 @@ class _TrashScreenState extends State<TrashScreen> {
         style: context.text.titleMedium,
       ),
       subtitle: Text(
-        '$what · ${date_util.deletedAgo(meta.deletedAt)} · '
-        '${left <= 1 ? 'se borra mañana' : 'quedan $left días'}',
+        context.l10n.trashInfoLine(
+          what,
+          date_util.deletedAgo(context.l10n, meta.deletedAt),
+          left <= 1 ? context.l10n.trashLeftTomorrow : context.l10n.trashLeftDays(left),
+        ),
         style: context.text.bodyMedium
             ?.copyWith(color: context.colors.onSurfaceVariant),
       ),
@@ -149,12 +150,12 @@ class _TrashScreenState extends State<TrashScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            tooltip: meta.kind == TrashKind.note ? 'Devolver a su cuaderno' : 'Restaurar',
+            tooltip: meta.kind == TrashKind.note ? context.l10n.trashReturn : context.l10n.commonRestore,
             icon: const Icon(Icons.restore_from_trash),
             onPressed: () => _restore(meta),
           ),
           IconButton(
-            tooltip: 'Eliminar definitivamente',
+            tooltip: context.l10n.trashDeleteForever,
             icon: Icon(Icons.delete_forever, color: context.inklus.danger),
             onPressed: () => _purge(meta),
           ),

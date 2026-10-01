@@ -5,6 +5,7 @@ import '../services/writing_stats_service.dart';
 import 'theme/inklus_colors.dart';
 import 'theme/tokens.dart';
 import 'widgets/page_scaffold.dart';
+import '../l10n/l10n.dart';
 
 /// Pantalla de estadísticas de escritura.
 ///
@@ -41,8 +42,8 @@ class _WritingStatsScreenState extends State<WritingStatsScreen> {
   Widget build(BuildContext context) {
     final totals = _totals;
     return InklusPage(
-      title: 'Estadísticas',
-      subtitle: 'Tu actividad de escritura en este dispositivo',
+      title: context.l10n.statsTitle,
+      subtitle: context.l10n.statsSubtitle,
       icon: Icons.insights_outlined,
       maxWidth: 820,
       slivers: [
@@ -52,30 +53,29 @@ class _WritingStatsScreenState extends State<WritingStatsScreen> {
             child: Center(child: CircularProgressIndicator()),
           )
         else if (totals.totalStrokes == 0 && totals.totalMinutesActive == 0)
-          const SliverFillRemaining(
+          SliverFillRemaining(
             hasScrollBody: false,
             child: EmptyState(
               icon: Icons.analytics_outlined,
-              title: 'Sin datos todavía',
-              message: 'Empieza a escribir en tus cuadernos y tus estadísticas '
-                  'aparecerán aquí.',
+              title: context.l10n.statsEmptyTitle,
+              message: context.l10n.statsEmptyBody,
             ),
           )
         else
           SliverList.list(
             children: [
               _SummaryGrid(items: [
-                (Icons.draw_outlined, 'Trazos', totals.totalStrokes),
-                (Icons.description_outlined, 'Páginas', totals.totalPagesCreated),
-                (Icons.timer_outlined, 'Minutos', totals.totalMinutesActive),
-                (Icons.event_available_outlined, 'Días activos', totals.totalDaysActive),
+                (Icons.draw_outlined, context.l10n.statsStrokes, totals.totalStrokes),
+                (Icons.description_outlined, context.l10n.tbPages, totals.totalPagesCreated),
+                (Icons.timer_outlined, context.l10n.statsMinutes, totals.totalMinutesActive),
+                (Icons.event_available_outlined, context.l10n.statsActiveDays, totals.totalDaysActive),
               ]),
-              const SectionLabel('Rachas'),
+              SectionLabel(context.l10n.statsStreaks),
               Row(
                 children: [
                   Expanded(
                     child: _StreakCard(
-                      label: 'Racha actual',
+                      label: context.l10n.statsCurrentStreak,
                       days: totals.currentStreak,
                       color: context.inklus.success,
                       icon: Icons.local_fire_department_outlined,
@@ -84,7 +84,7 @@ class _WritingStatsScreenState extends State<WritingStatsScreen> {
                   const SizedBox(width: Spacing.md),
                   Expanded(
                     child: _StreakCard(
-                      label: 'Récord',
+                      label: context.l10n.statsRecord,
                       days: totals.longestStreak,
                       color: context.inklus.warning,
                       icon: Icons.emoji_events_outlined,
@@ -92,7 +92,7 @@ class _WritingStatsScreenState extends State<WritingStatsScreen> {
                   ),
                 ],
               ),
-              const SectionLabel('Actividad — últimos 30 días'),
+              SectionLabel(context.l10n.statsActivity),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(Spacing.lg),
@@ -103,10 +103,10 @@ class _WritingStatsScreenState extends State<WritingStatsScreen> {
                       Wrap(
                         spacing: Spacing.lg,
                         children: [
-                          _LegendDot(color: context.colors.primary, label: 'Trazos'),
+                          _LegendDot(color: context.colors.primary, label: context.l10n.statsStrokes),
                           _LegendDot(
                               color: context.inklus.success,
-                              label: 'Días con páginas nuevas'),
+                              label: context.l10n.statsDaysWithPages),
                         ],
                       ),
                     ],
@@ -194,7 +194,7 @@ class _StreakCard extends StatelessWidget {
             ),
             const SizedBox(height: Spacing.sm),
             Text(
-              days == 1 ? '1 día' : '$days días',
+              context.l10n.statsDays(days),
               style: context.text.headlineMedium?.copyWith(color: color),
             ),
           ],
@@ -259,8 +259,7 @@ class _ActivityChart extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 1.5),
                       child: Tooltip(
-                        message: '${_formatDate(day.date)}: ${day.strokeCount} '
-                            'trazos, ${day.pagesCreated} páginas',
+                        message: context.l10n.statsDayTooltip(_formatDate(day.date), day.strokeCount, day.pagesCreated),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [

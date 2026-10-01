@@ -11,6 +11,7 @@ import '../widgets/controller_selector.dart';
 import '../widgets/dialogs.dart';
 import 'anchored_popover.dart';
 import 'tool_popovers.dart';
+import '../../l10n/l10n.dart';
 
 /// Barra flotante de acciones para la selección del lazo (o para pegar).
 ///
@@ -65,7 +66,7 @@ class SelectionBar extends StatelessWidget {
                           ? [
                               _Action(
                                 icon: Icons.content_paste,
-                                label: 'Pegar',
+                                label: context.l10n.selPaste,
                                 onTap: canvas.pasteStrokes,
                               ),
                             ]
@@ -91,22 +92,22 @@ class SelectionBar extends StatelessWidget {
     ),
     _Action(
       icon: Icons.copy,
-      label: 'Copiar',
+      label: context.l10n.selCopy,
       onTap: () {
         canvas.copySelectedStrokes();
-        onMessage('Copiado');
+        onMessage(context.l10n.selCopied);
       },
     ),
     _Action(
       icon: Icons.copy_all_outlined,
-      label: 'Duplicar',
+      label: context.l10n.libDuplicate,
       onTap: canvas.duplicateSelectedStrokes,
     ),
     if (hasStrokes) ...[
       Builder(
         builder: (anchor) => _Action(
           icon: Icons.palette_outlined,
-          label: 'Color',
+          label: context.l10n.createColor,
           onTap: () => showAnchoredPopover<void>(
             context: context,
             anchorContext: anchor,
@@ -120,36 +121,37 @@ class SelectionBar extends StatelessWidget {
       ),
       _Action(
         icon: Icons.line_weight,
-        label: 'Más fino',
+        label: context.l10n.selThinner,
         onTap: () => canvas.scaleSelectionThickness(0.8),
         iconSize: 16,
       ),
       _Action(
         icon: Icons.line_weight,
-        label: 'Más grueso',
+        label: context.l10n.selThicker,
         onTap: () => canvas.scaleSelectionThickness(1.25),
       ),
       if (OcrService.isSupported)
         _Action(
           icon: Icons.title,
-          label: 'Convertir a texto',
+          label: context.l10n.selToText,
           onTap: () => _convertToText(context),
         ),
     ],
     _Action(
       icon: Icons.delete_outline,
-      label: 'Eliminar',
+      label: context.l10n.libDelete,
       color: context.inklus.danger,
       onTap: canvas.deleteSelectedStrokes,
     ),
     _Action(
       icon: Icons.close,
-      label: 'Deseleccionar',
+      label: context.l10n.selDeselect,
       onTap: canvas.clearLassoSelection,
     ),
   ];
 
   Future<void> _convertToText(BuildContext context) async {
+    final l10n = context.l10n;
     try {
       final result = await OcrService.recognizeStrokes(
         canvas.selectedStrokes,
@@ -157,20 +159,20 @@ class SelectionBar extends StatelessWidget {
       );
       if (!context.mounted) return;
       if (result.isEmpty) {
-        onMessage('No se reconoció texto en la selección');
+        onMessage(context.l10n.selNoText);
         return;
       }
       // Permitir corregir antes de sustituir la escritura.
       final text = await showTextPrompt(
         context,
-        title: 'Convertir a texto',
+        title: context.l10n.selToText,
         initialValue: result.text,
-        confirmLabel: 'Convertir',
+        confirmLabel: context.l10n.selConvert,
         multiline: true,
       );
       if (text != null) canvas.convertSelectionToText(text);
     } catch (e) {
-      onMessage('No se pudo reconocer: $e');
+      onMessage(l10n.selRecognizeFailed('$e'));
     }
   }
 }

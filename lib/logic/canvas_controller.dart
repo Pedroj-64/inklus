@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -69,6 +70,9 @@ abstract class _CanvasCore extends ChangeNotifier {
   void _notifyToolContext();
   void _notifyBottomBarContext();
 }
+
+/// Avisos del lienzo que la UI traduce y muestra.
+enum ControllerNotice { stylusDetected, pageDeleted }
 
 class CanvasController extends _CanvasCore
     with _CanvasLayers, _CanvasView, _CanvasSelection {
@@ -461,7 +465,7 @@ class CanvasController extends _CanvasCore
   bool _fingerDrawingUserSet = false;
 
   /// Mensajes informativos para la UI (p. ej. "Lápiz detectado").
-  void Function(String message)? onNotice;
+  void Function(ControllerNotice notice)? onNotice;
 
   /// Lo llama el lienzo al ver un lápiz. La primera vez (si el usuario no
   /// eligió otra cosa) pasa a modo *solo lápiz*: el dedo desplaza la página
@@ -473,9 +477,7 @@ class CanvasController extends _CanvasCore
     _notifyBottomBarContext();
     notifyListeners();
     _saveInputPrefs();
-    onNotice?.call(
-      'Lápiz detectado: ahora el dedo desplaza la página (actívalo en la barra si quieres dibujar con el dedo)',
-    );
+    onNotice?.call(ControllerNotice.stylusDetected);
   }
 
   Future<void> _loadInputPrefs() async {
@@ -535,8 +537,9 @@ class CanvasController extends _CanvasCore
   void _onHold() {
     final active = _activeStroke;
     if (!_isDrawing || active == null || _heldShapeType != null) return;
-    if (active.tool == ToolType.highlighter || _activePoints.length < 10) return;
-    final shape = ShapeDetector.detect(_activePoints);
+    if (_activePoints.length < 10) return;
+    final shape = ShapeDetector.detect(_activePoints,
+        lineOnly: active.tool == ToolType.highlighter);
     if (shape == null) return;
     _activePoints
       ..clear()
@@ -704,6 +707,7 @@ class CanvasController extends _CanvasCore
     required ToolType tool,
   }) {
     if (tool == ToolType.select) return;
+    if (tool != ToolType.text) commitEditingText();
     // Empezar a escribir en una hoja vecina visible la hace la actual.
     worldPoint = _adoptPageAt(worldPoint);
     if (tool == ToolType.lasso) {
@@ -715,7 +719,13 @@ class CanvasController extends _CanvasCore
       return;
     }
     if (tool == ToolType.text) {
-      addTextItem(worldPoint);
+      final hit = textItemAt(worldPoint);
+      if (hit != null) {
+        beginEditingText(hit);
+      } else {
+        commitEditingText();
+        addTextItem(worldPoint);
+      }
       return;
     }
     // Láser: estela efímera, nunca se guarda ni pasa por deshacer.
@@ -840,10 +850,9 @@ class CanvasController extends _CanvasCore
       // "siempre" se detecta ahora al soltar.
       if (heldShape != null) {
         finalStroke = finalStroke.copyWith(shapeType: heldShape);
-      } else if (_shapeMode == ShapeMode.always &&
-          active.tool != ToolType.highlighter &&
-          active.tool != ToolType.eraser) {
-        final shape = ShapeDetector.detect(finalStroke.points);
+      } else if (_shapeMode == ShapeMode.always && active.tool != ToolType.eraser) {
+        final shape = ShapeDetector.detect(finalStroke.points,
+            lineOnly: active.tool == ToolType.highlighter);
         if (shape != null) {
           // copyWith conserva capa, ajustes y demás atributos.
           finalStroke = finalStroke.copyWith(
@@ -1014,11 +1023,12 @@ class CanvasController extends _CanvasCore
     _clearItemSelection();
     _lassoPath = [];
     _editingTextId = null;
+    _editingTextBefore = null;
     _activeLayerIndex = 0;
   }
 
   /// Aviso con acción de deshacer (la UI lo muestra como snackbar).
-  void Function(String message, VoidCallback undo)? onUndoableNotice;
+  void Function(ControllerNotice notice, VoidCallback undo)? onUndoableNotice;
 
   bool get canGoNext => _pageIndex < pageCount - 1;
   bool get canGoPrevious => _pageIndex > 0;
@@ -1045,7 +1055,7 @@ class CanvasController extends _CanvasCore
     _resetPageState();
     _viewInitialized = false;
     _touch();
-    onUndoableNotice?.call('Página eliminada', () => _restorePage(removed, index));
+    onUndoableNotice?.call(ControllerNotice.pageDeleted, () => _restorePage(removed, index));
   }
 
   void _restorePage(Page removed, int index) {
@@ -1103,22 +1113,15 @@ class CanvasController extends _CanvasCore
   /// resto de la libreta. Si la página actual está vacía, se reutiliza.
   void insertPdfPages(List<({String path, int width, int height})> pdfPages) {
     if (pdfPages.isEmpty) return;
-    final pagesToAdd = <Page>[];
-    for (var i = 0; i < pdfPages.length; i++) {
-      final p = pdfPages[i];
-      final w = PageTemplate.sheetWidth;
-      final h = p.width == 0 ? PageTemplate.sheetHeight : w * p.height / p.width;
-      pagesToAdd.add(Page.blank(
-        name: 'PDF ${i + 1}',
-        template: PageTemplate(
-          type: TemplateType.custom,
-          imagePath: p.path,
-          infiniteFill: false,
-          customWidth: w,
-          customHeight: h,
+    final pagesToAdd = [
+      for (var i = 0; i < pdfPages.length; i++)
+        Page.background(
+          name: 'PDF ${i + 1}',
+          path: pdfPages[i].path,
+          width: pdfPages[i].width,
+          height: pdfPages[i].height,
         ),
-      ));
-    }
+    ];
     final current = page;
     final currentEmpty = current.strokes.isEmpty &&
         current.images.isEmpty &&
@@ -1228,8 +1231,26 @@ class CanvasController extends _CanvasCore
 
   String? _editingTextId;
 
+  /// Estado de la caja al empezar a editarla (null = caja nueva). Con él se
+  /// empuja UNA acción de deshacer al terminar, no una por tecla.
+  TextItem? _editingTextBefore;
+
   String? get editingTextId => _editingTextId;
 
+  /// Caja de texto visible y editable bajo [worldPoint] (la de más arriba).
+  TextItem? textItemAt(Offset worldPoint) {
+    for (final t in page.textItems.reversed) {
+      if (_isLayerVisible(t.layerIndex) &&
+          !_isLayerLocked(t.layerIndex) &&
+          t.contains(worldPoint)) {
+        return t;
+      }
+    }
+    return null;
+  }
+
+  /// Crea una caja vacía y la pone en edición. No entra en deshacer hasta
+  /// que [commitEditingText] confirme que tiene contenido.
   void addTextItem(Offset worldPoint) {
     final item = TextItem(
       id: newId('txt'),
@@ -1242,8 +1263,17 @@ class CanvasController extends _CanvasCore
     );
     page.textItems.add(item);
     _editingTextId = item.id;
-    _undoStack.push(CanvasAction(textItemsAdded: [item]));
+    _editingTextBefore = null;
     _touch();
+  }
+
+  /// Pone una caja existente en edición.
+  void beginEditingText(TextItem item) {
+    if (_isLayerLocked(item.layerIndex)) return;
+    commitEditingText();
+    _editingTextId = item.id;
+    _editingTextBefore = item;
+    notifyListeners();
   }
 
   void updateTextItem(TextItem item) {
@@ -1255,16 +1285,42 @@ class CanvasController extends _CanvasCore
     }
   }
 
-  void commitTextItem(TextItem item) {
+  /// Termina la edición en curso: una caja vacía se descarta y el resto
+  /// empuja una sola acción de deshacer (añadir o reemplazar). Idempotente.
+  void commitEditingText() {
+    final id = _editingTextId;
+    if (id == null) return;
+    final before = _editingTextBefore;
     _editingTextId = null;
+    _editingTextBefore = null;
+    final index = page.textItems.indexWhere((t) => t.id == id);
+    if (index < 0) return;
+    final current = page.textItems[index];
+    if (current.text.trim().isEmpty) {
+      page.textItems.removeAt(index);
+      if (before != null) _undoStack.push(CanvasAction(textItemsRemoved: [before]));
+    } else if (before == null) {
+      _undoStack.push(CanvasAction(textItemsAdded: [current]));
+    } else if (jsonEncode(before.toJson()) != jsonEncode(current.toJson())) {
+      _undoStack.push(CanvasAction(
+        textItemsRemoved: [before],
+        textItemsAdded: [current],
+      ));
+    }
     _touch();
   }
 
+  /// Elimina la caja en edición (o la indicada).
   void removeTextItem(TextItem item) {
     if (_isLayerLocked(item.layerIndex)) return;
+    final before = _editingTextId == item.id ? _editingTextBefore : item;
+    final wasEditing = _editingTextId == item.id;
     page.textItems.removeWhere((t) => t.id == item.id);
-    if (_editingTextId == item.id) _editingTextId = null;
-    _undoStack.push(CanvasAction(textItemsRemoved: [item]));
+    if (wasEditing) {
+      _editingTextId = null;
+      _editingTextBefore = null;
+    }
+    if (before != null) _undoStack.push(CanvasAction(textItemsRemoved: [before]));
     _touch();
   }
 

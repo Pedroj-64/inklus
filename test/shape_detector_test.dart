@@ -52,4 +52,42 @@ void main() {
     expect(shape?.type, ShapeType.triangle);
     expect(shape!.normalizedPoints.first.offset, shape.normalizedPoints.last.offset);
   });
+
+  /// Recta a mano alzada de (0,0) a (to) que ondula ±[wobble] (un temblor
+  /// de baja frecuencia, como el de una mano real).
+  List<StrokePoint> wobblyLine(Offset to, double wobble) {
+    final dir = to / to.distance;
+    final normal = Offset(-dir.dy, dir.dx);
+    return [
+      for (var i = 0; i <= 40; i++)
+        StrokePoint.fromOffset(
+            to * (i / 40) + normal * (sin(i / 40 * 2 * pi) * wobble), 0.5),
+    ];
+  }
+
+  test('resaltador: una raya temblorosa se endereza y queda horizontal', () {
+    // 400 px con ±60 px de ondulación: el lapicero no la aceptaría, el marcador sí.
+    final pts = wobblyLine(const Offset(400, 12), 60);
+    expect(ShapeDetector.detect(pts), isNull);
+    final shape = ShapeDetector.detect(pts, lineOnly: true);
+    expect(shape?.type, ShapeType.line);
+    expect(shape!.normalizedPoints.length, 2);
+    expect(shape.normalizedPoints.last.y, shape.normalizedPoints.first.y,
+        reason: 'casi horizontal → horizontal exacta');
+  });
+
+  test('resaltador: nunca devuelve figuras (solo rectas)', () {
+    final pts = polygon(const [
+      Offset(0, 0), Offset(300, 0), Offset(300, 200), Offset(0, 200),
+    ]);
+    expect(ShapeDetector.detect(pts, lineOnly: true), isNull);
+  });
+
+  test('una diagonal real NO se fuerza a un eje', () {
+    final shape = ShapeDetector.detect(wobblyLine(const Offset(300, 300), 2));
+    expect(shape?.type, ShapeType.line);
+    final a = shape!.normalizedPoints.first, b = shape.normalizedPoints.last;
+    expect((b.x - a.x).abs(), greaterThan(250));
+    expect((b.y - a.y).abs(), greaterThan(250));
+  });
 }

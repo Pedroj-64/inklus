@@ -10,6 +10,7 @@ import '../../services/export_service.dart';
 import '../../services/image_service.dart';
 import '../theme/inklus_colors.dart';
 import '../theme/tokens.dart';
+import '../../l10n/l10n.dart';
 
 /// Panel lateral con las páginas de la nota (vertical, como GoodNotes).
 ///
@@ -102,10 +103,10 @@ class _PagesPanelState extends State<PagesPanel> {
       items: [
         PopupMenuItem(
           value: 'bookmark',
-          child: Text(_c.pages[index].bookmarked ? 'Quitar marcador' : 'Marcar página'),
+          child: Text(_c.pages[index].bookmarked ? context.l10n.pgUnbookmark : context.l10n.pgBookmark),
         ),
-        const PopupMenuItem(value: 'duplicate', child: Text('Duplicar página')),
-        const PopupMenuItem(value: 'delete', child: Text('Eliminar página')),
+        PopupMenuItem(value: 'duplicate', child: Text(context.l10n.pgDuplicate)),
+        PopupMenuItem(value: 'delete', child: Text(context.l10n.pgDelete)),
       ],
     );
     if (choice == null) return;
@@ -137,17 +138,17 @@ class _PagesPanelState extends State<PagesPanel> {
             child: Row(
               children: [
                 Expanded(
-                  child: Text('Páginas (${pages.length})', style: context.text.titleSmall),
+                  child: Text(context.l10n.pgPagesCount(pages.length), style: context.text.titleSmall),
                 ),
                 IconButton(
-                  tooltip: _onlyBookmarked ? 'Mostrar todas' : 'Solo marcadas',
+                  tooltip: _onlyBookmarked ? context.l10n.pgShowAll : context.l10n.pgOnlyBookmarked,
                   isSelected: _onlyBookmarked,
                   icon: const Icon(Icons.bookmark_border),
                   selectedIcon: const Icon(Icons.bookmark),
                   onPressed: () => setState(() => _onlyBookmarked = !_onlyBookmarked),
                 ),
                 IconButton(
-                  tooltip: 'Cerrar',
+                  tooltip: context.l10n.commonClose,
                   icon: const Icon(Icons.close),
                   onPressed: widget.onClose,
                 ),
@@ -213,7 +214,7 @@ class _PagesPanelState extends State<PagesPanel> {
                               Builder(
                                 builder: (btn) => IconButton(
                                   visualDensity: VisualDensity.compact,
-                                  tooltip: 'Opciones de la página',
+                                  tooltip: context.l10n.pgOptions,
                                   icon: const Icon(Icons.more_horiz, size: 18),
                                   onPressed: () {
                                     final box = btn.findRenderObject() as RenderBox;
@@ -237,7 +238,7 @@ class _PagesPanelState extends State<PagesPanel> {
               width: double.infinity,
               child: FilledButton.tonalIcon(
                 icon: const Icon(Icons.add),
-                label: const Text('Nueva página'),
+                label: Text(context.l10n.pgNew),
                 onPressed: _c.addPage,
               ),
             ),

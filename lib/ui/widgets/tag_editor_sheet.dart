@@ -5,6 +5,7 @@ import '../../constants.dart';
 import '../theme/inklus_colors.dart';
 import '../theme/tokens.dart';
 import 'page_scaffold.dart';
+import '../../l10n/l10n.dart';
 
 /// Bottom sheet para gestionar las etiquetas de un cuaderno.
 ///
@@ -119,15 +120,15 @@ class _TagEditorSheetState extends State<_TagEditorSheet> {
           Spacing.xl + MediaQuery.viewInsetsOf(context).bottom,
         ),
         children: [
-          const SheetHeader(
+          SheetHeader(
             icon: Icons.sell_outlined,
-            title: 'Etiquetas del cuaderno',
-            subtitle: 'Para encontrarlo y agruparlo en carpetas inteligentes',
+            title: context.l10n.tagTitle,
+            subtitle: context.l10n.tagSubtitle,
           ),
 
           // Tags seleccionadas.
           if (_selected.isNotEmpty) ...[
-            Text('Etiquetas activas', style: labelStyle),
+            Text(context.l10n.tagActive, style: labelStyle),
             const SizedBox(height: Spacing.sm),
             Wrap(
               spacing: Spacing.sm,
@@ -150,7 +151,7 @@ class _TagEditorSheetState extends State<_TagEditorSheet> {
 
           // Tags disponibles.
           if (_available.isNotEmpty) ...[
-            Text('Otras etiquetas', style: labelStyle),
+            Text(context.l10n.tagOthers, style: labelStyle),
             const SizedBox(height: Spacing.sm),
             Wrap(
               spacing: Spacing.sm,
@@ -176,14 +177,14 @@ class _TagEditorSheetState extends State<_TagEditorSheet> {
               Expanded(
                 child: TextField(
                   controller: _newTagController,
-                  decoration: const InputDecoration(hintText: 'Nueva etiqueta…'),
+                  decoration: InputDecoration(hintText: context.l10n.tagNew),
                   textInputAction: TextInputAction.done,
                   onSubmitted: _addTag,
                 ),
               ),
               const SizedBox(width: Spacing.sm),
               IconButton.filled(
-                tooltip: 'Añadir etiqueta',
+                tooltip: context.l10n.tagAdd,
                 onPressed: () => _addTag(_newTagController.text),
                 icon: const Icon(Icons.add),
               ),
@@ -194,7 +195,7 @@ class _TagEditorSheetState extends State<_TagEditorSheet> {
             onPressed: () => Navigator.pop(context, _selected),
             style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(Sizes.minTouch)),
-            child: const Text('Guardar etiquetas'),
+            child: Text(context.l10n.tagSave),
           ),
         ],
       ),

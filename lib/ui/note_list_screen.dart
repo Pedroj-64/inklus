@@ -14,6 +14,9 @@ import '../services/image_service.dart';
 import '../services/storage_service.dart';
 import 'home_screen.dart';
 import 'widgets/dialogs.dart';
+import '../l10n/l10n.dart';
+import '../utils/date_utils.dart' as date_util;
+import 'widgets/notebook_covers.dart';
 
 /// Pantalla que muestra la lista de apuntes (notes) dentro de un cuaderno.
 ///
@@ -98,8 +101,8 @@ class _NoteListScreenState extends State<NoteListScreen> {
 
   Future<void> _renameNote(Note note) async {
     final name = await _promptText(
-      titulo: 'Renombrar nota',
-      hint: 'Nombre',
+      titulo: context.l10n.noteRenameTitle,
+      hint: context.l10n.createName,
       prefilled: note.title,
     );
     if (name == null) return;
@@ -116,18 +119,16 @@ class _NoteListScreenState extends State<NoteListScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Eliminar nota'),
-        content: Text(
-          'Se eliminará "${note.title}" de este cuaderno.',
-        ),
+        title: Text(context.l10n.noteDeleteTitle),
+        content: Text(context.l10n.noteDeleteBody(note.title)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar'),
+            child: Text(context.l10n.libDelete),
           ),
         ],
       ),
@@ -139,8 +140,8 @@ class _NoteListScreenState extends State<NoteListScreen> {
 
   Future<void> _renameNotebook() async {
     final name = await _promptText(
-      titulo: 'Renombrar cuaderno',
-      hint: 'Nombre',
+      titulo: context.l10n.libRenameTitle,
+      hint: context.l10n.createName,
       prefilled: _notebook.title,
     );
     if (name == null) return;
@@ -152,7 +153,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
 
   Future<_CreateNoteResult?> _showCreateNoteDialog() async {
     final nameController = TextEditingController(
-      text: 'Nota ${_notebook.notes.length + 1}',
+      text: context.l10n.noteDefaultName(_notebook.notes.length + 1),
     );
     var selectedTemplate = const PageTemplate();
 
@@ -160,7 +161,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Nueva nota'),
+          title: Text(context.l10n.noteNew),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -169,9 +170,9 @@ class _NoteListScreenState extends State<NoteListScreen> {
                 TextField(
                   controller: nameController,
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Nombre',
-                    hintText: 'Mi nota',
+                  decoration: InputDecoration(
+                    labelText: context.l10n.createName,
+                    hintText: context.l10n.noteNameHint,
                   ),
                   onSubmitted: (_) {
                     if (nameController.text.trim().isNotEmpty) {
@@ -186,8 +187,8 @@ class _NoteListScreenState extends State<NoteListScreen> {
                   },
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  'Plantilla',
+                Text(
+                  context.l10n.createTemplate,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -206,7 +207,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
+              child: Text(context.l10n.commonCancel),
             ),
             FilledButton(
               onPressed: () {
@@ -217,7 +218,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
                   _CreateNoteResult(name: name, template: selectedTemplate),
                 );
               },
-              child: const Text('Crear'),
+              child: Text(context.l10n.noteCreate),
             ),
           ],
         ),
@@ -235,7 +236,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
       title: titulo,
       hint: hint,
       initialValue: prefilled,
-      confirmLabel: 'Guardar',
+      confirmLabel: context.l10n.commonSave,
     );
     if (result == null || result.trim().isEmpty) return null;
     return result.trim();
@@ -248,11 +249,11 @@ class _NoteListScreenState extends State<NoteListScreen> {
     final count = _notebook.notes.length;
     return InklusPage(
       title: _notebook.title,
-      subtitle: count == 1 ? '1 nota' : '$count notas',
+      subtitle: context.l10n.noteCount(count),
       maxWidth: double.infinity,
       actions: [
         IconButton(
-          tooltip: 'Renombrar cuaderno',
+          tooltip: context.l10n.libRenameTitle,
           icon: const Icon(Icons.edit_outlined),
           onPressed: _renameNotebook,
         ),
@@ -260,7 +261,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createNote,
         icon: const Icon(Icons.add),
-        label: const Text('Nueva nota'),
+        label: Text(context.l10n.noteNew),
       ),
       slivers: [
         if (count == 0)
@@ -268,13 +269,13 @@ class _NoteListScreenState extends State<NoteListScreen> {
             hasScrollBody: false,
             child: EmptyState(
               icon: Icons.note_add_outlined,
-              title: 'Sin notas',
-              message: 'Crea tu primera nota para empezar a escribir.',
+              title: context.l10n.noteEmptyTitle,
+              message: context.l10n.noteEmptyHint,
               actions: [
                 FilledButton.icon(
                   onPressed: _createNote,
                   icon: const Icon(Icons.add),
-                  label: const Text('Crear nota'),
+                  label: Text(context.l10n.noteCreateAction),
                 ),
               ],
             ),
@@ -297,7 +298,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
       itemBuilder: (context, index) {
         final note = _notebook.notes[index];
         final pageCount = note.pages.length;
-        final timeAgo = _relativeTime(note.updatedAt);
+        final timeAgo = date_util.relativeTime(context.l10n, note.updatedAt);
         return Card(
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -344,7 +345,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
                         top: Spacing.xs,
                         right: Spacing.xs,
                         child: PopupMenuButton<String>(
-                          tooltip: 'Opciones',
+                          tooltip: context.l10n.noteOptions,
                           style: IconButton.styleFrom(
                             backgroundColor:
                                 context.colors.surface.withValues(alpha: 0.85),
@@ -366,7 +367,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
                               value: 'rename',
                               child: ListTile(
                                 leading: Icon(Icons.edit_outlined),
-                                title: Text('Renombrar'),
+                                title: Text(context.l10n.libRename),
                                 dense: true,
                               ),
                             ),
@@ -374,7 +375,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
                               value: 'duplicate',
                               child: ListTile(
                                 leading: Icon(Icons.copy_outlined),
-                                title: Text('Duplicar'),
+                                title: Text(context.l10n.libDuplicate),
                                 dense: true,
                               ),
                             ),
@@ -387,7 +388,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
                                   color: context.inklus.danger,
                                 ),
                                 title: Text(
-                                  'Eliminar',
+                                  context.l10n.libDelete,
                                   style: TextStyle(color: context.inklus.danger),
                                 ),
                                 dense: true,
@@ -410,14 +411,14 @@ class _NoteListScreenState extends State<NoteListScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              note.title,
+                              displayTitle(context.l10n, note.title),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: context.text.titleSmall,
                             ),
                             const SizedBox(height: Spacing.xxs),
                             Text(
-                              '$pageCount página${pageCount == 1 ? '' : 's'} · $timeAgo',
+                              context.l10n.notePageCount(pageCount, timeAgo),
                               style: context.text.bodySmall?.copyWith(
                                   color: context.colors.onSurfaceVariant),
                             ),
@@ -438,16 +439,6 @@ class _NoteListScreenState extends State<NoteListScreen> {
 
 // --- Helpers ---
 
-String _relativeTime(DateTime time) {
-  final diff = DateTime.now().difference(time);
-  if (diff.inMinutes < 1) return 'ahora';
-  if (diff.inMinutes < 60) return 'hace ${diff.inMinutes} min';
-  if (diff.inHours < 24) return 'hace ${diff.inHours} h';
-  if (diff.inDays < 7) return 'hace ${diff.inDays} d';
-  final t = time.toLocal();
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${two(t.day)}/${two(t.month)}/${t.year}';
-}
 
 /// Resultado del diálogo de creación de nota.
 class _CreateNoteResult {
@@ -466,14 +457,14 @@ class _CompactTemplateGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final templates = <(TemplateType, IconData, String)>[
-      (TemplateType.blank, Icons.landscape, 'Infinito'),
-      (TemplateType.ruled, Icons.format_list_bulleted, 'Rayas'),
-      (TemplateType.grid, Icons.grid_on, 'Cuadrícula'),
-      (TemplateType.dots, Icons.grain, 'Puntos'),
-      (TemplateType.sheet, Icons.description, 'Hoja fija'),
-      (TemplateType.music, Icons.music_note, 'Pentagrama'),
-      (TemplateType.planner, Icons.calendar_today, 'Planificador'),
-      (TemplateType.habit, Icons.checklist, 'Hábitos'),
+      (TemplateType.blank, Icons.landscape, context.l10n.noteTplInfinite),
+      (TemplateType.ruled, Icons.format_list_bulleted, context.l10n.createTplRuled),
+      (TemplateType.grid, Icons.grid_on, context.l10n.createTplGrid),
+      (TemplateType.dots, Icons.grain, context.l10n.createTplDots),
+      (TemplateType.sheet, Icons.description, context.l10n.noteTplSheet),
+      (TemplateType.music, Icons.music_note, context.l10n.createTplMusic),
+      (TemplateType.planner, Icons.calendar_today, context.l10n.noteTplPlanner),
+      (TemplateType.habit, Icons.checklist, context.l10n.createTplHabit),
     ];
 
     return Wrap(

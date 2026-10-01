@@ -114,9 +114,7 @@ class OcrService {
     required ui.Size sheetSize,
   }) async {
     if (!isSupported) {
-      throw UnsupportedError(
-        'OCR solo está disponible en Android e iOS.',
-      );
+      throw UnsupportedError('OCR is only available on Android and iOS.');
     }
     if (strokes.isEmpty) return const OcrResult(text: '', blocks: []);
 
@@ -220,9 +218,7 @@ class OcrService {
     ImageService? imageService,
   }) async {
     if (!isSupported) {
-      throw UnsupportedError(
-        'OCR solo está disponible en Android e iOS.',
-      );
+      throw UnsupportedError('OCR is only available on Android and iOS.');
     }
 
     // 1) Renderizar la página a PNG temporal.

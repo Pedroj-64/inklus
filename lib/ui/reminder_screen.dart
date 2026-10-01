@@ -7,6 +7,7 @@ import 'theme/inklus_colors.dart';
 import 'theme/tokens.dart';
 import 'widgets/dialogs.dart';
 import 'widgets/page_scaffold.dart';
+import '../l10n/l10n.dart';
 
 /// Pantalla de recordatorios.
 ///
@@ -39,7 +40,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
   Future<void> _createReminder() async {
     if (_notebooks.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay cuadernos para vincular')),
+        SnackBar(content: Text(context.l10n.remNoNotebooks)),
       );
       return;
     }
@@ -53,10 +54,10 @@ class _ReminderScreenState extends State<ReminderScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SheetHeader(
+            SheetHeader(
               icon: Icons.book_outlined,
-              title: 'Seleccionar cuaderno',
-              subtitle: 'El recordatorio abrirá este cuaderno',
+              title: context.l10n.remPickNotebook,
+              subtitle: context.l10n.remPickHint,
             ),
             Flexible(
               child: ListView.builder(
@@ -118,7 +119,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
     );
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Recordatorio creado')),
+        SnackBar(content: Text(context.l10n.remCreated)),
       );
       await _load();
     }
@@ -127,9 +128,9 @@ class _ReminderScreenState extends State<ReminderScreen> {
   Future<String?> _promptMessage() {
     return showTextPrompt(
       context,
-      title: 'Mensaje del recordatorio',
-      hint: 'Ej: Revisar apuntes de clase',
-      secondaryLabel: 'Sin mensaje',
+      title: context.l10n.remMessageTitle,
+      hint: context.l10n.remMessageHint,
+      secondaryLabel: context.l10n.remNoMessage,
       secondaryValue: '',
     );
   }
@@ -145,36 +146,35 @@ class _ReminderScreenState extends State<ReminderScreen> {
     final fired = _reminderService.fired;
 
     return InklusPage(
-      title: 'Recordatorios',
-      subtitle: 'Avisos vinculados a tus cuadernos',
+      title: context.l10n.remTitle,
+      subtitle: context.l10n.remSubtitle,
       icon: Icons.alarm_outlined,
       maxWidth: 820,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createReminder,
         icon: const Icon(Icons.add_alarm),
-        label: const Text('Nuevo'),
+        label: Text(context.l10n.colorNew),
       ),
       slivers: [
         if (pending.isEmpty && fired.isEmpty)
-          const SliverFillRemaining(
+          SliverFillRemaining(
             hasScrollBody: false,
             child: EmptyState(
               icon: Icons.notifications_none,
-              title: 'Sin recordatorios',
-              message: 'Crea recordatorios vinculados a tus cuadernos para no '
-                  'olvidar nada.',
+              title: context.l10n.remEmptyTitle,
+              message: context.l10n.remEmptyBody,
             ),
           )
         else
           SliverList.list(
             children: [
               if (pending.isNotEmpty) ...[
-                const SectionLabel('Pendientes'),
+                SectionLabel(context.l10n.remPending),
                 for (final r in pending)
                   _ReminderCard(reminder: r, isPending: true, onDismiss: () => _remove(r)),
               ],
               if (fired.isNotEmpty) ...[
-                const SectionLabel('Completados'),
+                SectionLabel(context.l10n.remDone),
                 for (final r in fired)
                   _ReminderCard(reminder: r, isPending: false, onDismiss: () => _remove(r)),
               ],
@@ -236,7 +236,7 @@ class _ReminderCard extends StatelessWidget {
             accent: accent,
             title: reminder.documentTitle,
             subtitle: [
-              _formatDateTime(reminder.dateTime) + (overdue ? ' · vencido' : ''),
+              _formatDateTime(reminder.dateTime) + (overdue ? context.l10n.remOverdue : ''),
               if (reminder.message.isNotEmpty) reminder.message,
             ].join('\n'),
           ),

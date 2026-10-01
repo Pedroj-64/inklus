@@ -114,7 +114,1125 @@
       }
     }
   },
-  "driveRestoreBody": "Las notas de este dispositivo se reemplazan solo si la copia de Drive es más reciente. Las que no existan aquí se guardan en un cuaderno nuevo \"Recuperado de Drive\".",
+  "driveRestoreBody": "Las notas de este dispositivo se reemplazan solo si la copia de Drive es más reciente. Las que no existan aquí vuelven a su cuaderno (o a uno nuevo \"Recuperado de Drive\").",
   "backupSaveTitle": "Guardar respaldo de Inklus",
-  "backupSaved": "Respaldo guardado"
+  "backupSaved": "Respaldo guardado",
+  "driveSignInIncomplete": "No se completó el inicio de sesión",
+  "driveDetails": "Detalles",
+  "driveSignInHelpTitle": "No se pudo iniciar sesión",
+  "driveSignInHelpBody": "Si cerraste el selector de cuentas, no pasa nada. Si elegiste una cuenta y no se conectó, casi siempre es que la firma de esta app (SHA-1) no está registrada en Google Cloud para com.inklus.inklus.\n\nDetalle técnico:\n{details}",
+  "@driveSignInHelpBody": {
+    "placeholders": {
+      "details": {
+        "type": "String"
+      }
+    }
+  },
+  "driveNotebooksTitle": "Cuadernos que se sincronizan",
+  "driveNotebooksSubtitle": "Cada cuaderno se guarda en Drive → Inklus → su carpeta. Elige cuáles.",
+  "driveNotebooksEmpty": "Aún no hay cuadernos.",
+  "driveSyncMenu": "Sincronizar con Drive",
+  "driveSyncEnabled": "Sincronización activada",
+  "driveSyncDisabled": "Sincronización desactivada",
+  "textEditHint": "Escribe aquí…",
+  "textEditMove": "Mover caja",
+  "textEditWidth": "Ancho de la caja",
+  "textEditSmaller": "Más pequeño",
+  "textEditLarger": "Más grande",
+  "textEditBold": "Negrita",
+  "textEditItalic": "Cursiva",
+  "textEditUnderline": "Subrayado",
+  "textEditStrike": "Tachado",
+  "textEditColor": "Color del texto",
+  "textEditHighlight": "Resaltar",
+  "textEditAlign": "Alineación",
+  "textEditSpacing": "Interlineado",
+  "textEditLinkActive": "Enlace a página (activo)",
+  "textEditLink": "Vincular a página",
+  "textEditDelete": "Eliminar caja",
+  "textEditDone": "Listo",
+  "textEditWholeBox": "Toda la caja",
+  "textEditNoHighlight": "Sin resaltado",
+  "textEditUnlink": "Quitar enlace",
+  "commonPageN": "Página {n}",
+  "@commonPageN": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "marketWhereTemplate": "en Plantilla de la página",
+  "marketWherePalette": "en los colores de cada pluma",
+  "marketWhereStickers": "en Más herramientas → Insertar sticker",
+  "marketHeroTitle": "Descubre y personaliza",
+  "marketHeroSubtitle": "Plantillas, paletas y stickers de la comunidad. Gratis y de licencia libre.",
+  "marketSearch": "Buscar paquetes",
+  "marketTitle": "Marketplace",
+  "marketOfflineCache": "Sin conexión: último catálogo descargado",
+  "marketOfflineBundled": "Sin conexión: paquetes incluidos en la app",
+  "marketAll": "Todo",
+  "marketTemplates": "Plantillas",
+  "marketPalettes": "Paletas",
+  "marketStickers": "Stickers",
+  "marketPalette": "Paleta",
+  "marketNoResults": "No hay paquetes que coincidan",
+  "marketRemove": "Quitar",
+  "marketInstall": "Instalar",
+  "marketUninstalled": "«{name}» desinstalado",
+  "@marketUninstalled": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "marketInstalled": "«{name}» instalado: {where}",
+  "@marketInstalled": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "where": {
+        "type": "String"
+      }
+    }
+  },
+  "marketInstallFailed": "No se pudo instalar «{name}»: {error}",
+  "@marketInstallFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "createTplBlank": "Blanco",
+  "createTplRuled": "Rayas",
+  "createTplGrid": "Cuadrícula",
+  "createTplDots": "Puntos",
+  "createTplMusic": "Pentagrama",
+  "createTplPlanner": "Agenda",
+  "createTplHabit": "Hábitos",
+  "createTplSheet": "Hoja A4",
+  "createTitle": "Nuevo cuaderno",
+  "createName": "Nombre",
+  "createNameHint": "Mi cuaderno",
+  "createCover": "Portada",
+  "createDesign": "Diseño",
+  "createYourImage": "Tu imagen",
+  "createChangeImage": "Cambiar imagen",
+  "createColor": "Color",
+  "createNext": "Siguiente",
+  "createStep2": "Paso 2: Elige una plantilla",
+  "createBackToStep1": "Volver al paso 1",
+  "createTemplate": "Plantilla",
+  "createMoreTemplates": "Ver más plantillas",
+  "createFewer": "Ver menos",
+  "createInfinite": "Lienzo infinito",
+  "createInfiniteOn": "El lienzo se alarga al escribir",
+  "createInfiniteOff": "Hoja de tamaño fijo (A4)",
+  "createAction": "Crear cuaderno",
+  "createDefaultName": "Cuaderno {n}",
+  "@createDefaultName": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "createCoverSemantics": "Portada {name}",
+  "@createCoverSemantics": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "libRenameTitle": "Renombrar cuaderno",
+  "libDeleteTitle": "Eliminar cuaderno",
+  "libDelete": "Eliminar",
+  "libCoverColor": "Color de portada",
+  "commonSave": "Guardar",
+  "libSortTitle": "Ordenar cuadernos",
+  "libSortNewestFirst": "Más recientes primero",
+  "libSortOldestFirst": "Más antiguos primero",
+  "libSortTitleAZ": "Título A → Z",
+  "libSortTitleZA": "Título Z → A",
+  "libNavAll": "Todos",
+  "libNavRecent": "Recientes",
+  "libNavFavorites": "Favoritos",
+  "libNavFolders": "Carpetas",
+  "libImport": "Importar .inklus",
+  "libTrash": "Papelera",
+  "libLightMode": "Modo claro",
+  "libDarkMode": "Modo oscuro",
+  "libMoreOptions": "Más opciones",
+  "libMyNotebooks": "Mis cuadernos",
+  "libClearFilter": "Quitar filtro",
+  "libSearchHint": "Buscar por nombre o etiqueta",
+  "libSearchInNotes": "Buscar dentro de las notas (texto y escritura)",
+  "libSearchContent": "En el contenido",
+  "libSortNewest": "Más recientes",
+  "libSortOldest": "Más antiguos",
+  "libSortNameAZ": "Nombre A–Z",
+  "libSortNameZA": "Nombre Z–A",
+  "libGrid": "Cuadrícula",
+  "libList": "Lista",
+  "libNoResults": "No se encontraron cuadernos",
+  "libEmptyTitle": "Empieza a escribir",
+  "libNoResultsHint": "Prueba con otro nombre o etiqueta.",
+  "libUnfavorite": "Quitar de favoritos",
+  "libFavorite": "Añadir a favoritos",
+  "libRename": "Renombrar",
+  "libDuplicate": "Duplicar",
+  "libCoverAndColor": "Portada y color",
+  "libTags": "Etiquetas",
+  "libSyncOff": "Dejar de sincronizar con Drive",
+  "libMoveToTrash": "Mover a la papelera",
+  "libNotebookOptions": "Opciones del cuaderno",
+  "libSyncWillSync": "«{title}» se sincronizará con Drive",
+  "@libSyncWillSync": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "libSyncStopped": "«{title}» ya no se sincroniza",
+  "@libSyncStopped": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "libDeleteBody": "Se enviará \"{title}\" a la papelera. Podrás recuperarlo desde ahí.",
+  "@libDeleteBody": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "libImportError": "Error al importar: {error}",
+  "@libImportError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "libCountAll": "{total, plural, =1{1 cuaderno} other{{total} cuadernos}}",
+  "@libCountAll": {
+    "placeholders": {
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "libCountOf": "{shown} de {total} cuadernos",
+  "@libCountOf": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "libNotebookSemantics": "Cuaderno {title}, {when}",
+  "@libNotebookSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "libEmptyHint": "Crea un cuaderno nuevo o importa uno existente\\npara comenzar.",
+  "noteRenameTitle": "Renombrar nota",
+  "noteDeleteTitle": "Eliminar nota",
+  "noteNew": "Nueva nota",
+  "noteNameHint": "Mi nota",
+  "noteCreate": "Crear",
+  "noteEmptyTitle": "Sin notas",
+  "noteEmptyHint": "Crea tu primera nota para empezar a escribir.",
+  "noteCreateAction": "Crear nota",
+  "noteOptions": "Opciones",
+  "timeNow": "ahora",
+  "noteTplInfinite": "Infinito",
+  "noteTplSheet": "Hoja fija",
+  "noteTplPlanner": "Planificador",
+  "tplInfiniteHint": "Infinitas se alargan al escribir",
+  "tplNormalSheet": "Hoja normal",
+  "tplOwn": "Plantilla propia",
+  "tplFromMarket": "Del marketplace",
+  "tplMine": "Mis plantillas",
+  "tplSaveCurrent": "Guardar actual",
+  "tplCustomize": "Personalizar",
+  "tplLineColor": "Color de línea",
+  "tplSpacing": "Separación",
+  "tplFixedSheet": "Hoja de tamaño fijo",
+  "tplSheetSize": "Tamaño de hoja",
+  "tplLetter": "Carta",
+  "tplHowTitle": "¿Cómo usar la plantilla?",
+  "tplHowBody": "La imagen se usará como fondo para escribir encima.",
+  "tplAsSheet": "Como hoja fija",
+  "tplAsFill": "Relleno infinito",
+  "tplOnlyImage": "Solo se pueden guardar plantillas con imagen",
+  "tplSaveTitle": "Guardar plantilla",
+  "tplDefaultName": "Mi plantilla",
+  "tplSaved": "Plantilla guardada",
+  "tplDeleteTitle": "Eliminar plantilla",
+  "tplDeleteBody": "¿Eliminar esta plantilla guardada?",
+  "colorCustomTitle": "Color personalizado",
+  "colorCurrent": "Actual",
+  "colorNew": "Nuevo",
+  "colorWheel": "Rueda",
+  "colorHue": "Matiz",
+  "colorSaturation": "Saturación",
+  "colorBrightness": "Brillo",
+  "colorUse": "Usar",
+  "timeMinAgo": "hace {n} min",
+  "@timeMinAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "timeHoursAgo": "hace {n} h",
+  "@timeHoursAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "timeDaysAgo": "hace {n} d",
+  "@timeDaysAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "timeDeletedNow": "eliminado ahora",
+  "timeDeletedMin": "eliminado hace {n} min",
+  "@timeDeletedMin": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "timeDeletedHours": "eliminado hace {n} h",
+  "@timeDeletedHours": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "timeDeletedDays": "eliminado hace {n} días",
+  "@timeDeletedDays": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "timeDeletedOn": "eliminado {date}",
+  "@timeDeletedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "noteDeleteBody": "Se eliminará \"{title}\" de este cuaderno.",
+  "@noteDeleteBody": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "noteDefaultName": "Nota {n}",
+  "@noteDefaultName": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "noteCount": "{count, plural, =1{1 nota} other{{count} notas}}",
+  "@noteCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "notePageCount": "{count, plural, =1{1 página} other{{count} páginas}} · {when}",
+  "@notePageCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "tplImageLoadFailed": "No se pudo cargar la imagen: {error}",
+  "@tplImageLoadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tplSaveFailed": "Error al guardar: {error}",
+  "@tplSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "colorSliders": "Sliders",
+  "selPaste": "Pegar",
+  "selCopy": "Copiar",
+  "selCopied": "Copiado",
+  "selThinner": "Más fino",
+  "selThicker": "Más grueso",
+  "selToText": "Convertir a texto",
+  "selDeselect": "Deseleccionar",
+  "selNoText": "No se reconoció texto en la selección",
+  "selConvert": "Convertir",
+  "popPenType": "Tipo de pluma",
+  "popThickness": "Grosor",
+  "popStraighten": "Enderezar figuras",
+  "popNo": "No",
+  "popOnHold": "Al mantener",
+  "popAlways": "Siempre",
+  "popShapeOffHint": "Los trazos quedan tal cual.",
+  "popShapeHoldHint": "Deja el lápiz quieto medio segundo al terminar una línea, círculo, triángulo o rectángulo.",
+  "popShapeAlwaysHint": "Toda figura reconocible se endereza al soltar.",
+  "popAdvanced": "Ajustes avanzados del trazo",
+  "popMode": "Modo",
+  "popPartial": "Parcial",
+  "popStroke": "Trazo",
+  "popHighlighter": "Resaltador",
+  "popEraseOff": "Borra solo lo que tocas, como una goma.",
+  "popEraseStroke": "Borra el trazo entero al tocarlo.",
+  "popEraseHighlighter": "Solo borra resaltador; la tinta no se toca.",
+  "popSize": "Tamaño",
+  "tbBackToLibrary": "Volver a la biblioteca",
+  "tbHidePages": "Ocultar páginas",
+  "tbPages": "Páginas",
+  "tbHideLayers": "Ocultar capas",
+  "tbLayers": "Capas",
+  "tbInsertImage": "Insertar imagen",
+  "tbRuler": "Regla",
+  "tbRulerNext": "Regla (toca: transportador)",
+  "tbProtractorNext": "Transportador (toca: ocultar)",
+  "tbMoveSelect": "Mover / seleccionar imágenes y trazos",
+  "tbFill": "Rellenar área",
+  "tbHideMagnifier": "Ocultar lupa",
+  "tbMagnifier": "Lupa",
+  "tbLaserOff": "Desactivar puntero láser",
+  "tbLaser": "Puntero láser",
+  "tbInsertSticker": "Insertar sticker",
+  "tbPageTemplate": "Plantilla de la página",
+  "tbMoreTools": "Más herramientas",
+  "tbUndo": "Deshacer",
+  "tbRedo": "Rehacer",
+  "pgUnbookmark": "Quitar marcador",
+  "pgBookmark": "Marcar página",
+  "pgShowAll": "Mostrar todas",
+  "pgOnlyBookmarked": "Solo marcadas",
+  "commonClose": "Cerrar",
+  "pgOptions": "Opciones de la página",
+  "pgNew": "Nueva página",
+  "tagTitle": "Etiquetas del cuaderno",
+  "tagSubtitle": "Para encontrarlo y agruparlo en carpetas inteligentes",
+  "tagActive": "Etiquetas activas",
+  "tagOthers": "Otras etiquetas",
+  "tagNew": "Nueva etiqueta…",
+  "tagAdd": "Añadir etiqueta",
+  "tagSave": "Guardar etiquetas",
+  "trashDeleteForever": "Eliminar definitivamente",
+  "trashEmptyTitle": "Vaciar papelera",
+  "trashEmpty": "Vaciar",
+  "trashSubtitleEmpty": "Lo que elimines se guarda aquí 30 días",
+  "trashEmptyState": "Papelera vacía",
+  "trashLegacy": "Cuaderno (formato antiguo)",
+  "trashNote": "Nota",
+  "trashReturn": "Devolver a su cuaderno",
+  "strokeSubtitle": "Presión, suavizado y fluidez del trazo",
+  "strokeNone": "El borrador y la selección no tienen opciones de trazo.",
+  "strokeQuickSize": "Tamaño rápido",
+  "strokePressure": "Variación con la presión",
+  "strokePressureDesc": "Cuánto cambia el grosor al apretar",
+  "strokeSmoothing": "Suavizado",
+  "strokeSmoothingDesc": "Redondea las curvas del trazo",
+  "strokeStabilizer": "Estabilizador",
+  "strokeStabilizerDesc": "Reduce el temblor del pulso",
+  "sizeThin": "Fino",
+  "sizeMedium": "Medio",
+  "sizeThick": "Grueso",
+  "sizeExtra": "Extra",
+  "sizeSmall": "Pequeño",
+  "sizeLarge": "Grande",
+  "toolPen": "Bolígrafo",
+  "toolPencil": "Lápiz",
+  "toolCalligraphy": "Pluma caligráfica",
+  "toolBrush": "Pincel",
+  "toolMarker": "Marcador",
+  "toolSpray": "Aerosol",
+  "toolEraser": "Borrador",
+  "toolSelect": "Mover / seleccionar",
+  "toolLasso": "Lazo",
+  "toolFill": "Rellenar",
+  "toolText": "Texto",
+  "selRecognizeFailed": "No se pudo reconocer: {error}",
+  "@selRecognizeFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tbPenSlot": "{tool} {n}",
+  "@tbPenSlot": {
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      },
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "tbPageOf": "Pág. {n} de {total}",
+  "@tbPageOf": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "pgPagesCount": "Páginas ({n})",
+  "@pgPagesCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "strokeOptionsOf": "Opciones de {tool}",
+  "@strokeOptionsOf": {
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "trashRestoredMsg": "\"{title}\" restaurado",
+  "@trashRestoredMsg": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "trashPurgeBody": "Se eliminará \"{title}\" permanentemente. Esta acción no se puede deshacer.",
+  "@trashPurgeBody": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "trashEmptyBody": "Se eliminarán permanentemente {count, plural, =1{1 elemento} other{{count} elementos}}. Esta acción no se puede deshacer.",
+  "@trashEmptyBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "trashSubtitleCount": "{count, plural, =1{1 elemento} other{{count} elementos}} · se borran solos a los 30 días",
+  "@trashSubtitleCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "trashEmptyStateBody": "Los cuadernos y notas que elimines se guardarán aquí durante 30 días antes de borrarse definitivamente.",
+  "trashNotebookKind": "Cuaderno · {count, plural, =1{1 nota} other{{count} notas}}",
+  "@trashNotebookKind": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "trashNoteOf": "Nota de «{title}»",
+  "@trashNoteOf": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "trashLeftTomorrow": "se borra mañana",
+  "trashLeftDays": "quedan {n} días",
+  "@trashLeftDays": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "trashInfoLine": "{what} · {deleted} · {left}",
+  "@trashInfoLine": {
+    "placeholders": {
+      "what": {
+        "type": "String"
+      },
+      "deleted": {
+        "type": "String"
+      },
+      "left": {
+        "type": "String"
+      }
+    }
+  },
+  "edLayerLocked": "Capa bloqueada — desbloquea para editar",
+  "expTitle": "Opciones de exportación",
+  "expLow": "Baja (1024 px)",
+  "expMedium": "Media (2048 px)",
+  "expHigh": "Alta (4096 px)",
+  "expMax": "Máxima (8192 px)",
+  "expTransparent": "Fondo transparente",
+  "expTransparentHint": "Sin plantilla ni papel",
+  "expStrokesOnly": "Solo trazos",
+  "expStrokesOnlyHint": "Sin imágenes ni plantilla",
+  "expExport": "Exportar",
+  "ocrUnsupported": "OCR solo está disponible en Android e iOS",
+  "ocrWorking": "Reconociendo texto…",
+  "ocrNoText": "No se reconoció texto en esta página",
+  "ocrResultTitle": "Texto reconocido",
+  "ocrCopied": "Texto copiado al portapapeles",
+  "edGoogleAccount": "Cuenta Google",
+  "edSyncedCloud": "Sincronizado con la nube",
+  "edRestoreCloud": "Restaurar desde la nube",
+  "edRestoreCloudHint": "Última versión (last-write-wins)",
+  "edDriveVersions": "Ver versiones en Drive",
+  "edUploadInklus": "Subir archivo .inklus",
+  "edSyncOnForNotebook": "Sync: activada para este cuaderno",
+  "edSyncOffForNotebook": "Sync: desactivada para este cuaderno",
+  "edSyncDisabledMsg": "Sync desactivada para este cuaderno",
+  "edSyncEnabledMsg": "Sync activada para este cuaderno",
+  "edNoteSynced": "Nota sincronizada con Google Drive",
+  "edPasswordHint": "Contraseña (dejar vacío si no está cifrado)",
+  "edNoCloudCopy": "Todavía no hay ninguna copia de esta nota en Google Drive",
+  "edNoteRestored": "Nota restaurada desde Google Drive",
+  "edIsFullBackup": "Ese archivo es un respaldo completo, no un cuaderno .inklus",
+  "edNoPassword": "Sin contraseña",
+  "edNotebookTitle": "Título del cuaderno",
+  "pdfUnsupported": "Importar PDF por ahora solo está disponible en Android/iOS",
+  "pdfReadFailed": "No se pudo leer el PDF",
+  "verRestoreTitle": "Restaurar versión",
+  "verRestored": "Versión restaurada",
+  "verEncrypted": "Copia cifrada",
+  "verPasswordHint": "Contraseña de la copia",
+  "verDecrypt": "Descifrar",
+  "inkUnsupported": "Reconocer escritura solo está disponible en Android e iOS",
+  "edDeleteImage": "Eliminar imagen",
+  "edExitPresent": "Salir de presentación",
+  "edLaserOff": "Desactivar láser",
+  "edGoToPage": "Ir a página",
+  "edGo": "Ir",
+  "edNoStickers": "Aún no tienes stickers instalados.",
+  "edOpenMarket": "Abrir el marketplace",
+  "edSyncing": "Sincronizando…",
+  "edSyncToDrive": "Sincronizar con Google Drive",
+  "edSynced": "Sincronizado",
+  "edSyncError": "Error de sincronización",
+  "menuPagePng": "Página como imagen (PNG)",
+  "menuPagePdf": "Página como PDF",
+  "menuNotePdf": "Nota completa (PDF)",
+  "menuStrokesSvg": "Trazos (SVG)",
+  "menuPptx": "Presentación (PowerPoint)",
+  "menuInklusCopy": "Copia .inklus",
+  "menuShareImage": "Compartir imagen",
+  "menuSharePdf": "Compartir PDF",
+  "menuShareInklus": "Compartir .inklus",
+  "menuExportShare": "Exportar y compartir",
+  "menuTemplate": "Plantilla…",
+  "menuGoToPage": "Ir a página…",
+  "menuImportPdf": "Importar PDF para anotar",
+  "menuClearPage": "Limpiar página",
+  "menuPage": "Página",
+  "menuSearchNote": "Buscar en la nota",
+  "menuIndexInk": "Indexar escritura (para buscarla)",
+  "menuIndexInkUnsupported": "Indexar escritura (solo Android/iOS)",
+  "menuOcr": "Reconocer texto (OCR)",
+  "menuOcrUnsupported": "OCR (solo Android/iOS)",
+  "menuVersions": "Historial de versiones",
+  "menuReminder": "Crear recordatorio",
+  "menuNightOff": "Desactivar modo nocturno",
+  "menuNightOn": "Modo nocturno de escritura",
+  "menuPresent": "Modo presentación",
+  "menuHapticsOn": "Vibración al escribir: sí",
+  "menuHapticsOff": "Vibración al escribir: no",
+  "menuContinuousScroll": "Desplazamiento continuo entre hojas",
+  "menuView": "Ver",
+  "menuBackup": "Exportar respaldo completo",
+  "menuRestoreBackup": "Importar .inklus o respaldo",
+  "menuData": "Datos",
+  "menuStats": "Estadísticas de escritura",
+  "clearPageBody": "Se borrará todo el contenido de la página. Puedes deshacerlo después.",
+  "clearPageAction": "Limpiar",
+  "pgPrev": "Página anterior",
+  "pgNext": "Página siguiente",
+  "zoomOut": "Alejar",
+  "zoomFit": "Ajustar a la vista",
+  "zoomIn": "Acercar",
+  "shareTextPage": "Página de Inklus",
+  "shareTextNotebook": "Cuaderno de Inklus",
+  "edInsertImageFailed": "No se pudo insertar la imagen: {error}",
+  "@edInsertImageFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "expSvgFailed": "Error al exportar SVG: {error}",
+  "@expSvgFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "ocrFailed": "Error al reconocer texto: {error}",
+  "@ocrFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "expFailed": "Error al exportar: {error}",
+  "@expFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "expPreview": "Previsualización: {name}",
+  "@expPreview": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "expSaveDialog": "Guardar {name}",
+  "@expSaveDialog": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "expDone": "Exportado: {path}",
+  "@expDone": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "expSaveFailed": "No se pudo guardar el archivo: {error}",
+  "@expSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "shareFailed": "Error al compartir: {error}",
+  "@shareFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "edSignInIncomplete": "No se completó el inicio de sesión. Detalle: {detail}",
+  "@edSignInIncomplete": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadFailed": "Error al subir: {error}",
+  "@uploadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "restoreFailed": "Error al restaurar: {error}",
+  "@restoreFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "edFileUploaded": "Archivo \"{name}\" subido a Google Drive",
+  "@edFileUploaded": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pdfImported": "PDF importado: {count, plural, =1{1 página} other{{count} páginas}} para anotar",
+  "@pdfImported": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pdfImportFailed": "Error al importar PDF: {error}",
+  "@pdfImportFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "verRestoreBody": "La nota volverá a como estaba el {date}.\\n\\nEl estado actual se guarda antes como una versión local, así que puedes deshacer la restauración desde este mismo historial.",
+  "@verRestoreBody": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "verRestoreFailed": "No se pudo restaurar la versión: {error}",
+  "@verRestoreFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "pptxFailed": "Error al exportar PowerPoint: {error}",
+  "@pptxFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "reminderCreated": "Recordatorio creado para {date} a las {time}",
+  "@reminderCreated": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "inkIndexed": "Escritura indexada en {count, plural, =1{1 página} other{{count} páginas}}: ya puedes buscarla",
+  "@inkIndexed": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inkFailed": "No se pudo reconocer la escritura: {error}",
+  "@inkFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "backupFailed": "Error al exportar respaldo: {error}",
+  "@backupFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "importDoneOpen": "{message}. Ábrelo desde la biblioteca.",
+  "@importDoneOpen": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "noteHasPages": "La nota tiene {count, plural, =1{1 página} other{{count} páginas}}",
+  "@noteHasPages": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stickerInsertFailed": "No se pudo insertar el sticker: {error}",
+  "@stickerInsertFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "remNoNotebooks": "No hay cuadernos para vincular",
+  "remPickNotebook": "Seleccionar cuaderno",
+  "remPickHint": "El recordatorio abrirá este cuaderno",
+  "remCreated": "Recordatorio creado",
+  "remMessageTitle": "Mensaje del recordatorio",
+  "remMessageHint": "Ej: Revisar apuntes de clase",
+  "remNoMessage": "Sin mensaje",
+  "remTitle": "Recordatorios",
+  "remSubtitle": "Avisos vinculados a tus cuadernos",
+  "remEmptyTitle": "Sin recordatorios",
+  "remPending": "Pendientes",
+  "remDone": "Completados",
+  "statsTitle": "Estadísticas",
+  "statsSubtitle": "Tu actividad de escritura en este dispositivo",
+  "statsEmptyTitle": "Sin datos todavía",
+  "statsStrokes": "Trazos",
+  "statsMinutes": "Minutos",
+  "statsActiveDays": "Días activos",
+  "statsStreaks": "Rachas",
+  "statsCurrentStreak": "Racha actual",
+  "statsRecord": "Récord",
+  "statsActivity": "Actividad — últimos 30 días",
+  "statsDaysWithPages": "Días con páginas nuevas",
+  "smartTitle": "Carpetas inteligentes",
+  "smartSubtitle": "Organiza tus cuadernos automáticamente",
+  "smartByColor": "Por color",
+  "smartByTag": "Por etiqueta",
+  "onbSkip": "Saltar",
+  "onbStart": "Empezar",
+  "onb1Title": "Escribe con tu lápiz",
+  "onb2Title": "Muévete con los dedos",
+  "onb3Title": "Herramientas arriba",
+  "onb4Title": "Tus notas son tuyas",
+  "layerAdd": "Añadir capa",
+  "layerRename": "Renombrar capa",
+  "verSubtitle": "Al restaurar, el estado actual se guarda antes",
+  "verOnDevice": "En este dispositivo",
+  "verNoLocal": "Aún no hay copias locales de esta nota.",
+  "verOnDrive": "En Google Drive",
+  "verNotUploaded": "Esta nota aún no se ha subido a Drive.",
+  "smartThisWeek": "Esta semana",
+  "smartNoTags": "Sin etiquetas",
+  "smartOther": "Otro",
+  "colorNone": "Sin color",
+  "colorBlue": "Azul",
+  "colorGreen": "Verde",
+  "colorRed": "Rojo",
+  "colorOrange": "Naranja",
+  "colorPurple": "Morado",
+  "colorPink": "Rosa",
+  "colorTurquoise": "Turquesa",
+  "colorGray": "Gris",
+  "onb1Body": "Apoya la mano sin miedo: Inklus reconoce el lápiz y descarta la palma. La goma del lápiz o el botón lateral borran.",
+  "onb2Body": "Con el lápiz, un dedo desplaza la página y dos dedos acercan o alejan. Puedes volver a dibujar con el dedo desde la barra.",
+  "onb3Body": "Toca una herramienta para usarla y tócala otra vez para ver sus opciones: grosor, color, borrador parcial, figuras…",
+  "onb4Body": "Todo se guarda en este dispositivo, sin cuentas ni anuncios. Si quieres, puedes hacer copia en tu Google Drive.",
+  "remEmptyBody": "Crea recordatorios vinculados a tus cuadernos para no olvidar nada.",
+  "statsEmptyBody": "Empieza a escribir en tus cuadernos y tus estadísticas aparecerán aquí.",
+  "remOverdue": " · vencido",
+  "statsDays": "{count, plural, =1{1 día} other{{count} días}}",
+  "@statsDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statsDayTooltip": "{date}: {strokes} trazos, {pages} páginas",
+  "@statsDayTooltip": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "strokes": {
+        "type": "int"
+      },
+      "pages": {
+        "type": "int"
+      }
+    }
+  },
+  "searchInNote": "Buscar en esta nota",
+  "searchInAll": "Buscar en todas las notas",
+  "searchPrompt": "Escribe para buscar",
+  "searchMatches": "{count, plural, =1{1 coincidencia} other{{count} coincidencias}}",
+  "@searchMatches": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchInfo": "Incluye cajas de texto y la escritura a mano ya reconocida (menú Nota → Indexar escritura).",
+  "searchTitleMatch": "Título",
+  "pgDuplicate": "Duplicar página",
+  "pgDelete": "Eliminar página",
+  "verDriveFailed": "No se pudo consultar Drive: {error}",
+  "@verDriveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "colorSemantics": "Color #{hex}",
+  "@colorSemantics": {
+    "placeholders": {
+      "hex": {
+        "type": "String"
+      }
+    }
+  },
+  "errNotInklus": "El archivo no es un cuaderno .inklus ni un respaldo de Inklus.",
+  "errNotInklusFile": "No es un cuaderno .inklus válido",
+  "errNotInklusV2": "No es un cuaderno .inklus v2 válido",
+  "errCatalogTooLarge": "Catálogo demasiado grande",
+  "errCatalogVersion": "Versión de catálogo no soportada: {version}",
+  "@errCatalogVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "errOcrUnsupported": "OCR solo está disponible en Android e iOS.",
+  "errNotSignedIn": "Inicia sesión con Google primero.",
+  "errEncrypted": "La copia está cifrada: hace falta la contraseña",
+  "driveConfigBody": "Error de configuración de Google (clientConfigurationError).\\n\\nCausa probable: la SHA-1 de la firma de esta app no está registrada en Google Cloud Console para el paquete com.inklus.inklus.\\n\\nSolución:\\n1. Ve a Google Cloud Console → APIs y servicios → Credenciales\\n2. Crea o edita el ID de cliente OAuth de Android con el paquete com.inklus.inklus y la SHA-1 de tu firma\\n3. Habilita Google Sign-In en la pantalla de consentimiento\\n\\nError original: {details}",
+  "@driveConfigBody": {
+    "placeholders": {
+      "details": {
+        "type": "String"
+      }
+    }
+  },
+  "noticeStylus": "Lápiz detectado: ahora el dedo desplaza la página (actívalo en la barra si quieres dibujar con el dedo)",
+  "noticePageDeleted": "Página eliminada",
+  "noticeFileUploaded": "Archivo subido a Google Drive",
+  "importBackupRestored": "Respaldo restaurado: {count, plural, =1{1 cuaderno} other{{count} cuadernos}}",
+  "@importBackupRestored": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importNotebookDone": "Cuaderno \"{title}\" importado ({count, plural, =1{1 nota} other{{count} notas}})",
+  "@importNotebookDone": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importNotebookSimple": "Cuaderno \"{title}\" importado",
+  "@importNotebookSimple": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "driveRestoreNone": "No hay copias de Inklus en tu Google Drive",
+  "driveRestoreUpToDate": "Todo está al día: nada que restaurar",
+  "driveRestoreUpdated": "{count, plural, =1{1 nota actualizada} other{{count} notas actualizadas}}",
+  "@driveRestoreUpdated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "driveRestoreAdded": "{count, plural, =1{1 recuperada} other{{count} recuperadas}}",
+  "@driveRestoreAdded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "driveRecovered": "Recuperado de Drive",
+  "packClassicName": "Cuadernos clásicos",
+  "packClassicDesc": "Rayado ancho y estrecho, cuadrícula de 5 mm, puntos y pentagrama.",
+  "packTechName": "Papel técnico",
+  "packTechDesc": "Cuadrícula fina tipo milimetrado y agenda por columnas, en tonos suaves.",
+  "packStudyName": "Paleta Estudio",
+  "packStudyDesc": "Tinta azul y negra, rojo de corrección, verde y naranja para destacar.",
+  "packPastelName": "Paleta Pastel",
+  "packPastelDesc": "Tonos suaves para apuntes bonitos y diagramas.",
+  "packEarthName": "Paleta Tierra",
+  "packEarthDesc": "Ocres, oliva y terracota, con buen contraste sobre papel.",
+  "coverSimple": "Degradado",
+  "coverClassic": "Clásico",
+  "coverAurora": "Aurora",
+  "coverWaves": "Olas",
+  "coverGeometric": "Geométrico",
+  "coverSun": "Sol",
+  "coverDots": "Puntos",
+  "coverLines": "Rayas",
+  "untitled": "Sin título",
+  "defaultNotebookTitle": "Mi cuaderno",
+  "createFromFile": "O empieza desde un archivo",
+  "createFromFileHint": "Sube un PDF o fotos y escribe encima de cada página.",
+  "createFromPdf": "Desde un PDF",
+  "createFromImages": "Desde imágenes",
+  "createFromFileRemove": "Quitar archivo",
+  "createFromFilePages": "{count, plural, =1{1 página} other{{count} páginas}}",
+  "@createFromFilePages": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

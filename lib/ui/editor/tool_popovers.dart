@@ -11,6 +11,7 @@ import '../widgets/custom_color_dialog.dart';
 import '../widgets/stroke_options_sheet.dart';
 import 'tool_visuals.dart';
 import '../../services/marketplace/marketplace_service.dart';
+import '../../l10n/l10n.dart';
 
 /// Opciones de una pluma favorita o del resaltador: tipo de pluma, color,
 /// grosor y ajustes. Los cambios se aplican al momento y se guardan en la
@@ -32,7 +33,7 @@ class PenPopover extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (!isHighlighter) ...[
-              const _SectionTitle('Tipo de pluma'),
+              _SectionTitle(context.l10n.popPenType),
               Wrap(
                 spacing: Spacing.sm,
                 runSpacing: Spacing.sm,
@@ -40,7 +41,7 @@ class PenPopover extends StatelessWidget {
                   for (final t in ToolVisuals.penTools)
                     ChoiceChip(
                       avatar: Icon(ToolVisuals.icon(t), size: 18),
-                      label: Text(ToolVisuals.label(t)),
+                      label: Text(ToolVisuals.label(context, t)),
                       selected: canvas.tool == t,
                       onSelected: (_) {
                         canvas.setTool(t);
@@ -51,20 +52,20 @@ class PenPopover extends StatelessWidget {
               ),
               const SizedBox(height: Spacing.lg),
             ],
-            const _SectionTitle('Color'),
+            _SectionTitle(context.l10n.createColor),
             ColorGrid(canvas: canvas, presets: presets),
             const SizedBox(height: Spacing.lg),
-            const _SectionTitle('Grosor'),
+            _SectionTitle(context.l10n.popThickness),
             SizePicker(canvas: canvas, onChanged: () => presets.syncFrom(canvas)),
-            const SizedBox(height: Spacing.sm),
-            const SizedBox(height: Spacing.sm),
-            const _SectionTitle('Enderezar figuras'),
+            SizedBox(height: Spacing.sm),
+            SizedBox(height: Spacing.sm),
+            _SectionTitle(context.l10n.popStraighten),
             SegmentedButton<ShapeMode>(
               showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: ShapeMode.off, label: Text('No')),
-                ButtonSegment(value: ShapeMode.hold, label: Text('Al mantener')),
-                ButtonSegment(value: ShapeMode.always, label: Text('Siempre')),
+              segments: [
+                ButtonSegment(value: ShapeMode.off, label: Text(context.l10n.popNo)),
+                ButtonSegment(value: ShapeMode.hold, label: Text(context.l10n.popOnHold)),
+                ButtonSegment(value: ShapeMode.always, label: Text(context.l10n.popAlways)),
               ],
               selected: {canvas.shapeMode},
               onSelectionChanged: (v) => canvas.setShapeMode(v.first),
@@ -72,10 +73,10 @@ class PenPopover extends StatelessWidget {
             const SizedBox(height: Spacing.xs),
             Text(
               switch (canvas.shapeMode) {
-                ShapeMode.off => 'Los trazos quedan tal cual.',
+                ShapeMode.off => context.l10n.popShapeOffHint,
                 ShapeMode.hold =>
-                  'Deja el lápiz quieto medio segundo al terminar una línea, círculo, triángulo o rectángulo.',
-                ShapeMode.always => 'Toda figura reconocible se endereza al soltar.',
+                  context.l10n.popShapeHoldHint,
+                ShapeMode.always => context.l10n.popShapeAlwaysHint,
               },
               style: context.text.bodySmall,
             ),
@@ -83,8 +84,8 @@ class PenPopover extends StatelessWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
-                  icon: const Icon(Icons.tune),
-                  label: const Text('Ajustes avanzados del trazo'),
+                  icon: Icon(Icons.tune),
+                  label: Text(context.l10n.popAdvanced),
                   onPressed: () {
                     Navigator.pop(context);
                     showStrokeOptionsSheet(context, controller: canvas);
@@ -112,24 +113,24 @@ class EraserPopover extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const _SectionTitle('Modo'),
+          _SectionTitle(context.l10n.popMode),
           SegmentedButton<EraserMode>(
             showSelectedIcon: false,
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: EraserMode.partial,
                 icon: Icon(Icons.content_cut),
-                label: Text('Parcial'),
+                label: Text(context.l10n.popPartial),
               ),
               ButtonSegment(
                 value: EraserMode.stroke,
                 icon: Icon(Icons.gesture),
-                label: Text('Trazo'),
+                label: Text(context.l10n.popStroke),
               ),
               ButtonSegment(
                 value: EraserMode.highlighterOnly,
                 icon: Icon(Icons.border_color),
-                label: Text('Resaltador'),
+                label: Text(context.l10n.popHighlighter),
               ),
             ],
             selected: {canvas.eraserMode},
@@ -138,14 +139,14 @@ class EraserPopover extends StatelessWidget {
           const SizedBox(height: Spacing.sm),
           Text(
             switch (canvas.eraserMode) {
-              EraserMode.partial => 'Borra solo lo que tocas, como una goma.',
-              EraserMode.stroke => 'Borra el trazo entero al tocarlo.',
-              EraserMode.highlighterOnly => 'Solo borra resaltador; la tinta no se toca.',
+              EraserMode.partial => context.l10n.popEraseOff,
+              EraserMode.stroke => context.l10n.popEraseStroke,
+              EraserMode.highlighterOnly => context.l10n.popEraseHighlighter,
             },
             style: context.text.bodySmall,
           ),
           const SizedBox(height: Spacing.lg),
-          const _SectionTitle('Tamaño'),
+          _SectionTitle(context.l10n.popSize),
           SizePicker(canvas: canvas),
         ],
       ),
@@ -167,7 +168,7 @@ class ColorPopover extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const _SectionTitle('Color'),
+            _SectionTitle(context.l10n.createColor),
             ColorGrid(canvas: canvas, presets: presets),
           ],
         ),
@@ -251,7 +252,7 @@ class ColorGrid extends StatelessWidget {
         ),
         if (recent.isNotEmpty) ...[
           const SizedBox(height: Spacing.sm),
-          Text('Recientes', style: context.text.labelSmall),
+          Text(context.l10n.libNavRecent, style: context.text.labelSmall),
           const SizedBox(height: Spacing.xs),
           Wrap(
             spacing: Spacing.xs,
@@ -292,7 +293,7 @@ class ColorSwatchButton extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: 'Color #${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}',
+      label: context.l10n.colorSemantics(color.toARGB32().toRadixString(16).substring(2).toUpperCase()),
       child: InkResponse(
         onTap: onTap,
         radius: Sizes.minTouch / 2,
@@ -327,7 +328,7 @@ class _CustomColorButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Tooltip(
-        message: 'Color personalizado',
+        message: context.l10n.colorCustomTitle,
         child: InkResponse(
           onTap: onTap,
           radius: Sizes.minTouch / 2,

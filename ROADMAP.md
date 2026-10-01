@@ -207,17 +207,22 @@
 - ✅ **R5** `integration_test/app_test.dart` (también en CI con Xvfb) + guion manual `docs/testing.md`.
 - ✅ **R6** sustituido por un **registro de errores local** (`ErrorLog`) que el usuario comparte a mano: coherente con "sin analítica ni terceros".
 - ✅ **P3** desplazamiento continuo entre hojas fijas (+ deshacer por página).
-- 🔧 **P2** i18n: `gen-l10n` (ES fuente, EN), localización de Material en español, Configuración migrada, test de paridad (`test/l10n_test.dart`). Falta pasar el resto de textos (~450) a `lib/l10n/app_*.arb` pantalla a pantalla; al terminar, quitar `locale: kAppLocale` de `MaterialApp` para seguir el idioma del sistema.
+- ✅ **P2** i18n (2026-10): todas las pantallas y avisos en `lib/l10n/app_{es,en}.arb`; la app sigue el idioma del sistema (es/en; otro → inglés). Errores con código (`AppError`/`userError`), resultados con `message(l10n)`. Quedan en español por diseño: contenido guardado en datos (títulos por defecto, nombres de páginas/capas; se traducen al mostrarse con `displayTitle`), catálogo remoto del marketplace y diagnósticos técnicos (`validatePack`, logs).
 - **v2.0** = P2 terminado + R3 hecho + guion de `docs/testing.md` superado en una tablet.
 
 #### Aparcado (poco valor ahora o coste alto)
 P4 audio sincronizado, P5 ventana de zoom, R7 plugin nativo de latencia (solo si la medición de 1.5 lo justifica), R8 otras plataformas.
 
+### ✅ Ronda 2026-10 (texto, Drive, UI)
+- Texto tipo Docs: formato por selección (negrita/cursiva/subrayado/tachado/color/resaltado/fuente), 11 fuentes, interlineado, mover y ensanchar la caja, deshacer correcto; arreglado que tocar la barra moviera la página.
+- Figuras: resaltador recto, ajuste a ejes. Drive: carpeta por cuaderno, sync selectiva desde Configuración y menú del cuaderno, diagnóstico de inicio de sesión. UI: portadas nuevas + "Tu imagen" visible, marketplace rediseñado.
+- Pendiente de verificar en tablet: edición de texto con S-Pen/teclado, y el inicio de sesión de Drive (registrar SHA-1 de debug y release en Google Cloud).
+
 ### 🟡 Pendiente (siguiente ronda)
 | # | Tarea | Detalle |
 |---|---|---|
 | P1 | ✅ **Migrar pantallas restantes al sistema de diseño** | Hecho en 1.4.2 (Configuración) y 1.6.0 (resto). |
-| P2 | 🔧 **i18n** (infraestructura + Configuración en 1.7.0) | Ver Fase 4: falta migrar ~450 textos a los ARB. |
+| P2 | ✅ **i18n** | Hecho (ver Fase 4). |
 | P3 | ✅ **Desplazamiento vertical continuo** entre páginas (1.7.0). Vista doble en apaisado: pendiente. |
 | P4 | **Audio sincronizado** (`record`) con reproducción que resalta lo escrito. |
 | P5 | **Ventana de zoom** tipo Samsung Notes (recuadro de escritura ampliada que avanza solo). |

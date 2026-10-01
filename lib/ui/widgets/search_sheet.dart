@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/search_service.dart';
 import '../theme/inklus_colors.dart';
 import '../theme/tokens.dart';
@@ -83,20 +84,19 @@ class _SearchSheetState extends State<_SearchSheet> {
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search),
               hintText: widget.onlyNoteId != null
-                  ? 'Buscar en esta nota'
-                  : 'Buscar en todas las notas',
+                  ? context.l10n.searchInNote
+                  : context.l10n.searchInAll,
             ),
             onChanged: (_) => _run(),
           ),
           const SizedBox(height: Spacing.sm),
           Text(
-            _query.text.trim().isEmpty ? 'Escribe para buscar' : '$total coincidencia(s)',
+            _query.text.trim().isEmpty ? context.l10n.searchPrompt : context.l10n.searchMatches(total),
             style: context.text.bodySmall,
           ),
           const SizedBox(height: Spacing.sm),
           Text(
-            'Incluye cajas de texto y la escritura a mano ya reconocida '
-            '(menú Nota → Indexar escritura).',
+            context.l10n.searchInfo,
             style: context.text.bodySmall,
           ),
           const SizedBox(height: Spacing.sm),
@@ -118,7 +118,7 @@ class _SearchSheetState extends State<_SearchSheet> {
                         SearchSource.handwriting => Icons.draw,
                       }),
                       title: Text(m.snippet, maxLines: 2, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(m.pageIndex < 0 ? 'Título' : 'Página ${m.pageIndex + 1}'),
+                      subtitle: Text(m.pageIndex < 0 ? context.l10n.searchTitleMatch : context.l10n.commonPageN(m.pageIndex + 1)),
                       onTap: () {
                         Navigator.pop(context);
                         widget.onOpen(r, m);

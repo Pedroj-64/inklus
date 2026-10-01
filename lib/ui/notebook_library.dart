@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import '../constants.dart';
+import '../models/page.dart' as models;
 
 import 'dart:io';
 
@@ -25,6 +26,8 @@ import 'theme/inklus_colors.dart';
 import 'theme/tokens.dart';
 import 'widgets/inklus_logo.dart';
 import 'marketplace_screen.dart';
+import '../l10n/l10n.dart';
+import '../services/app_errors.dart';
 
 /// Biblioteca de cuadernos (pantalla de inicio).
 ///
@@ -81,6 +84,30 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
   Future<void> _toggleFavorite(NotebookMeta meta) async {
     await _storage.setFavorite(meta.id, !meta.favorite);
     await _reload();
+  }
+
+  Future<void> _toggleSync(NotebookMeta meta) async {
+    final enable = !meta.isSyncEnabled;
+    await _storage.setSyncEnabled(meta.id, enable);
+    await _reload();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+          content: Text(enable
+              ? context.l10n.libSyncWillSync(meta.title)
+              : context.l10n.libSyncStopped(meta.title))));
+    if (!enable || !DriveSyncService.instance.isSignedIn) return;
+    // Primera subida (silenciosa) del cuaderno recién activado.
+    final nb = await _storage.loadNotebook(meta.id);
+    for (final note in nb?.notes ?? const []) {
+      try {
+        await DriveSyncService.instance
+            .backupNote(note, notebookId: meta.id, notebookTitle: meta.title);
+      } catch (_) {
+        break;
+      }
+    }
   }
 
   @override
@@ -176,6 +203,15 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
     final nb = await _storage.createNotebook(
       title: result.name,
       template: result.template,
+      pages: [
+        for (final (i, b) in result.backgrounds.indexed)
+          models.Page.background(
+            name: '${i + 1}',
+            path: b.path,
+            width: b.width,
+            height: b.height,
+          ),
+      ],
       coverStyle: result.coverStyle.name,
       coverImagePath: result.coverImagePath,
       colorValue: result.coverColorValue,
@@ -188,8 +224,8 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
 
   Future<void> _renameNotebook(NotebookMeta meta) async {
     final name = await _promptText(
-      titulo: 'Renombrar cuaderno',
-      hint: 'Nombre',
+      titulo: context.l10n.libRenameTitle,
+      hint: context.l10n.createName,
       prefilled: meta.title,
     );
     if (name == null) return;
@@ -206,19 +242,16 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Eliminar cuaderno'),
-        content: Text(
-          'Se enviará "${meta.title}" a la papelera. '
-          'Podrás recuperarlo desde ahí.',
-        ),
+        title: Text(context.l10n.libDeleteTitle),
+        content: Text(context.l10n.libDeleteBody(meta.title)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar'),
+            child: Text(context.l10n.libDelete),
           ),
         ],
       ),
@@ -237,10 +270,10 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(16),
               child: Text(
-                'Color de portada',
+                context.l10n.libCoverColor,
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
@@ -287,14 +320,15 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
   /// Importa un cuaderno `.inklus` o un respaldo completo `.zip` (el tipo se
   /// detecta por el contenido, ver [ImportService]).
   Future<void> _importInklus() async {
+    final l10n = context.l10n;
     try {
       final bytes = await ImportService.pickFile();
       if (bytes == null || !mounted) return;
       final result = await runWithLoading(context, () => ImportService.importBytes(bytes));
       await _reload();
-      _snack(result.message);
+      _snack(result.message(l10n));
     } catch (e) {
-      _snack(e is FormatException ? e.message : 'Error al importar: $e');
+      _snack(e is FormatException ? userError(l10n, e) : l10n.libImportError('$e'));
     }
   }
 
@@ -350,7 +384,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
       title: titulo,
       hint: hint,
       initialValue: prefilled,
-      confirmLabel: 'Guardar',
+      confirmLabel: context.l10n.commonSave,
     );
     if (result == null || result.trim().isEmpty) return null;
     return result.trim();
@@ -398,34 +432,34 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(16),
               child: Text(
-                'Ordenar cuadernos',
+                context.l10n.libSortTitle,
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
             _SortOption(
               icon: Icons.access_time,
-              label: 'Más recientes primero',
+              label: context.l10n.libSortNewestFirst,
               selected: _sortBy == _SortBy.updatedDesc,
               onTap: () => Navigator.pop(context, _SortBy.updatedDesc),
             ),
             _SortOption(
               icon: Icons.access_time_filled,
-              label: 'Más antiguos primero',
+              label: context.l10n.libSortOldestFirst,
               selected: _sortBy == _SortBy.updatedAsc,
               onTap: () => Navigator.pop(context, _SortBy.updatedAsc),
             ),
             _SortOption(
               icon: Icons.sort_by_alpha,
-              label: 'Título A → Z',
+              label: context.l10n.libSortTitleAZ,
               selected: _sortBy == _SortBy.titleAsc,
               onTap: () => Navigator.pop(context, _SortBy.titleAsc),
             ),
             _SortOption(
               icon: Icons.sort_by_alpha,
-              label: 'Título Z → A',
+              label: context.l10n.libSortTitleZA,
               selected: _sortBy == _SortBy.titleDesc,
               onTap: () => Navigator.pop(context, _SortBy.titleDesc),
             ),
@@ -466,7 +500,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createNotebook,
         icon: const Icon(Icons.add),
-        label: const Text('Nuevo cuaderno'),
+        label: Text(context.l10n.createTitle),
       ),
       body: SafeArea(
         child: wide
@@ -512,24 +546,24 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
           padding: EdgeInsets.fromLTRB(Spacing.xl, 0, Spacing.lg, Spacing.lg),
           child: _Brand(),
         ),
-        tile(Icons.auto_stories_outlined, 'Todos',
+        tile(Icons.auto_stories_outlined, context.l10n.libNavAll,
             _section == _Section.all && _activeFolder == null, () => go(_Section.all),
             count: all.length),
-        tile(Icons.schedule, 'Recientes', _section == _Section.recent, () => go(_Section.recent)),
-        tile(Icons.star_outline, 'Favoritos', _section == _Section.favorites,
+        tile(Icons.schedule, context.l10n.libNavRecent, _section == _Section.recent, () => go(_Section.recent)),
+        tile(Icons.star_outline, context.l10n.libNavFavorites, _section == _Section.favorites,
             () => go(_Section.favorites),
             count: all.where((m) => m.favorite).length),
-        tile(Icons.folder_special_outlined, 'Carpetas', _activeFolder != null,
+        tile(Icons.folder_special_outlined, context.l10n.libNavFolders, _activeFolder != null,
             _showSmartFolders),
-        tile(Icons.storefront_outlined, 'Marketplace', false, () {
+        tile(Icons.storefront_outlined, context.l10n.marketTitle, false, () {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const MarketplaceScreen()),
           );
         }),
         const Divider(indent: Spacing.xl, endIndent: Spacing.xl),
-        tile(Icons.file_download_outlined, 'Importar .inklus', false, _importInklus),
-        tile(Icons.delete_outline, 'Papelera', false, _openTrash),
-        tile(Icons.settings_outlined, 'Configuración', false, _openSettings),
+        tile(Icons.file_download_outlined, context.l10n.libImport, false, _importInklus),
+        tile(Icons.delete_outline, context.l10n.libTrash, false, _openTrash),
+        tile(Icons.settings_outlined, context.l10n.settingsTitle, false, _openSettings),
       ],
     );
   }
@@ -541,26 +575,26 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
             leadingIcon: Icon(context.isDark ? Icons.light_mode : Icons.dark_mode),
             onPressed: () =>
                 (widget.onToggleTheme ?? () => ThemeModeController.toggle(context))(),
-            child: Text(context.isDark ? 'Modo claro' : 'Modo oscuro'),
+            child: Text(context.isDark ? context.l10n.libLightMode : context.l10n.libDarkMode),
           ),
           MenuItemButton(
             leadingIcon: const Icon(Icons.settings_outlined),
             onPressed: _openSettings,
-            child: const Text('Configuración'),
+            child: Text(context.l10n.settingsTitle),
           ),
         ],
         builder: (context, menu, _) => IconButton(
-          tooltip: 'Más opciones',
+          tooltip: context.l10n.libMoreOptions,
           icon: const Icon(Icons.more_vert),
           onPressed: () => menu.isOpen ? menu.close() : menu.open(),
         ),
       );
 
-  String get _sectionTitle => _activeFolder?.displayName ??
+  String get _sectionTitle => _activeFolder?.displayName(context.l10n) ??
       switch (_section) {
-        _Section.all => 'Mis cuadernos',
-        _Section.recent => 'Recientes',
-        _Section.favorites => 'Favoritos',
+        _Section.all => context.l10n.libMyNotebooks,
+        _Section.recent => context.l10n.libNavRecent,
+        _Section.favorites => context.l10n.libNavFavorites,
       };
 
   /// Título, búsqueda y controles de orden/vista.
@@ -580,19 +614,19 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
               if (_activeFolder != null)
                 TextButton.icon(
                   icon: const Icon(Icons.close),
-                  label: const Text('Quitar filtro'),
+                  label: Text(context.l10n.libClearFilter),
                   onPressed: () => setState(() => _activeFolder = null),
                 ),
             ],
           ),
           const SizedBox(height: Spacing.xs),
           Text(
-            shown == total ? '$total cuaderno(s)' : '$shown de $total cuaderno(s)',
+            shown == total ? context.l10n.libCountAll(total) : context.l10n.libCountOf(shown, total),
             style: context.text.bodyMedium?.copyWith(color: context.colors.onSurfaceVariant),
           ),
           const SizedBox(height: Spacing.lg),
           SearchBar(
-            hintText: 'Buscar por nombre o etiqueta',
+            hintText: context.l10n.libSearchHint,
             leading: const Icon(Icons.search),
             elevation: const WidgetStatePropertyAll(0),
             backgroundColor: WidgetStatePropertyAll(context.colors.surfaceContainerHigh),
@@ -602,10 +636,10 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
             onChanged: (v) => setState(() => _searchQuery = v),
             trailing: [
               Tooltip(
-                message: 'Buscar dentro de las notas (texto y escritura)',
+                message: context.l10n.libSearchInNotes,
                 child: TextButton.icon(
                   icon: const Icon(Icons.manage_search),
-                  label: const Text('En el contenido'),
+                  label: Text(context.l10n.libSearchContent),
                   onPressed: _searchInContent,
                 ),
               ),
@@ -617,19 +651,19 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
               ActionChip(
                 avatar: const Icon(Icons.sort, size: 18),
                 label: Text(switch (_sortBy) {
-                  _SortBy.updatedDesc => 'Más recientes',
-                  _SortBy.updatedAsc => 'Más antiguos',
-                  _SortBy.titleAsc => 'Nombre A–Z',
-                  _SortBy.titleDesc => 'Nombre Z–A',
+                  _SortBy.updatedDesc => context.l10n.libSortNewest,
+                  _SortBy.updatedAsc => context.l10n.libSortOldest,
+                  _SortBy.titleAsc => context.l10n.libSortNameAZ,
+                  _SortBy.titleDesc => context.l10n.libSortNameZA,
                 }),
                 onPressed: _showSortSheet,
               ),
-              const Spacer(),
+              Spacer(),
               SegmentedButton<bool>(
                 showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(value: false, icon: Icon(Icons.grid_view), tooltip: 'Cuadrícula'),
-                  ButtonSegment(value: true, icon: Icon(Icons.view_list), tooltip: 'Lista'),
+                segments: [
+                  ButtonSegment(value: false, icon: Icon(Icons.grid_view), tooltip: context.l10n.libGrid),
+                  ButtonSegment(value: true, icon: Icon(Icons.view_list), tooltip: context.l10n.libList),
                 ],
                 selected: {_listView},
                 onSelectionChanged: (v) => _setListView(v.first),
@@ -656,6 +690,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
           onSetColor: () => _setNotebookColor(meta),
           onEditTags: () => _editTags(meta),
           onToggleFavorite: () => _toggleFavorite(meta),
+          onToggleSync: () => _toggleSync(meta),
         );
     if (_listView) {
       return [
@@ -711,15 +746,15 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
             const SizedBox(height: 20),
             Text(
               hasSearch
-                  ? 'No se encontraron cuadernos'
-                  : 'Empieza a escribir',
+                  ? context.l10n.libNoResults
+                  : context.l10n.libEmptyTitle,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Text(
               hasSearch
-                  ? 'Prueba con otro nombre o etiqueta.'
-                  : 'Crea un cuaderno nuevo o importa uno existente\npara comenzar.',
+                  ? context.l10n.libNoResultsHint
+                  : context.l10n.libEmptyHint,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: context.colors.onSurfaceVariant,
@@ -732,7 +767,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
               FilledButton.icon(
                 onPressed: _createNotebook,
                 icon: const Icon(Icons.add),
-                label: const Text('Crear cuaderno'),
+                label: Text(context.l10n.createAction),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                   textStyle: const TextStyle(fontSize: 15),
@@ -744,7 +779,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
               OutlinedButton.icon(
                 onPressed: _importInklus,
                 icon: const Icon(Icons.file_download_outlined, size: 18),
-                label: const Text('Importar .inklus'),
+                label: Text(context.l10n.libImport),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(200, 48),
                   side: BorderSide(
@@ -794,6 +829,7 @@ class _NotebookCard extends StatelessWidget {
     required this.onSetColor,
     required this.onEditTags,
     required this.onToggleFavorite,
+    required this.onToggleSync,
   });
 
   final NotebookMeta meta;
@@ -805,27 +841,33 @@ class _NotebookCard extends StatelessWidget {
   final VoidCallback onSetColor;
   final VoidCallback onEditTags;
   final VoidCallback onToggleFavorite;
+  final VoidCallback onToggleSync;
 
   Widget _menu(BuildContext context) => MenuAnchor(
         menuChildren: [
           MenuItemButton(
             leadingIcon: Icon(meta.favorite ? Icons.star : Icons.star_outline),
             onPressed: onToggleFavorite,
-            child: Text(meta.favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'),
+            child: Text(meta.favorite ? context.l10n.libUnfavorite : context.l10n.libFavorite),
           ),
-          MenuItemButton(leadingIcon: const Icon(Icons.edit_outlined), onPressed: onRename, child: const Text('Renombrar')),
-          MenuItemButton(leadingIcon: const Icon(Icons.copy_outlined), onPressed: onDuplicate, child: const Text('Duplicar')),
-          MenuItemButton(leadingIcon: const Icon(Icons.palette_outlined), onPressed: onSetColor, child: const Text('Portada y color')),
-          MenuItemButton(leadingIcon: const Icon(Icons.label_outline), onPressed: onEditTags, child: const Text('Etiquetas')),
+          MenuItemButton(leadingIcon: const Icon(Icons.edit_outlined), onPressed: onRename, child: Text(context.l10n.libRename)),
+          MenuItemButton(leadingIcon: const Icon(Icons.copy_outlined), onPressed: onDuplicate, child: Text(context.l10n.libDuplicate)),
+          MenuItemButton(leadingIcon: const Icon(Icons.palette_outlined), onPressed: onSetColor, child: Text(context.l10n.libCoverAndColor)),
+          MenuItemButton(leadingIcon: const Icon(Icons.label_outline), onPressed: onEditTags, child: Text(context.l10n.libTags)),
+          MenuItemButton(
+            leadingIcon: Icon(meta.isSyncEnabled ? Icons.cloud_done_outlined : Icons.cloud_off_outlined),
+            onPressed: onToggleSync,
+            child: Text(meta.isSyncEnabled ? context.l10n.libSyncOff : context.l10n.driveSyncMenu),
+          ),
           const Divider(),
           MenuItemButton(
             leadingIcon: Icon(Icons.delete_outline, color: context.inklus.danger),
             onPressed: onDelete,
-            child: Text('Mover a la papelera', style: TextStyle(color: context.inklus.danger)),
+            child: Text(context.l10n.libMoveToTrash, style: TextStyle(color: context.inklus.danger)),
           ),
         ],
         builder: (context, menu, _) => IconButton(
-          tooltip: 'Opciones del cuaderno',
+          tooltip: context.l10n.libNotebookOptions,
           icon: const Icon(Icons.more_vert),
           onPressed: () => menu.isOpen ? menu.close() : menu.open(),
         ),
@@ -833,7 +875,7 @@ class _NotebookCard extends StatelessWidget {
 
   Widget _cover(BuildContext context) => _NotebookCover(
         color: meta.colorValue != null ? Color(meta.colorValue!) : null,
-        title: meta.title,
+        title: displayTitle(context.l10n, meta.title),
         isDark: context.isDark,
         coverStyle: meta.coverStyle,
         coverImagePath: meta.coverImagePath,
@@ -841,7 +883,7 @@ class _NotebookCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = date_util.relativeTime(meta.updatedAt);
+    final subtitle = date_util.relativeTime(context.l10n, meta.updatedAt);
     if (compact) {
       return Card(
         clipBehavior: Clip.antiAlias,
@@ -852,7 +894,7 @@ class _NotebookCard extends StatelessWidget {
             borderRadius: Radii.smAll,
             child: SizedBox(width: 40, height: 52, child: _cover(context)),
           ),
-          title: Text(meta.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          title: Text(displayTitle(context.l10n, meta.title), maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text([subtitle, ...meta.tags.take(3)].join(' · ')),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -867,7 +909,7 @@ class _NotebookCard extends StatelessWidget {
     }
     return Semantics(
       button: true,
-      label: 'Cuaderno ${meta.title}, $subtitle',
+      label: context.l10n.libNotebookSemantics(meta.title, subtitle),
       child: InkWell(
         onTap: onTap,
         borderRadius: Radii.lgAll,
@@ -908,7 +950,7 @@ class _NotebookCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    meta.title,
+                    displayTitle(context.l10n, meta.title),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: context.text.titleSmall,

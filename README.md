@@ -80,6 +80,13 @@ La app es **offline-first**: funciona al 100 % sin cuenta ni red. Si inicias ses
 
 No hay servidores de Inklus, analítica ni anuncios. Los errores se registran **solo en el dispositivo** y tú decides si compartirlos (Configuración → Registro de errores). Detalles en [`docs/privacy.md`](docs/privacy.md).
 
+### Secretos (para quien contribuya o publique)
+
+- **Nunca al repo:** keystore (`*.jks`), `android/key.properties`, `client_secret*.json`, `google-services.json`, `.env`. Todo está en `.gitignore` y la CI (`secret-scan`, gitleaks) rechaza lo que se cuele.
+- **Firma de releases:** la CI lee `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` y `ANDROID_KEY_PASSWORD` de *GitHub → Settings → Secrets*. El keystore se guarda **fuera** del repositorio y con copia de seguridad cifrada: perderlo impide actualizar los APK ya instalados.
+- **Es público (no es secreto):** el ID de cliente OAuth y las huellas SHA-1 de firma; identifican la app, no dan acceso. Un `client_secret` sí es secreto: la app no lo necesita, no lo descargues.
+- **Si se filtra algo:** rotar en Google Cloud (Credenciales), regenerar el secreto de GitHub y reescribir el historial solo si el valor sigue vigente.
+
 ---
 
 ## 🧠 Decisiones técnicas

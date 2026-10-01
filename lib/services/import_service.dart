@@ -12,6 +12,8 @@ import '../models/note.dart';
 import '../models/notebook.dart';
 import 'inklus_format.dart';
 import 'storage_service.dart';
+import 'app_errors.dart';
+import '../l10n/l10n.dart';
 
 /// Qué contiene un archivo que el usuario quiere importar.
 enum ImportKind {
@@ -27,10 +29,20 @@ enum ImportKind {
 
 /// Resultado de una importación, listo para mostrarse al usuario.
 class ImportResult {
-  const ImportResult(this.kind, this.message, {this.notebookId});
+  const ImportResult(this.kind, {this.title = '', this.count = 0, this.notebookId});
 
   final ImportKind kind;
-  final String message;
+
+  /// Título del cuaderno importado y su número de notas (o de cuadernos en un
+  /// respaldo completo): con ellos la UI arma el mensaje traducido.
+  final String title;
+  final int count;
+
+  String message(AppLocalizations l10n) => switch (kind) {
+        ImportKind.fullBackup => l10n.importBackupRestored(count),
+        ImportKind.notebook => l10n.importNotebookDone(title, count),
+        ImportKind.legacyDocument => l10n.importNotebookSimple(title),
+      };
 
   /// Cuaderno creado (null en un respaldo completo).
   final String? notebookId;
@@ -82,9 +94,7 @@ abstract final class ImportService {
     // format.json: manda la entrada de contenido.
     if (names.contains('notebook.json')) return ImportKind.notebook;
     if (names.contains('document.json')) return ImportKind.legacyDocument;
-    throw const FormatException(
-      'El archivo no es un cuaderno .inklus ni un respaldo de Inklus.',
-    );
+    throw const AppError(AppErrorCode.notInklus);
   }
 
   /// Importa [bytes] en la biblioteca y describe lo que se hizo.
@@ -98,7 +108,7 @@ abstract final class ImportService {
     switch (kind) {
       case ImportKind.fullBackup:
         final count = await s.importFullBackup(bytes);
-        return ImportResult(kind, 'Respaldo restaurado: $count cuaderno(s)');
+        return ImportResult(kind, count: count);
       case ImportKind.notebook:
       case ImportKind.legacyDocument:
         final result = await InklusFormat.importAuto(bytes, extractTo: extractTo);
@@ -106,7 +116,8 @@ abstract final class ImportService {
           await s.saveNotebook(result);
           return ImportResult(
             kind,
-            'Cuaderno "${result.title}" importado (${result.notes.length} nota(s))',
+            title: result.title,
+            count: result.notes.length,
             notebookId: result.id,
           );
         }
@@ -122,11 +133,7 @@ abstract final class ImportService {
         );
         final nb = Notebook(id: newId('nb'), title: doc.title, notes: [note]);
         await s.saveNotebook(nb);
-        return ImportResult(
-          kind,
-          'Cuaderno "${doc.title}" importado',
-          notebookId: nb.id,
-        );
+        return ImportResult(kind, title: doc.title, notebookId: nb.id);
     }
   }
 }

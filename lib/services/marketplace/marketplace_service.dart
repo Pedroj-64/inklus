@@ -13,6 +13,7 @@ import '../file_utils.dart';
 import '../storage_service.dart';
 import '../template_library_service.dart';
 import 'marketplace_models.dart';
+import '../app_errors.dart';
 
 /// Marketplace de Inklus: catálogo público de paquetes gratuitos
 /// (plantillas, paletas, stickers) alojado en un repositorio de GitHub y
@@ -81,7 +82,7 @@ class MarketplaceService extends ChangeNotifier {
           .get(Uri.parse('$baseUrl$catalogFile'))
           .timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) throw HttpException('HTTP ${res.statusCode}');
-      if (res.bodyBytes.length > maxCatalogBytes) throw const FormatException('Catálogo demasiado grande');
+      if (res.bodyBytes.length > maxCatalogBytes) throw const AppError(AppErrorCode.catalogTooLarge);
       _catalog = parseCatalog(utf8.decode(res.bodyBytes));
       await writeAtomic(cache, res.bodyBytes);
       source = CatalogSource.network;
@@ -102,7 +103,7 @@ class MarketplaceService extends ChangeNotifier {
   static List<MarketplacePack> parseCatalog(String raw) {
     final json = jsonDecode(raw) as Map<String, dynamic>;
     if (json['schema'] != schemaVersion) {
-      throw FormatException('Versión de catálogo no soportada: ${json['schema']}');
+      throw AppError(AppErrorCode.catalogVersion, '${json['schema']}');
     }
     final packs = <MarketplacePack>[];
     for (final p in json['packs'] as List? ?? []) {

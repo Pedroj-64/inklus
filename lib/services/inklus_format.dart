@@ -15,6 +15,7 @@ import '../models/text_item.dart';
 import '../models/template.dart';
 import 'file_utils.dart';
 import 'app_paths.dart';
+import 'app_errors.dart';
 
 /// Formato propietario **.inklus v2**: contenedor autocontenido de un cuaderno.
 ///
@@ -155,7 +156,7 @@ class InklusFormat {
     }
 
     if (notebookBytes == null) {
-      throw const FormatException('No es un cuaderno .inklus v2 válido');
+      throw const AppError(AppErrorCode.notInklusV2);
     }
 
     final nbJson = jsonDecode(utf8.decode(notebookBytes)) as Map<String, dynamic>;
@@ -277,7 +278,7 @@ class InklusFormat {
       }
     }
     if (docBytes == null) {
-      throw const FormatException('No es un cuaderno .inklus válido');
+      throw const AppError(AppErrorCode.notInklusFile);
     }
 
     final doc = Document.fromJson(

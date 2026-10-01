@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/stroke.dart';
 
 /// Icono y nombre visible de cada herramienta. **Única fuente**: la barra,
@@ -21,20 +22,21 @@ abstract final class ToolVisuals {
         ToolType.text => Icons.text_fields,
       };
 
-  static String label(ToolType tool) => switch (tool) {
-        ToolType.pen => 'Bolígrafo',
-        ToolType.pencil => 'Lápiz',
-        ToolType.calligraphy => 'Pluma caligráfica',
-        ToolType.brush => 'Pincel',
-        ToolType.marker => 'Marcador',
-        ToolType.spray => 'Aerosol',
-        ToolType.highlighter => 'Resaltador',
-        ToolType.eraser => 'Borrador',
-        ToolType.select => 'Mover / seleccionar',
-        ToolType.lasso => 'Lazo',
-        ToolType.bucket => 'Rellenar',
-        ToolType.text => 'Texto',
+  static String label(BuildContext context, ToolType tool) => switch (tool) {
+        ToolType.pen => context.l10n.toolPen,
+        ToolType.pencil => context.l10n.toolPencil,
+        ToolType.calligraphy => context.l10n.toolCalligraphy,
+        ToolType.brush => context.l10n.toolBrush,
+        ToolType.marker => context.l10n.toolMarker,
+        ToolType.spray => context.l10n.toolSpray,
+        ToolType.highlighter => context.l10n.popHighlighter,
+        ToolType.eraser => context.l10n.toolEraser,
+        ToolType.select => context.l10n.toolSelect,
+        ToolType.lasso => context.l10n.toolLasso,
+        ToolType.bucket => context.l10n.toolFill,
+        ToolType.text => context.l10n.toolText,
       };
+
 
   /// Herramientas de tinta que puede usar una pluma favorita.
   static const penTools = [

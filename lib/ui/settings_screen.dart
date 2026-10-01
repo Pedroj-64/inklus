@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../constants.dart';
 import '../services/drive_sync_service.dart';
+import '../services/app_errors.dart';
 import '../services/error_log.dart';
 import '../services/import_service.dart';
 import '../services/storage_service.dart';
@@ -58,6 +59,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             SectionLabel(context.l10n.settingsSectionDrive),
             ListenableBuilder(listenable: _sync, builder: (context, _) => _driveCard()),
+            ListenableBuilder(
+              listenable: _sync,
+              builder: (context, _) => _sync.isSignedIn
+                  ? _SyncNotebooksCard(storage: _storage, sync: _sync)
+                  : const SizedBox.shrink(),
+            ),
             SectionLabel(context.l10n.settingsSectionAppearance),
             SectionCard(children: [_themeTile()]),
             SectionLabel(context.l10n.settingsSectionFiles),
@@ -255,21 +262,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await task();
     } on GoogleConfigException catch (e) {
-      if (mounted) _showConfigErrorDialog(e.message);
+      if (mounted) _showConfigErrorDialog(context.l10n.driveConfigBody(e.message));
     } catch (e) {
-      if (mounted) _snack(e is FormatException ? e.message : context.l10n.commonError('$e'));
+      if (mounted) _snack(userError(context.l10n, e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _signIn() => _run(() async {
-        if (await _sync.signIn() && mounted) _snack(context.l10n.driveConnectedAs(_sync.email ?? ''));
+        _afterSignIn(await _sync.signIn());
       });
 
   Future<void> _switchAccount() => _run(() async {
-        if (await _sync.switchAccount() && mounted) _snack(context.l10n.driveConnectedAs(_sync.email ?? ''));
+        _afterSignIn(await _sync.switchAccount());
       });
+
+  /// Avisa del resultado. Si no se conectó, ofrece el detalle técnico: Android
+  /// informa "cancelado" aunque el fallo sea de configuración (SHA-1).
+  void _afterSignIn(bool ok) {
+    if (!mounted) return;
+    final l10n = context.l10n;
+    if (ok) {
+      _snack(l10n.driveConnectedAs(_sync.email ?? ''));
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(l10n.driveSignInIncomplete),
+        action: SnackBarAction(
+          label: l10n.driveDetails,
+          onPressed: () => showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              icon: Icon(Icons.error_outline, color: context.inklus.warning, size: 40),
+              title: Text(l10n.driveSignInHelpTitle),
+              content: SingleChildScrollView(
+                child: SelectableText(
+                    l10n.driveSignInHelpBody(_sync.lastSignInIssue ?? '—')),
+              ),
+              actions: [
+                FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(l10n.commonGotIt)),
+              ],
+            ),
+          ),
+        ),
+      ));
+  }
 
   void _showConfigErrorDialog(String message) {
     showDialog<void>(
@@ -311,7 +353,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (!meta.isSyncEnabled) continue;
           final nb = await _storage.loadNotebook(meta.id);
           for (final note in nb?.notes ?? const []) {
-            await _sync.backupNote(note, promptForConsent: true);
+            await _sync.backupNote(
+              note,
+              notebookId: meta.id,
+              notebookTitle: meta.title,
+              promptForConsent: true,
+            );
             count++;
           }
         }
@@ -333,19 +380,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-    if (ok != true) return;
+    if (ok != true || !mounted) return;
+    final l10n = context.l10n;
     await _run(() async {
-      final result = await _sync.restoreLibrary(_storage);
-      _snack(result.message);
+      final result = await _sync.restoreLibrary(_storage, fallbackTitle: l10n.driveRecovered);
+      _snack(result.message(l10n));
     });
   }
 
   Future<void> _import() async {
     final bytes = await ImportService.pickFile();
     if (bytes == null || !mounted) return;
+    final l10n = context.l10n;
     await _run(() async {
       final result = await runWithLoading(context, () => ImportService.importBytes(bytes));
-      _snack(result.message);
+      _snack(result.message(l10n));
     });
   }
 
@@ -419,5 +468,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(msg)));
+  }
+}
+
+/// Lista de cuadernos con un interruptor de sincronización cada uno
+/// (`NotebookMeta.syncEnabled`). Al activar uno, se sube en segundo plano.
+class _SyncNotebooksCard extends StatefulWidget {
+  const _SyncNotebooksCard({required this.storage, required this.sync});
+
+  final StorageService storage;
+  final DriveSyncService sync;
+
+  @override
+  State<_SyncNotebooksCard> createState() => _SyncNotebooksCardState();
+}
+
+class _SyncNotebooksCardState extends State<_SyncNotebooksCard> {
+  List<NotebookMeta>? _metas;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final metas = await widget.storage.loadIndex();
+    if (mounted) setState(() => _metas = metas);
+  }
+
+  Future<void> _toggle(NotebookMeta meta, bool enabled) async {
+    await widget.storage.setSyncEnabled(meta.id, enabled);
+    await _load();
+    if (!enabled) return;
+    // Primera subida del cuaderno recién activado (silenciosa: si falta
+    // consentimiento no hace nada; ya hay copia local).
+    final nb = await widget.storage.loadNotebook(meta.id);
+    for (final note in nb?.notes ?? const []) {
+      try {
+        await widget.sync.backupNote(note, notebookId: meta.id, notebookTitle: meta.title);
+      } catch (e) {
+        debugPrint('Sync del cuaderno ${meta.id}: $e');
+        break;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final metas = _metas;
+    final l10n = context.l10n;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionLabel(l10n.driveNotebooksTitle),
+        Padding(
+          padding: const EdgeInsets.only(bottom: Spacing.sm, left: Spacing.xs, right: Spacing.xs),
+          child: Text(l10n.driveNotebooksSubtitle, style: context.text.bodySmall),
+        ),
+        SectionCard(
+          children: [
+            if (metas == null)
+              const Padding(
+                padding: EdgeInsets.all(Spacing.lg),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (metas.isEmpty)
+              ListTile(title: Text(l10n.driveNotebooksEmpty))
+            else
+              for (final meta in metas)
+                SwitchListTile(
+                  secondary: ListenableBuilder(
+                    listenable: widget.sync,
+                    builder: (context, _) => _syncStatusIcon(
+                        context, meta.isSyncEnabled, widget.sync.statusFor(meta.id)),
+                  ),
+                  title: Text(meta.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(meta.isSyncEnabled ? l10n.driveSyncEnabled : l10n.driveSyncDisabled),
+                  value: meta.isSyncEnabled,
+                  onChanged: (v) => _toggle(meta, v),
+                ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _syncStatusIcon(BuildContext context, bool enabled, SyncStatus status) {
+    if (!enabled) return Icon(Icons.cloud_off_outlined, color: context.colors.outline);
+    return switch (status) {
+      SyncStatus.synced => Icon(Icons.cloud_done, color: context.inklus.success),
+      SyncStatus.syncing => const SizedBox.square(
+          dimension: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+      SyncStatus.error => Icon(Icons.sync_problem, color: context.inklus.danger),
+      _ => Icon(Icons.cloud_upload_outlined, color: context.colors.onSurfaceVariant),
+    };
   }
 }

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'l10n/l10n.dart';
 
 import 'theme_controller.dart';
-import 'constants.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/notebook_library.dart';
 import 'ui/onboarding_screen.dart';
@@ -48,10 +47,7 @@ class _InklusAppState extends State<InklusApp> {
       themeMode: themeMode,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      // Español fijo hasta que todos los textos estén en los ARB (P2 del
-      // roadmap): una interfaz a medio traducir sería peor. Con esto, los
-      // selectores de fecha/hora y los textos de Material ya salen en español.
-      locale: kAppLocale,
+      // Sin `locale` fijo: sigue el idioma del sistema (es / en; otro idioma → inglés).
       home: _showOnboarding
           ? OnboardingScreen(
               onDone: () => setState(() => _showOnboarding = false),

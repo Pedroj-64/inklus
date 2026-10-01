@@ -11,6 +11,8 @@ import '../widgets/controller_selector.dart';
 import 'anchored_popover.dart';
 import 'tool_popovers.dart';
 import 'tool_visuals.dart';
+import '../../l10n/l10n.dart';
+import '../widgets/notebook_covers.dart';
 
 /// Barra superior única del editor (sustituye al riel lateral y a la barra
 /// inferior): deja todo el resto de la pantalla al lienzo.
@@ -74,7 +76,7 @@ class EditorToolbar extends StatelessWidget {
           builder: (context, _) => Row(
             children: [
               IconButton(
-                tooltip: 'Volver a la biblioteca',
+                tooltip: context.l10n.tbBackToLibrary,
                 icon: const Icon(Icons.arrow_back),
                 onPressed: onBack,
               ),
@@ -93,13 +95,13 @@ class EditorToolbar extends StatelessWidget {
               _UndoRedo(canvas: canvas),
               _ToolbarButton(
                 icon: Icons.view_sidebar_outlined,
-                label: pagesOpen ? 'Ocultar páginas' : 'Páginas',
+                label: pagesOpen ? context.l10n.tbHidePages : context.l10n.tbPages,
                 selected: pagesOpen,
                 onTap: onTogglePages,
               ),
               _ToolbarButton(
                 icon: layersOpen ? Icons.layers : Icons.layers_outlined,
-                label: layersOpen ? 'Ocultar capas' : 'Capas',
+                label: layersOpen ? context.l10n.tbHideLayers : context.l10n.tbLayers,
                 selected: layersOpen,
                 onTap: onToggleLayers,
               ),
@@ -124,7 +126,7 @@ class EditorToolbar extends StatelessWidget {
       ),
       _ToolbarButton(
         icon: ToolVisuals.icon(ToolType.lasso),
-        label: ToolVisuals.label(ToolType.lasso),
+        label: ToolVisuals.label(context, ToolType.lasso),
         selected: tool == ToolType.lasso,
         onTap: () => canvas.setTool(ToolType.lasso),
       ),
@@ -135,7 +137,7 @@ class EditorToolbar extends StatelessWidget {
       ),
       _ToolbarButton(
         icon: Icons.add_photo_alternate_outlined,
-        label: 'Insertar imagen',
+        label: context.l10n.tbInsertImage,
         onTap: onInsertImage,
       ),
       _ToolbarButton(
@@ -143,10 +145,10 @@ class EditorToolbar extends StatelessWidget {
             ? Icons.architecture
             : Icons.straighten,
         label: !canvas.rulerEnabled
-            ? 'Regla'
+            ? context.l10n.tbRuler
             : canvas.rulerType == RulerType.straight
-                ? 'Regla (toca: transportador)'
-                : 'Transportador (toca: ocultar)',
+                ? context.l10n.tbRulerNext
+                : context.l10n.tbProtractorNext,
         selected: canvas.rulerEnabled,
         onTap: canvas.cycleRuler,
       ),
@@ -167,8 +169,8 @@ class EditorToolbar extends StatelessWidget {
       builder: (anchor) => _ToolbarButton(
         icon: ToolVisuals.icon(preset.tool),
         label: slot == PenPresetsController.highlighterSlot
-            ? 'Resaltador'
-            : '${ToolVisuals.label(preset.tool)} ${slot + 1}',
+            ? context.l10n.popHighlighter
+            : context.l10n.tbPenSlot(ToolVisuals.label(context, preset.tool), slot + 1),
         selected: showing,
         inkColor: preset.color,
         onTap: () {
@@ -196,7 +198,7 @@ class EditorToolbar extends StatelessWidget {
     return Builder(
       builder: (anchor) => _ToolbarButton(
         icon: ToolVisuals.icon(type),
-        label: ToolVisuals.label(type),
+        label: ToolVisuals.label(context, type),
         selected: selected,
         onTap: () {
           if (selected) {
@@ -239,37 +241,37 @@ class _MoreToolsButton extends StatelessWidget {
         MenuItemButton(
           leadingIcon: Icon(ToolVisuals.icon(ToolType.select)),
           onPressed: () => canvas.setTool(ToolType.select),
-          child: const Text('Mover / seleccionar imágenes y trazos'),
+          child: Text(context.l10n.tbMoveSelect),
         ),
         MenuItemButton(
           leadingIcon: Icon(ToolVisuals.icon(ToolType.bucket)),
           onPressed: () => canvas.setTool(ToolType.bucket),
-          child: const Text('Rellenar área'),
+          child: Text(context.l10n.tbFill),
         ),
         MenuItemButton(
           leadingIcon: Icon(canvas.magnifierEnabled ? Icons.search_off : Icons.search),
           onPressed: canvas.toggleMagnifier,
-          child: Text(canvas.magnifierEnabled ? 'Ocultar lupa' : 'Lupa'),
+          child: Text(canvas.magnifierEnabled ? context.l10n.tbHideMagnifier : context.l10n.tbMagnifier),
         ),
         MenuItemButton(
           leadingIcon: Icon(canvas.laserMode ? Icons.flashlight_off : Icons.flashlight_on),
           onPressed: canvas.toggleLaser,
-          child: Text(canvas.laserMode ? 'Desactivar puntero láser' : 'Puntero láser'),
+          child: Text(canvas.laserMode ? context.l10n.tbLaserOff : context.l10n.tbLaser),
         ),
         MenuItemButton(
           leadingIcon: const Icon(Icons.emoji_emotions_outlined),
           onPressed: onInsertSticker,
-          child: const Text('Insertar sticker'),
+          child: Text(context.l10n.tbInsertSticker),
         ),
         MenuItemButton(
           leadingIcon: const Icon(Icons.dashboard_customize_outlined),
           onPressed: onTemplates,
-          child: const Text('Plantilla de la página'),
+          child: Text(context.l10n.tbPageTemplate),
         ),
       ],
       builder: (context, menu, _) => _ToolbarButton(
         icon: Icons.more_horiz,
-        label: 'Más herramientas',
+        label: context.l10n.tbMoreTools,
         selected: extraSelected,
         onTap: () => menu.isOpen ? menu.close() : menu.open(),
       ),
@@ -297,13 +299,13 @@ class _TitleButton extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  state.$1,
+                  displayTitle(context.l10n, state.$1),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: context.text.titleMedium,
                 ),
                 Text(
-                  'Pág. ${state.$2 + 1} de ${state.$3}',
+                  context.l10n.tbPageOf(state.$2 + 1, state.$3),
                   style: context.text.bodySmall,
                 ),
               ],
@@ -327,12 +329,12 @@ class _UndoRedo extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              tooltip: 'Deshacer',
+              tooltip: context.l10n.tbUndo,
               icon: const Icon(Icons.undo),
               onPressed: state.$1 ? canvas.undo : null,
             ),
             IconButton(
-              tooltip: 'Rehacer',
+              tooltip: context.l10n.tbRedo,
               icon: const Icon(Icons.redo),
               onPressed: state.$2 ? canvas.redo : null,
             ),

@@ -7,6 +7,7 @@ import '../editor/tool_visuals.dart';
 import '../theme/inklus_colors.dart';
 import '../theme/tokens.dart';
 import 'page_scaffold.dart';
+import '../../l10n/l10n.dart';
 
 /// Panel de opciones de escritura: ajusta los parámetros de presión,
 /// suavizado y streamline de la herramienta actual.
@@ -48,8 +49,8 @@ class _StrokeOptionsSheet extends StatelessWidget {
               children: [
                 SheetHeader(
                   icon: ToolVisuals.icon(tool),
-                  title: 'Opciones de ${ToolVisuals.label(tool).toLowerCase()}',
-                  subtitle: 'Presión, suavizado y fluidez del trazo',
+                  title: context.l10n.strokeOptionsOf(ToolVisuals.label(context, tool).toLowerCase()),
+                  subtitle: context.l10n.strokeSubtitle,
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
@@ -57,7 +58,7 @@ class _StrokeOptionsSheet extends StatelessWidget {
                       ? Padding(
                           padding: const EdgeInsets.symmetric(vertical: Spacing.xl),
                           child: Text(
-                            'El borrador y la selección no tienen opciones de trazo.',
+                            context.l10n.strokeNone,
                             style: context.text.bodyLarge
                                 ?.copyWith(color: context.colors.onSurfaceVariant),
                           ),
@@ -65,7 +66,7 @@ class _StrokeOptionsSheet extends StatelessWidget {
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Tamaño rápido', style: context.text.titleSmall),
+                            Text(context.l10n.strokeQuickSize, style: context.text.titleSmall),
                             const SizedBox(height: Spacing.sm),
                             _QuickSizeRow(
                               currentSize: controller.toolSize,
@@ -74,30 +75,30 @@ class _StrokeOptionsSheet extends StatelessWidget {
                             ),
                             const SizedBox(height: Spacing.lg),
                             _OptionSlider(
-                              label: 'Variación con la presión',
+                              label: context.l10n.strokePressure,
                               value: controller.thinning,
                               min: -1,
                               max: 1,
                               icon: Icons.straighten,
-                              description: 'Cuánto cambia el grosor al apretar',
+                              description: context.l10n.strokePressureDesc,
                               onChanged: controller.setThinning,
                             ),
                             _OptionSlider(
-                              label: 'Suavizado',
+                              label: context.l10n.strokeSmoothing,
                               value: controller.smoothing,
                               min: 0,
                               max: 1,
                               icon: Icons.waves,
-                              description: 'Redondea las curvas del trazo',
+                              description: context.l10n.strokeSmoothingDesc,
                               onChanged: controller.setSmoothing,
                             ),
                             _OptionSlider(
-                              label: 'Estabilizador',
+                              label: context.l10n.strokeStabilizer,
                               value: controller.streamline,
                               min: 0,
                               max: 1,
                               icon: Icons.speed,
-                              description: 'Reduce el temblor del pulso',
+                              description: context.l10n.strokeStabilizerDesc,
                               onChanged: controller.setStreamline,
                             ),
                           ],
@@ -184,11 +185,11 @@ class _QuickSizeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final presets = switch (tool) {
-      ToolType.highlighter => [(8.0, 'Fino'), (16.0, 'Medio'), (24.0, 'Grueso'), (40.0, 'Extra')],
+      ToolType.highlighter => [(8.0, context.l10n.sizeThin), (16.0, context.l10n.sizeMedium), (24.0, context.l10n.sizeThick), (40.0, context.l10n.sizeExtra)],
       ToolType.pen => [(1.0, '0.5'), (2.0, '1.0'), (3.5, '2.0'), (5.0, '3.0'), (8.0, '5.0')],
       ToolType.pencil => [(1.0, 'HB'), (2.0, '2B'), (4.0, '4B'), (7.0, '6B')],
-      ToolType.eraser => [(4.0, 'Pequeño'), (12.0, 'Medio'), (24.0, 'Grande'), (48.0, 'Extra')],
-      _ => [(2.0, 'Fino'), (5.0, 'Medio'), (10.0, 'Grueso'), (20.0, 'Extra')],
+      ToolType.eraser => [(4.0, context.l10n.sizeSmall), (12.0, context.l10n.sizeMedium), (24.0, context.l10n.sizeLarge), (48.0, context.l10n.sizeExtra)],
+      _ => [(2.0, context.l10n.sizeThin), (5.0, context.l10n.sizeMedium), (10.0, context.l10n.sizeThick), (20.0, context.l10n.sizeExtra)],
     };
 
     return Wrap(

@@ -12,6 +12,7 @@ import '../../services/image_service.dart';
 import '../../services/template_library_service.dart';
 import 'dialogs.dart';
 import '../../services/marketplace/marketplace_service.dart';
+import '../../l10n/l10n.dart';
 
 /// Selector de plantillas de la página actual.
 ///
@@ -119,11 +120,11 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Plantillas',
+                        context.l10n.marketTemplates,
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        'Infinitas se alargan al escribir',
+                        context.l10n.tplInfiniteHint,
                         style: TextStyle(fontSize: 12, color: context.colors.onSurfaceVariant),
                       ),
                     ],
@@ -134,7 +135,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
             const SizedBox(height: 16),
 
             // ---- Sección: Plantillas infinitas ----
-            _SectionLabel(label: 'Lienzo infinito'),
+            _SectionLabel(label: context.l10n.createInfinite),
             const SizedBox(height: 8),
 
             // --- Tiles de plantillas infinitas ---
@@ -144,43 +145,43 @@ class _TemplateSheetState extends State<_TemplateSheet> {
               children: [
                 _TemplateTile(
                   icon: Icons.crop_free,
-                  label: 'Blanco',
+                  label: context.l10n.createTplBlank,
                   selected: current.type == TemplateType.blank,
                   onTap: () => _apply(const PageTemplate(type: TemplateType.blank)),
                 ),
                 _TemplateTile(
                   icon: Icons.subject,
-                  label: 'Rayas',
+                  label: context.l10n.createTplRuled,
                   selected: current.type == TemplateType.ruled,
                   onTap: () => _selectTemplate(TemplateType.ruled),
                 ),
                 _TemplateTile(
                   icon: Icons.grid_on,
-                  label: 'Cuadrícula',
+                  label: context.l10n.createTplGrid,
                   selected: current.type == TemplateType.grid,
                   onTap: () => _selectTemplate(TemplateType.grid),
                 ),
                 _TemplateTile(
                   icon: Icons.brush_outlined,
-                  label: 'Puntos',
+                  label: context.l10n.createTplDots,
                   selected: current.type == TemplateType.dots,
                   onTap: () => _selectTemplate(TemplateType.dots),
                 ),
                 _TemplateTile(
                   icon: Icons.music_note,
-                  label: 'Pentagrama',
+                  label: context.l10n.createTplMusic,
                   selected: current.type == TemplateType.music,
                   onTap: () => _selectTemplate(TemplateType.music),
                 ),
                 _TemplateTile(
                   icon: Icons.view_week,
-                  label: 'Agenda',
+                  label: context.l10n.createTplPlanner,
                   selected: current.type == TemplateType.planner,
                   onTap: () => _selectTemplate(TemplateType.planner),
                 ),
                 _TemplateTile(
                   icon: Icons.check_box_outlined,
-                  label: 'Hábitos',
+                  label: context.l10n.createTplHabit,
                   selected: current.type == TemplateType.habit,
                   onTap: () => _selectTemplate(TemplateType.habit),
                 ),
@@ -189,7 +190,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
 
             // --- Sección: Hoja fija ---
             const SizedBox(height: 16),
-            _SectionLabel(label: 'Hoja fija'),
+            _SectionLabel(label: context.l10n.noteTplSheet),
             const SizedBox(height: 8),
             Wrap(
               spacing: 10,
@@ -197,7 +198,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
               children: [
                 _TemplateTile(
                   icon: Icons.description_outlined,
-                  label: 'Hoja normal',
+                  label: context.l10n.tplNormalSheet,
                   selected: current.type == TemplateType.sheet,
                   onTap: () => _apply(PageTemplate(
                     type: TemplateType.sheet,
@@ -206,7 +207,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                 ),
                 _TemplateTile(
                   icon: Icons.add_photo_alternate_outlined,
-                  label: 'Plantilla propia',
+                  label: context.l10n.tplOwn,
                   selected: current.type == TemplateType.custom,
                   onTap: _pickCustomTemplate,
                 ),
@@ -223,7 +224,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 16),
-                    const _SectionLabel(label: 'Del marketplace'),
+                    _SectionLabel(label: context.l10n.tplFromMarket),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -249,15 +250,15 @@ class _TemplateSheetState extends State<_TemplateSheet> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Text(
-                    'Mis plantillas',
+                  Text(
+                    context.l10n.tplMine,
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                   ),
                   const Spacer(),
                   TextButton.icon(
                     onPressed: _saveCurrentAsTemplate,
                     icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Guardar actual'),
+                    label: Text(context.l10n.tplSaveCurrent),
                   ),
                 ],
               ),
@@ -291,8 +292,8 @@ class _TemplateSheetState extends State<_TemplateSheet> {
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 8),
-              const Text(
-                'Personalizar',
+              Text(
+                context.l10n.tplCustomize,
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
             ],
@@ -303,7 +304,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
               Row(
                 children: [
                   Text(
-                    'Color de línea',
+                    context.l10n.tplLineColor,
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                   const Spacer(),
@@ -328,8 +329,8 @@ class _TemplateSheetState extends State<_TemplateSheet> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Text(
-                    'Separación',
+                  Text(
+                    context.l10n.tplSpacing,
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                   Expanded(
@@ -362,14 +363,14 @@ class _TemplateSheetState extends State<_TemplateSheet> {
             if (supportsInfiniteToggle) ...[
               const SizedBox(height: 8),
               SwitchListTile(
-                title: const Text(
-                  'Lienzo infinito',
+                title: Text(
+                  context.l10n.createInfinite,
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
                 subtitle: Text(
                   _infiniteFill
-                      ? 'El lienzo se alarga al escribir'
-                      : 'Hoja de tamaño fijo',
+                      ? context.l10n.createInfiniteOn
+                      : context.l10n.tplFixedSheet,
                   style: const TextStyle(fontSize: 11),
                 ),
                 value: _infiniteFill,
@@ -385,8 +386,8 @@ class _TemplateSheetState extends State<_TemplateSheet> {
             // Tamaño de hoja (para hoja normal)
             if (isFiniteSheet && current.type != TemplateType.custom) ...[
               const SizedBox(height: 8),
-              const Text(
-                'Tamaño de hoja',
+              Text(
+                context.l10n.tplSheetSize,
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 4),
@@ -402,7 +403,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                   ),
                   const SizedBox(width: 8),
                   _SizePreset(
-                    label: 'Carta',
+                    label: context.l10n.tplLetter,
                     width: 1275,
                     height: 1650,
                     isActive: _sheetWidth == 1275 && _sheetHeight == 1650,
@@ -491,10 +492,10 @@ class _TemplateSheetState extends State<_TemplateSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(16),
               child: Text(
-                'Color de línea',
+                context.l10n.tplLineColor,
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
@@ -586,18 +587,18 @@ class _TemplateSheetState extends State<_TemplateSheet> {
       final mode = await showDialog<String>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('¿Cómo usar la plantilla?'),
-          content: const Text(
-            'La imagen se usará como fondo para escribir encima.',
+          title: Text(context.l10n.tplHowTitle),
+          content: Text(
+            context.l10n.tplHowBody,
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, 'sheet'),
-              child: const Text('Como hoja fija'),
+              child: Text(context.l10n.tplAsSheet),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, 'fill'),
-              child: const Text('Relleno infinito'),
+              child: Text(context.l10n.tplAsFill),
             ),
           ],
         ),
@@ -616,7 +617,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo cargar la imagen: $e')),
+          SnackBar(content: Text(context.l10n.tplImageLoadFailed('$e'))),
         );
       }
     }
@@ -627,16 +628,16 @@ class _TemplateSheetState extends State<_TemplateSheet> {
     final t = widget.controller.page.template;
     if (t.type != TemplateType.custom || t.imagePath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Solo se pueden guardar plantillas con imagen')),
+        SnackBar(content: Text(context.l10n.tplOnlyImage)),
       );
       return;
     }
     final name = await showTextPrompt(
       context,
-      title: 'Guardar plantilla',
-      hint: 'Nombre',
-      initialValue: 'Mi plantilla',
-      confirmLabel: 'Guardar',
+      title: context.l10n.tplSaveTitle,
+      hint: context.l10n.createName,
+      initialValue: context.l10n.tplDefaultName,
+      confirmLabel: context.l10n.commonSave,
     );
     if (name == null || name.trim().isEmpty) return;
 
@@ -651,13 +652,13 @@ class _TemplateSheetState extends State<_TemplateSheet> {
       if (mounted) {
         setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Plantilla guardada')),
+          SnackBar(content: Text(context.l10n.tplSaved)),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar: $e')),
+          SnackBar(content: Text(context.l10n.tplSaveFailed('$e'))),
         );
       }
     }
@@ -668,16 +669,16 @@ class _TemplateSheetState extends State<_TemplateSheet> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Eliminar plantilla'),
-        content: const Text('¿Eliminar esta plantilla guardada?'),
+        title: Text(context.l10n.tplDeleteTitle),
+        content: Text(context.l10n.tplDeleteBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar'),
+            child: Text(context.l10n.libDelete),
           ),
         ],
       ),
