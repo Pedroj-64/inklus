@@ -2,6 +2,24 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versiones [SemVer](https://semver.org/lang/es/).
 
+## [1.8.0] — 2026-10-01
+
+### Añadido
+- **Texto enriquecido en las cajas de texto**: negrita, cursiva, subrayado, alineación y 8 fuentes empaquetadas (Lato, Lora, Caveat, Oswald, Playfair Display, Pacifico, Indie Flower, Source Code Pro; licencias OFL en `third_party_licenses/`). El formato se aplica a la selección o a toda la caja, y se ve igual en el lienzo, en el editor y en las exportaciones.
+- **Abrir `.inklus` desde fuera de la app (Android)**: desde Drive, Archivos o "Compartir", Inklus aparece como opción y el cuaderno o la nota se importan a la biblioteca.
+- **Toda la app en español e inglés**: todas las pantallas y los mensajes de error están traducidos y siguen el idioma del sistema.
+- **Figuras más precisas**: las rectas casi horizontales o verticales se ajustan al eje (±4°, resaltador ±8°) y el resaltador solo endereza rectas.
+
+### Cambiado
+- Rediseño de la creación de cuadernos, las portadas, el Marketplace y la hoja de plantillas.
+- Errores visibles unificados (`AppError`): los servicios ya no devuelven texto de interfaz.
+- Mejoras en la sincronización con Google Drive y en la importación de respaldos.
+
+### Corregido
+- Tocar la barra de formato de una caja de texto ya no llega a la página de debajo.
+- Deshacer en cajas de texto: se registra una única acción por edición.
+- CI: el escaneo de secretos ya no marca los cachés locales de graphify (ahora ignorados en git).
+
 ## [1.7.0] — 2026-09-27
 
 ### Añadido

@@ -15,7 +15,7 @@ import 'models/stroke.dart';
 
 /// Versión visible de la app (debe coincidir con `version:` de pubspec.yaml;
 /// lo comprueba `test/app_version_test.dart`).
-const String kAppVersion = '1.7.0';
+const String kAppVersion = '1.8.0';
 
 /// Idioma fijo SOLO para las capturas de pantalla (`tool/screenshots`) y los
 /// tests; la app real sigue el idioma del sistema.

@@ -5,6 +5,7 @@ import '../models/page.dart' as models;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/drive_sync_service.dart';
 import '../services/import_service.dart';
@@ -117,6 +118,31 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
     _loadViewPref();
     // Restaura la sesión de Google (silenciosa).
     DriveSyncService.instance.restoreSession();
+    // Archivos .inklus abiertos desde fuera (Drive, Archivos…), Android.
+    if (Platform.isAndroid) {
+      _openChannel.setMethodCallHandler((call) async {
+        if (call.method == 'file') await _importIncoming(call.arguments as String);
+      });
+      _openChannel.invokeMethod<String>('take').then((p) {
+        if (p != null) _importIncoming(p);
+      });
+    }
+  }
+
+  static const _openChannel = MethodChannel('inklus/open');
+
+  Future<void> _importIncoming(String path) async {
+    if (!mounted) return;
+    final l10n = context.l10n;
+    try {
+      final bytes = await File(path).readAsBytes();
+      if (!mounted) return;
+      final result = await runWithLoading(context, () => ImportService.importBytes(bytes));
+      await _reload();
+      _snack(result.message(l10n));
+    } catch (e) {
+      _snack(e is FormatException ? userError(l10n, e) : l10n.libImportError('$e'));
+    }
   }
 
   Future<void> _reload() async {

@@ -168,3 +168,6 @@ client_secret*.json
 *.pfx
 *.pem
 *.p8
+
+# graphify (salida local, cachés con mtimes que gitleaks toma por claves)
+graphify-out/
