@@ -38,7 +38,12 @@ void main() {
     final end = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(end)) {
       await tester.pump(const Duration(milliseconds: 100));
-      if (finder.evaluate().isNotEmpty) return;
+      if (finder.evaluate().isNotEmpty) {
+        // Deja terminar la transición: en CI (lento) el widget ya existe
+        // pero aún se está moviendo, y el tap caería fuera de él.
+        await tester.pump(const Duration(milliseconds: 600));
+        return;
+      }
     }
     final visible = find
         .byType(Text)
