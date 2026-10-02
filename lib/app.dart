@@ -13,7 +13,10 @@ import 'ui/onboarding_screen.dart';
 /// Soporta tema claro y oscuro. El usuario puede alternar desde la
 /// configuración del sistema o desde un toggle manual.
 class InklusApp extends StatefulWidget {
-  const InklusApp({super.key});
+  /// Solo para tests: fija el idioma (null = el del sistema).
+  const InklusApp({super.key, this.locale});
+
+  final Locale? locale;
 
   @override
   State<InklusApp> createState() => _InklusAppState();
@@ -47,7 +50,8 @@ class _InklusAppState extends State<InklusApp> {
       themeMode: themeMode,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      // Sin `locale` fijo: sigue el idioma del sistema (es / en; otro idioma → inglés).
+      // Sin `locale`: sigue el idioma del sistema (es / en; otro idioma → inglés).
+      locale: widget.locale,
       home: _showOnboarding
           ? OnboardingScreen(
               onDone: () => setState(() => _showOnboarding = false),

@@ -52,7 +52,7 @@ void main() {
 
   testWidgets('bienvenida → crear cuaderno → escribir con lápiz → se guarda',
       (tester) async {
-    await tester.pumpWidget(const InklusApp());
+    await tester.pumpWidget(const InklusApp(locale: Locale('es')));
 
     // 1. Primer arranque: bienvenida.
     await waitFor(tester, find.text('Saltar'));
