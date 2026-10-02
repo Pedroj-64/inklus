@@ -2,6 +2,8 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versiones [SemVer](https://semver.org/lang/es/).
 
+Cada versión se escribe en español y en inglés (sección `### English`): el workflow de release copia la sección completa a las notas de GitHub.
+
 ## [1.8.0] — 2026-10-01
 
 ### Añadido
@@ -19,6 +21,24 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 - Tocar la barra de formato de una caja de texto ya no llega a la página de debajo.
 - Deshacer en cajas de texto: se registra una única acción por edición.
 - CI: el escaneo de secretos ya no marca los cachés locales de graphify (ahora ignorados en git).
+
+### English
+
+**Added**
+- **Rich text in text boxes**: bold, italic, underline, alignment and 8 bundled fonts (Lato, Lora, Caveat, Oswald, Playfair Display, Pacifico, Indie Flower, Source Code Pro; OFL licenses in `third_party_licenses/`). Formatting applies to the selection or the whole box and looks the same on the canvas, in the editor and in exports.
+- **Open `.inklus` files from outside the app (Android)**: from Drive, Files or "Share", Inklus shows up as an option and the notebook or note is imported into the library.
+- **Whole app in Spanish and English**: every screen and error message is translated and follows the system language.
+- **More precise shapes**: nearly horizontal or vertical lines snap to the axis (±4°, highlighter ±8°) and the highlighter only straightens lines.
+
+**Changed**
+- Redesigned notebook creation, covers, the Marketplace and the templates sheet.
+- Unified user-facing errors (`AppError`): services no longer return UI text.
+- Improvements to Google Drive sync and backup import.
+
+**Fixed**
+- Tapping a text box's formatting bar no longer reaches the page underneath.
+- Undo in text boxes: a single action is recorded per edit.
+- CI: the secret scan no longer flags local graphify caches (now git-ignored).
 
 ## [1.7.0] — 2026-09-27
 
