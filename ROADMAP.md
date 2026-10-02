@@ -13,7 +13,7 @@
 
 ## ✅ Lo que la app ofrece hoy
 
-> Verificado contra el código fuente (~25,678 líneas Dart en `lib/`, 216 tests pasando).
+> Verificado contra el código fuente (~27,600 líneas Dart en `lib/`, ~231 tests; versión 1.8.0).
 
 ### ✨ UX y Onboarding
 - **Onboarding tutorial**: 4 páginas ilustradas skippable al primer inicio; persiste con `SharedPreferences`.
@@ -117,7 +117,7 @@
 - **Ctrl+V**: pegar.
 
 ### 🧪 Calidad y DevOps
-- **173 tests** pasando (modelos, storage, backup, cifrado, migración, CRUD, formatos, lógica del lienzo, historial).
+- **~231 tests** (modelos, storage, backup, cifrado, migración, CRUD, formatos, lógica del lienzo, historial).
 - **CI (GitHub Actions)**: `flutter analyze` + `flutter test --coverage` + APK debug + build Linux; en tags `v*` genera APK/AAB **firmados** (secretos `ANDROID_KEYSTORE_*`) y los publica en la release.
 - **Firma de release** desde `android/key.properties` (no versionado); sin él, release usa la clave debug.
 - **Tema oscuro** adaptado (scaffold, top bar, bottom bar, tool rail, biblioteca).
@@ -160,7 +160,12 @@
 - **Importación única por contenido** (`ImportService`): `.inklus` v1/v2, respaldo completo y `.inklus.zip` renombrados.
 - Autoguardado fijo (sin intervalo configurable), nuevo icono, Configuración migrada al sistema de diseño.
 
-### 🎯 Siguiente — plan por fases (revisado contra el código, 2026-09-27)
+### ✅ v1.8.0 — Texto, apertura externa e i18n (hecho)
+- Texto enriquecido por tramos (negrita/cursiva/subrayado/alineación) con 8 fuentes empaquetadas, idéntico en lienzo, editor y exportación.
+- Abrir `.inklus` desde Drive/Archivos/Compartir (Android). App completa en es/en según el idioma del sistema; errores unificados (`AppError`).
+- Figuras con ajuste a ejes; rediseño de creación de cuadernos, portadas, Marketplace y hoja de plantillas.
+
+### 🎯 Plan por fases (histórico, ya ejecutado) (revisado contra el código, 2026-09-27)
 > Prioridades: **1) no perder datos, 2) fluidez con notas grandes, 3) interfaz consistente, 4) distribución pública.** Cada fase es una versión publicable.
 
 **Hallazgos que motivan el orden**
@@ -218,32 +223,29 @@ P4 audio sincronizado, P5 ventana de zoom, R7 plugin nativo de latencia (solo si
 - Figuras: resaltador recto, ajuste a ejes. Drive: carpeta por cuaderno, sync selectiva desde Configuración y menú del cuaderno, diagnóstico de inicio de sesión. UI: portadas nuevas + "Tu imagen" visible, marketplace rediseñado.
 - Pendiente de verificar en tablet: edición de texto con S-Pen/teclado, y el inicio de sesión de Drive (registrar SHA-1 de debug y release en Google Cloud).
 
-### 🟡 Pendiente (siguiente ronda)
-| # | Tarea | Detalle |
-|---|---|---|
-| P1 | ✅ **Migrar pantallas restantes al sistema de diseño** | Hecho en 1.4.2 (Configuración) y 1.6.0 (resto). |
-| P2 | ✅ **i18n** | Hecho (ver Fase 4). |
-| P3 | ✅ **Desplazamiento vertical continuo** entre páginas (1.7.0). Vista doble en apaisado: pendiente. |
-| P4 | **Audio sincronizado** (`record`) con reproducción que resalta lo escrito. |
-| P5 | **Ventana de zoom** tipo Samsung Notes (recuadro de escritura ampliada que avanza solo). |
-| P6 | **Portadas desde el marketplace** y plantillas con imagen/PDF en el catálogo real (hoy el catálogo incluido solo trae plantillas paramétricas y paletas). |
-| P7 | ✅ **Escalar/rotar y copiar/pegar** también imágenes y textos del lazo (1.6.0). |
-| P8 | ✅ **UI de revisiones de Drive** en el historial de versiones (1.6.0). |
-
-### 🔵 v2.0 — Release pública (sin Google Play)
-> Decisión: **no se publica en Google Play**. Distribución por **GitHub Releases** (APK firmados por la CI en cada tag `v*`) y, opcionalmente, IzzyOnDroid. (F-Droid principal no admite dependencias propietarias como ML Kit / Google Sign-In.)
+### 🏁 Camino a 2.0 (lo único que falta)
+> Distribución **sin Google Play**: GitHub Releases (APK firmados por la CI en tags `v*`) y opcionalmente IzzyOnDroid (F-Droid principal no admite ML Kit / Google Sign-In). Licencia GPL-3.0-or-later.
 
 | # | Tarea | Detalle |
 |---|---|---|
-| R1 | ✅ **LICENSE GPL-3.0-or-later** | `LICENSE` + cabecera SPDX en cada `.dart` + sección en README. |
-| R2 | ✅ **Política de privacidad** | `docs/privacy.md` (1.7.0), enlazada en Configuración: todo local, Drive con `drive.file`, ML Kit en el dispositivo, sin analítica. Es la URL para la pantalla de consentimiento OAuth. |
-| R3 | **OAuth en producción** | Pasar la pantalla de consentimiento de Google Cloud de *Testing* a *In production* (si no: máx. 100 usuarios de prueba y tokens que caducan a los 7 días). |
-| R4 | ✅ **Releases en GitHub** | Tags `v*` → la CI firma, adjunta APK por ABI + AAB, comprueba tag = versión y usa la sección del CHANGELOG como notas. Instalación explicada en README y en cada release. |
-| R5 | ✅ **Pruebas en dispositivo** | `integration_test` (CI con Xvfb) + guion manual `docs/testing.md` para Galaxy Tab S, tablet USI y teléfono. |
-| R6 | ✅ **Registro de errores** | Local y compartido a mano por el usuario (en lugar de Sentry). |
-| R7 | **Latencia del lápiz** | Medir; si es alta, plugin nativo Android con *front-buffered rendering* + predicción de movimiento. |
-| R8 | **Otras plataformas** | iPadOS / Windows (revisar `google_sign_in`, ML Kit y `printing`). |
-| R9 | **Versionado** | SemVer + `CHANGELOG.md`. |
+| R3 | **OAuth en producción** (manual) | Google Cloud → pantalla de consentimiento: URL de `docs/privacy.md` + *Publish app* (si no: 100 usuarios de prueba y tokens de 7 días). |
+| T1 | **Prueba en tablet** | Superar `docs/testing.md`; verificar texto con S-Pen/teclado e inicio de sesión de Drive (SHA-1 debug y release registrados). |
+| 1.5 | **Medir rendimiento** | `flutter run --profile` con `build/inklus_stress.inklus`; decide R7 y "páginas en archivos". |
+| 0.4 | **Keystore de release** (manual) | Secretos `ANDROID_KEYSTORE_*` en GitHub antes de repartir APKs. |
+
+Hecho de P1–P3, P7, P8, R1, R2, R4–R6, R9: ver versiones 1.4–1.8.
+
+### 🔭 Después de 2.0 (propuesta, por valor)
+| Prioridad | Idea | Notas |
+|---|---|---|
+| Alta | **Vista doble en apaisado** | Continuación de P3 (`_neighbor`, desplazamiento continuo). |
+| Alta | **Marketplace con contenido real** (P6) | Portadas, plantillas con imagen/PDF, planners y stickers en el catálogo; hoy solo hay plantillas paramétricas y paletas. |
+| Alta | **Accesibilidad** | TalkBack/Semantics en biblioteca y barra, escala de texto del sistema. |
+| Alta | **Reconocimiento de escritura en escritorio** | ML Kit solo existe en Android/iOS; evaluar alternativa gratuita on-device. |
+| Media | **Latencia del lápiz** (R7) | Plugin nativo con *front-buffered rendering* + predicción, solo si 1.5 la muestra alta. |
+| Media | **Páginas en archivos separados** | Solo si la medición con notas de cientos de páginas lo exige (ver Fase 3). |
+| Media | **Varias notas abiertas / pestañas**, atajos ampliados, IzzyOnDroid | |
+| Baja | Audio sincronizado (P4), ventana de zoom (P5), iPadOS/Windows (R8) | Aparcado: coste alto. |
 
 ### 🛒 Marketplace propio de Inklus
 
@@ -276,9 +278,9 @@ Contenido inicial sugerido: agenda semanal/mensual real (con días y cabeceras, 
 
 | Métrica | Valor |
 |---|---|
-| Archivos Dart (lib/) | ~94 |
-| Líneas de código | ~25,678 |
-| Tests | 216 unitarios + 1 de integración + 23 capturas (todos pasando) |
+| Archivos Dart (lib/) | ~96 |
+| Líneas de código | ~27,600 |
+| Tests | ~231 (22 archivos en `test/`) + integración + capturas |
 | Modelos | 9 (`document`, `note`, `notebook`, `page`, `stroke`, `template`, `image_item`, `text_item`, `id`) |
 | Servicios | 17 (+ `file_utils`) |
 | Herramientas de escritura | 10 (pen, pencil, highlighter, calligraphy, brush, eraser, select, lasso, bucket, text) |
