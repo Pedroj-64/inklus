@@ -49,7 +49,7 @@ dependencies:
   xml: ^7.0.1
   shared_preferences: ^2.3.0
   cryptography: ^2.9.0
-  printing: ^5.13.0
+  printing: ^5.15.1
   url_launcher: ^6.3.2
   flutter_localizations:
     sdk: flutter
