@@ -210,7 +210,7 @@ jobs:
           chmod +x appimagetool
           ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool AppDir Inklus-x86_64.AppImage
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           name: Inklus ${{ github.ref_name }}
           body_path: release_notes.md
