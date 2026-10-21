@@ -69,9 +69,10 @@ void main() {
     await waitFor(tester, find.text('Siguiente'));
     await tester.tap(find.text('Siguiente'));
     // .last: la biblioteca vacía (debajo) tiene otro botón "Crear cuaderno".
-    final create = find.widgetWithText(FilledButton, 'Crear cuaderno').last;
+    // Se espera sin .last (lanza StateError si aún no hay ninguno).
+    final create = find.widgetWithText(FilledButton, 'Crear cuaderno');
     await waitFor(tester, create);
-    await tester.tap(create);
+    await tester.tap(create.last);
 
     // 3. Se abre la lista de notas; abrir la primera.
     await waitFor(tester, find.text('Sin título'));

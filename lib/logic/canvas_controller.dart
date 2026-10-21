@@ -810,6 +810,9 @@ class CanvasController extends _CanvasCore
     if (tool == ToolType.eraser) {
       _activeEraserPath = [worldPoint];
       _activeStroke = null;
+      // Borrado en vivo: instantánea para un único deshacer al soltar.
+      _eraserBefore = List.of(page.strokes);
+      _eraseLive([worldPoint]);
     } else {
       _activePoints = [
         StrokePoint.fromOffset(constrainedPoint, _pressure(pressure)),
@@ -852,7 +855,14 @@ class CanvasController extends _CanvasCore
       _activePoints.add(StrokePoint.fromOffset(constrained, _pressure(pressure)));
       if (snap == null) _trackHold(worldPoint);
     } else {
-      _activeEraserPath.add(worldPoint);
+      final last = _activeEraserPath.last;
+      _activeEraserPath = [worldPoint]; // solo el cursor; el borrado ya se aplicó
+      // Interpola para no dejar huecos si el lápiz va rápido.
+      final step = eraserRadius;
+      final n = ((worldPoint - last).distance / step).ceil().clamp(1, 200);
+      _eraseLive([
+        for (var i = 1; i <= n; i++) Offset.lerp(last, worldPoint, i / n)!,
+      ]);
     }
     // Actualiza posición de la lupa si está activa.
     if (_magnifierEnabled) {
@@ -907,7 +917,7 @@ class CanvasController extends _CanvasCore
         strokesAddedAt: [page.strokes.length - 1],
       ));
     } else if (eraserPath.isNotEmpty) {
-      _applyEraser(eraserPath);
+      _commitEraser();
     }
     _touch();
     // Borrador de la barra: tras el trazo se vuelve a la herramienta anterior.
@@ -916,13 +926,16 @@ class CanvasController extends _CanvasCore
     }
   }
 
-  /// Borra con [eraserPath] conservando el orden de los trazos (los
+  /// Estado de los trazos al empezar el gesto del borrador (null = no borrando).
+  List<Stroke>? _eraserBefore;
+
+  /// Borra en vivo con [eraserPath] conservando el orden de los trazos (los
   /// fragmentos ocupan el lugar del original) y sin tocar capas bloqueadas.
-  /// El deshacer guarda solo los trazos afectados y sus posiciones.
-  void _applyEraser(List<Offset> eraserPath) {
+  void _eraseLive(List<Offset> eraserPath) {
     final before = page.strokes;
     final after = <Stroke>[];
     var changed = false;
+    final pathBounds = StrokeEraser.bounds(eraserPath); // una vez, no por trazo
     for (final s in before) {
       final skip = _isLayerLocked(s.layerIndex) ||
           (_eraserMode == EraserMode.highlighterOnly &&
@@ -931,7 +944,8 @@ class CanvasController extends _CanvasCore
         after.add(s);
         continue;
       }
-      var fragments = StrokeEraser.eraseStroke(s, eraserPath, eraserRadius);
+      var fragments = StrokeEraser.eraseStroke(s, eraserPath, eraserRadius,
+          pathBounds: pathBounds);
       // Modo trazo completo: si se tocó, desaparece entero.
       if (fragments != null && _eraserMode == EraserMode.stroke) {
         fragments = const [];
@@ -944,10 +958,19 @@ class CanvasController extends _CanvasCore
       }
     }
     if (!changed) return;
-    final action = CanvasAction.strokeDiff(before, after);
     page.strokes
       ..clear()
       ..addAll(after);
+    _touchLive();
+  }
+
+  /// Al soltar: una sola acción de deshacer con todo lo borrado en el gesto.
+  void _commitEraser() {
+    final before = _eraserBefore;
+    _eraserBefore = null;
+    if (before == null) return;
+    final action = CanvasAction.strokeDiff(before, page.strokes);
+    if (action.strokesRemoved.isEmpty && action.strokesAdded.isEmpty) return;
     _undoStack.push(action);
   }
 
@@ -977,6 +1000,15 @@ class CanvasController extends _CanvasCore
     _activeStroke = null;
     _activePoints = [];
     _activeEraserPath = [];
+    final eraserBefore = _eraserBefore;
+    if (eraserBefore != null) {
+      // Cancelado (p. ej. palma): se deshace lo borrado en el gesto.
+      _eraserBefore = null;
+      page.strokes
+        ..clear()
+        ..addAll(eraserBefore);
+      _touchLive();
+    }
     notifyListeners();
   }
 

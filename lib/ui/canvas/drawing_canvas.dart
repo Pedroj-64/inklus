@@ -748,7 +748,9 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       // pulsado = borrador para este trazo.
       final eraserButton = kind == PointerDeviceKind.invertedStylus ||
           (kind == PointerDeviceKind.stylus &&
-              (event.buttons & kSecondaryStylusButton) != 0);
+              // Algunos lápices (p. ej. el de la Lenovo) reportan el botón
+              // lateral como primario y otras veces como secundario.
+              (event.buttons & (kPrimaryStylusButton | kSecondaryStylusButton)) != 0);
       if (eraserButton) {
         c.beginStroke(world, event.pressure, tool: ToolType.eraser);
       } else if (c.tool == ToolType.select) {

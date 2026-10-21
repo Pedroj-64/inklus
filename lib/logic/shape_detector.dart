@@ -203,17 +203,14 @@ class ShapeDetector {
       rect.bottomRight,
       rect.bottomLeft,
     ];
-    var matched = 0;
-    for (final c in corners) {
-      for (final expected in cornersExpected) {
-        if ((c - expected).distance < rect.shortestSide * 0.2) {
-          matched++;
-          break;
-        }
-      }
-    }
+    // Cada esquina del rectángulo debe tener una esquina detectada (o el
+    // inicio del trazo, que _findCorners no ve): con 3 de 4 un triángulo
+    // rectángulo se confundía con un rectángulo.
+    final candidates = [points.first.offset, ...corners];
+    final matched = cornersExpected.where((expected) => candidates
+        .any((c) => (c - expected).distance < rect.shortestSide * 0.2)).length;
 
-    if (matched >= 3) {
+    if (matched == 4) {
       // Cerrado y con lados densificados (antes faltaba el cuarto lado).
       return DetectedShape(
         ShapeType.rectangle,

@@ -172,6 +172,7 @@ jobs:
 
           | Plataforma | Archivo |
           |---|---|
+          | Android: si dudas, usa este (32+64 bits, funciona en todos) | `app-release.apk` |
           | Android (casi todas las tablets y teléfonos) | `app-arm64-v8a-release.apk` |
           | Android antiguos de 32 bits | `app-armeabi-v7a-release.apk` |
           | Android x86_64 / emuladores | `app-x86_64-release.apk` |
@@ -185,6 +186,9 @@ jobs:
       - name: Build APK + AAB (release)
         run: |
           flutter build apk --release --split-per-abi
+          # Universal 32+64 bits: para móviles con userland de 32 bits sobre CPU arm64
+          # (el APK arm64 se rechaza con "app ya no disponible para esta versión de Android")
+          flutter build apk --release --target-platform android-arm,android-arm64
           flutter build appbundle --release
 
       - name: Build Linux (release) + AppImage + tar.gz

@@ -22,7 +22,7 @@ class StrokeEraser {
     double radius,
   ) {
     if (eraserPath.isEmpty) return strokes;
-    final pathBounds = _bounds(eraserPath);
+    final pathBounds = bounds(eraserPath);
     final result = <Stroke>[];
     for (final stroke in strokes) {
       final fragments = eraseStroke(stroke, eraserPath, radius, pathBounds: pathBounds);
@@ -50,7 +50,7 @@ class StrokeEraser {
     // borrar "encima" de la línea la corte limpiamente.
     final effectiveRadius = radius + stroke.size / 2;
     // Descarte rápido: si los rectángulos no se tocan, no hay nada que hacer.
-    final pb = pathBounds ?? _bounds(eraserPath);
+    final pb = pathBounds ?? bounds(eraserPath);
     if (!stroke.pointBounds.overlaps(pb.inflate(effectiveRadius))) return null;
 
     final r2 = effectiveRadius * effectiveRadius;
@@ -95,7 +95,7 @@ class StrokeEraser {
     return fragments;
   }
 
-  static Rect _bounds(List<Offset> pts) {
+  static Rect bounds(List<Offset> pts) {
     var left = double.infinity, top = double.infinity;
     var right = double.negativeInfinity, bottom = double.negativeInfinity;
     for (final p in pts) {

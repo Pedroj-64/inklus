@@ -4,6 +4,26 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 Cada versión se escribe en español y en inglés (sección `### English`): el workflow de release copia la sección completa a las notas de GitHub.
 
+## [1.9.1] — 2026-10-20
+
+### Cambiado
+- **Borrador en vivo**: el trazo desaparece mientras pasas el borrador (un solo deshacer al soltar) y se interpola para no dejar huecos si el lápiz va rápido; los límites de la ruta se calculan una vez por movimiento, no por trazo.
+- APK universal (32+64 bits) en las releases para móviles con userland de 32 bits sobre CPU arm64.
+
+### Corregido
+- Un triángulo rectángulo ya no se endereza como rectángulo (se exigen las 4 esquinas).
+- El botón lateral del lápiz funciona como borrador aunque se reporte como primario o secundario.
+
+### English
+
+**Changed**
+- **Live eraser**: strokes vanish while you erase (a single undo on release), interpolated so fast pen movement leaves no gaps; the eraser path bounds are computed once per move instead of once per stroke.
+- Universal APK (32+64 bit) in releases for phones with a 32-bit userland on arm64 CPUs.
+
+**Fixed**
+- A right triangle is no longer straightened into a rectangle (all 4 corners are required).
+- The stylus side button works as an eraser whether reported as primary or secondary.
+
 ## [1.9.0] — 2026-10-15
 
 ### Añadido
