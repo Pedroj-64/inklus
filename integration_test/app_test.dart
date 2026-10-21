@@ -57,6 +57,9 @@ void main() {
 
   testWidgets('bienvenida → crear cuaderno → escribir con lápiz → se guarda',
       (tester) async {
+    tester.view.physicalSize = const Size(1280, 720); // como en CI
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(const InklusApp(locale: Locale('es')));
 
     // 1. Primer arranque: bienvenida.
@@ -67,6 +70,9 @@ void main() {
     // 2. Crear un cuaderno con los valores por defecto ("Cuaderno 1").
     await tester.tap(find.text('Nuevo cuaderno'));
     await waitFor(tester, find.text('Siguiente'));
+    // En ventanas bajas (CI: 720 px) el botón queda fuera de pantalla.
+    await tester.ensureVisible(find.text('Siguiente'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Siguiente'));
     // .last: la biblioteca vacía (debajo) tiene otro botón "Crear cuaderno".
     // Se espera sin .last (lanza StateError si aún no hay ninguno).
