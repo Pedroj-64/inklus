@@ -5,8 +5,22 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inklus/services/image_service.dart';
+import 'package:inklus/services/low_power_mode.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test('modo ahorro: caché e imágenes del lienzo más pequeñas, y se recuerda', () async {
+    SharedPreferences.setMockInitialValues({});
+    addTearDown(() => LowPowerMode.set(false));
+    final normal = BoundedImageCache().maxBytes;
+    await LowPowerMode.set(true);
+    expect(BoundedImageCache().maxBytes, lessThan(normal));
+    expect(LowPowerMode.canvasImageMaxSide, lessThan(kCanvasImageMaxSide));
+    LowPowerMode.enabled.value = false;
+    await LowPowerMode.load();
+    expect(LowPowerMode.enabled.value, isTrue, reason: 'persistido en SharedPreferences');
+  });
+
   group('ImageService.fitWithin', () {
     test('no reduce lo que ya cabe o sin límite', () {
       expect(ImageService.fitWithin(800, 600, 2560), isNull);

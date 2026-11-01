@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Icono completo (generado a partir de icon_background.svg + icon_foreground.svg). -->
+  <clipPath id="sq"><rect width="1024" height="1024" rx="228"/></clipPath>
+  <g clip-path="url(#sq)">
+  <defs>
+    <linearGradient id="fullbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5B8CFF"/>
+      <stop offset="1" stop-color="#2A4FD6"/>
+    </linearGradient>
+    <radialGradient id="fullglow" cx="0.3" cy="0.22" r="0.7">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#fullbg)"/>
+  <rect width="1024" height="1024" fill="url(#fullglow)"/>
+    <g transform="translate(82 82) scale(0.84)">
+  <!-- Inklus: plumilla estilográfica escribiendo un trazo de tinta dorada. -->
+  <defs>
+    <linearGradient id="nibL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F2F6FF"/>
+    </linearGradient>
+    <linearGradient id="nibR" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#DCE7FF"/>
+      <stop offset="1" stop-color="#C3D5FF"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFD66B"/>
+      <stop offset="1" stop-color="#FF9F43"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#0B1F5C" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Trazo de tinta: sale de la punta y hace un bucle de escritura. -->
+  <path d="M318,706 C262,760 214,838 262,872 C312,906 402,806 470,812 C540,818 530,884 610,880 C668,877 712,840 752,800" pathLength="1" fill="none" stroke="url(#ink)" stroke-width="44" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 1.01" stroke-dashoffset="1.01"><animate attributeName="stroke-dashoffset" values="1.01;0;0;1.01;1.01" keyTimes="0;0.5;0.72;0.9;1" dur="5s" repeatCount="indefinite" calcMode="spline" keySplines=".4 0 .6 1;0 0 1 1;.5 0 .5 1;0 0 1 1"/></path>
+
+  <!-- Plumilla (dibujada vertical y girada 45°; la punta queda abajo a la izquierda). -->
+  <g><animateMotion path="M0,0 C-56,54 -104,132 -56,166 C-6,200 84,100 152,106 C222,112 212,178 292,174 C350,171 394,134 434,94" keyPoints="0;1;1;0;0" keyTimes="0;0.5;0.72;0.9;1" dur="5s" repeatCount="indefinite" calcMode="spline" keySplines=".4 0 .6 1;0 0 1 1;.5 0 .5 1;0 0 1 1"/><g transform="translate(560 470) rotate(45)" filter="url(#shadow)">
+    <!-- Mitad izquierda (luz) -->
+    <path d="M0,-190 L-150,-190 L-150,-110 C-150,-20 -70,110 0,330 Z" fill="url(#nibL)"/>
+    <!-- Mitad derecha (sombra) -->
+    <path d="M0,-190 L150,-190 L150,-110 C150,-20 70,110 0,330 Z" fill="url(#nibR)"/>
+    <!-- Virola / sección superior -->
+    <rect x="-172" y="-300" width="344" height="120" rx="36" fill="#FFFFFF"/>
+    <rect x="-172" y="-212" width="344" height="32" rx="12" fill="#C3D5FF"/>
+    <!-- Respiradero + ranura -->
+    <circle cx="0" cy="-30" r="34" fill="#2F6BF2"/>
+    <path d="M0,-30 L0,320" stroke="#2F6BF2" stroke-width="16" stroke-linecap="round"/>
+  </g></g>
+    </g>
+  </g>
+</svg>

@@ -31,3 +31,9 @@ Objetivo: que cada pantalla se sienta del mismo producto, al nivel de GoodNotes/
 - [ ] Estados vacío, carga y error presentes
 - [ ] Feedback de pulsación y transiciones con `Motion` (sin animaciones bruscas)
 - [ ] Capturas con `flutter test tool/screenshots/screenshots_test.dart`
+
+## Marca e icono
+
+- **Icono**: plumilla blanca escribiendo un trazo dorado sobre degradado azul (`#5B8CFF → #2A4FD6`, tinta `#FFD66B → #FF9F43`). Fuente vectorial en `assets/icon/` (`icon_full.svg`, `icon_foreground.svg`, `icon_background.svg`); los PNG de `flutter_launcher_icons` salen de ahí con `rsvg-convert`.
+- **README**: `docs/assets/icon-animated.svg` (la plumilla escribe el trazo en bucle) y `docs/assets/anim/*.{en,es}.svg` (presión, rechazo de palma, figuras, lazo). Son SVG/SMIL escritos a mano y **generados** por `tool/docs_assets/generate.py` (sin dependencias; edita el script, no los SVG).
+- Una animación nueva = una función `scene_*` en el script, con fondo propio (se ve igual en tema claro y oscuro) y textos es/en en `TXT`.

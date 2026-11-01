@@ -1,0 +1,51 @@
+{
+  "id": "hojas-estructuradas",
+  "name": "Hojas con estructura",
+  "description": "Cornell, semana, mes, lista de tareas, storyboard y papel milimetrado.",
+  "type": "template",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": [
+    "estudio",
+    "organización"
+  ],
+  "templates": [
+    {
+      "name": "Cornell",
+      "params": {
+        "type": "cornell"
+      }
+    },
+    {
+      "name": "Semana",
+      "params": {
+        "type": "weekly"
+      }
+    },
+    {
+      "name": "Mes",
+      "params": {
+        "type": "monthly"
+      }
+    },
+    {
+      "name": "Tareas",
+      "params": {
+        "type": "todo"
+      }
+    },
+    {
+      "name": "Storyboard",
+      "params": {
+        "type": "storyboard"
+      }
+    },
+    {
+      "name": "Milimetrado",
+      "params": {
+        "type": "millimeter"
+      }
+    }
+  ]
+}

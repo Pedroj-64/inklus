@@ -173,7 +173,11 @@ class _PagesPanelState extends State<PagesPanel> {
                   index: i,
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: Spacing.md),
-                    child: GestureDetector(
+                    child: Semantics(
+                      button: true,
+                      selected: i == _c.pageIndex,
+                      label: context.l10n.tbPageOf(i + 1, _c.pageCount),
+                      child: GestureDetector(
                       onTap: () => _c.goToPage(i),
                       onSecondaryTapDown: (d) => _pageMenu(context, i, d.globalPosition),
                       child: Column(
@@ -226,6 +230,7 @@ class _PagesPanelState extends State<PagesPanel> {
                           ),
                         ],
                       ),
+                    ),
                     ),
                   ),
                 );

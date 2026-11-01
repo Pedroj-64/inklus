@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-inklus">
+    <comment>Inklus notebook</comment>
+    <comment xml:lang="es">Cuaderno de Inklus</comment>
+    <glob pattern="*.inklus"/>
+    <icon name="inklus"/>
+  </mime-type>
+</mime-info>

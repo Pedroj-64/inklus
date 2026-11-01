@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import '../models/id.dart';
 import '../models/page.dart';
 import 'app_paths.dart';
+import 'low_power_mode.dart';
 
 /// Lado mayor (px) con que se decodifican las imágenes para el **lienzo**.
 /// Una foto de 12 MP a tamaño completo ocupa ~48 MB en memoria; a 2560 px
@@ -39,6 +40,8 @@ class ImageService {
   /// se decodifica ya reducida (conservando la proporción); `null` = tamaño
   /// original.
   Future<ui.Image> decode(String path, {int? maxSide = kCanvasImageMaxSide}) async {
+    // El valor por defecto del lienzo se adapta al «modo ahorro».
+    if (maxSide == kCanvasImageMaxSide) maxSide = LowPowerMode.canvasImageMaxSide;
     final bytes = await File(path).readAsBytes();
     final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
     final descriptor = await ui.ImageDescriptor.encoded(buffer);
@@ -128,7 +131,7 @@ class ImageService {
 /// imágenes desalojadas no se `dispose()`an explícitamente (podrían estar
 /// en uso por un frame o una exportación en curso); las libera el GC.
 class BoundedImageCache extends MapBase<String, ui.Image> {
-  BoundedImageCache({this.maxBytes = 192 * 1024 * 1024});
+  BoundedImageCache({int? maxBytes}) : maxBytes = maxBytes ?? LowPowerMode.imageCacheBytes;
 
   final int maxBytes;
   // ignore: prefer_collection_literals

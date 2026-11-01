@@ -9,7 +9,22 @@ import 'dart:ui' show Color, Size;
 /// - [grid]: cuadrícula tipo cuaderno, infinita.
 /// - [custom]: plantilla de usuario (imagen subida del dispositivo). Puede
 ///   usarse como hoja fija o como relleno infinito (se repite al escribir).
-enum TemplateType { blank, sheet, ruled, grid, custom, music, planner, habit, dots }
+///
+/// Hojas con estructura ([cornell], [weekly], [monthly], [todo], [storyboard])
+/// son SIEMPRE de tamaño fijo; [millimeter] es papel milimetrado infinito.
+enum TemplateType {
+  blank, sheet, ruled, grid, custom, music, planner, habit, dots,
+  cornell, weekly, monthly, todo, storyboard, millimeter,
+}
+
+/// Hojas con estructura propia, siempre de tamaño fijo.
+const kStructuredTemplates = {
+  TemplateType.cornell,
+  TemplateType.weekly,
+  TemplateType.monthly,
+  TemplateType.todo,
+  TemplateType.storyboard,
+};
 
 TemplateType templateTypeFromName(String name) => TemplateType.values
     .firstWhere((t) => t.name == name, orElse: () => TemplateType.blank);
@@ -65,7 +80,7 @@ class PageTemplate {
       type == TemplateType.blank || type == TemplateType.music ||
       type == TemplateType.habit || type == TemplateType.ruled ||
       type == TemplateType.grid || type == TemplateType.dots ||
-      type == TemplateType.planner;
+      type == TemplateType.planner || type == TemplateType.millimeter;
 
   /// Tamaño efectivo de la hoja de esta plantilla.
   /// Usa [customWidth]/[customHeight] si están (imagen propia, página de PDF
@@ -78,13 +93,15 @@ class PageTemplate {
       type != TemplateType.blank &&
       type != TemplateType.sheet &&
       type != TemplateType.music &&
-      type != TemplateType.habit;
+      type != TemplateType.habit &&
+      !kStructuredTemplates.contains(type);
 
   /// Si la plantilla es finita (hoja de tamaño fijo).
   /// B6: ruled/grid/dots/planner son infinitos por defecto. El usuario puede
   /// volverlos finitos desde el template picker (checkbox "Lienzo infinito").
   /// sheet siempre es finito. blank/music/habit siempre son infinitos.
   bool get isFinite => type == TemplateType.sheet ||
+      kStructuredTemplates.contains(type) ||
       (type != TemplateType.blank && type != TemplateType.music &&
        type != TemplateType.habit && !infiniteFill);
 

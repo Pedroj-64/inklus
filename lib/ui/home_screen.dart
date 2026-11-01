@@ -1281,6 +1281,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 imageService: _imageService,
                                 nightMode: _nightMode,
                                 onGoToPage: _goToPageDialog,
+                                onSearch: _searchContent,
                               ),
                             ),
                             if (!presentMode)

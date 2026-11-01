@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Inklus
+GenericName=Handwritten notes
+GenericName[es]=Notas manuscritas
+Comment=Handwritten notes for stylus and tablets
+Comment[es]=Notas manuscritas con stylus
+Exec=inklus %F
+Icon=inklus
+Terminal=false
+Categories=Office;Utility;
+Keywords=notes;handwriting;stylus;notebook;pdf;
+MimeType=application/x-inklus;
+StartupWMClass=com.inklus.inklus

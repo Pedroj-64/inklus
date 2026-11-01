@@ -13,13 +13,12 @@ import 'app_paths.dart';
 /// plantilla de fondo en el editor. Usa el paquete `printing` que delega
 /// el renderizado a la plataforma nativa (Android/iOS).
 ///
-/// En Linux desktop (dev), PDF rendering no está soportado por `printing`.
-/// La app funciona correctamente sin esta feature en escritorio.
+/// En escritorio rasteriza con PDFium (incluido en el bundle de `printing`).
 class PdfImportService {
   const PdfImportService._();
 
   /// Si la plataforma soporta renderizado de PDF.
-  static bool get isSupported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+  static bool get isSupported => !kIsWeb;
 
   /// Renderiza la primera página de un PDF como imagen PNG.
   ///
