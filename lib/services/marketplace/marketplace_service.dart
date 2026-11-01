@@ -298,6 +298,53 @@ class MarketplaceService extends ChangeNotifier {
 
   static final List<MarketplacePack> builtInCatalog = [
     const MarketplacePack(
+      id: 'hojas-estructuradas',
+      name: 'Hojas con estructura',
+      description: 'Cornell, semana, mes, lista de tareas, storyboard y papel milimetrado.',
+      type: PackType.template,
+      author: 'Inklus',
+      license: 'CC0-1.0',
+      version: '1.0.0',
+      tags: ['estudio', 'organización'],
+      templates: [
+        PackTemplate(name: 'Cornell', params: {'type': 'cornell'}),
+        PackTemplate(name: 'Semana', params: {'type': 'weekly'}),
+        PackTemplate(name: 'Mes', params: {'type': 'monthly'}),
+        PackTemplate(name: 'Tareas', params: {'type': 'todo'}),
+        PackTemplate(name: 'Storyboard', params: {'type': 'storyboard'}),
+        PackTemplate(name: 'Milimetrado', params: {'type': 'millimeter'}),
+      ],
+    ),
+    MarketplacePack(
+      id: 'paleta-accesible',
+      name: 'Paleta accesible (daltonismo)',
+      description: 'Colores distinguibles con las formas más comunes de daltonismo (Okabe-Ito).',
+      type: PackType.palette,
+      author: 'Inklus',
+      license: 'CC0-1.0',
+      version: '1.0.0',
+      tags: ['accesibilidad'],
+      palette: [
+        parseHexColor('#000000')!, parseHexColor('#E69F00')!, parseHexColor('#56B4E9')!,
+        parseHexColor('#009E73')!, parseHexColor('#F0E442')!, parseHexColor('#0072B2')!,
+        parseHexColor('#D55E00')!, parseHexColor('#CC79A7')!,
+      ],
+    ),
+    MarketplacePack(
+      id: 'paleta-contraste',
+      name: 'Paleta de alto contraste',
+      description: 'Tintas oscuras y saturadas que se leen bien con poca luz o baja visión.',
+      type: PackType.palette,
+      author: 'Inklus',
+      license: 'CC0-1.0',
+      version: '1.0.0',
+      tags: ['accesibilidad'],
+      palette: [
+        parseHexColor('#000000')!, parseHexColor('#0000FF')!, parseHexColor('#B91C1C')!,
+        parseHexColor('#166534')!, parseHexColor('#7C2D12')!, parseHexColor('#4C1D95')!,
+      ],
+    ),
+    const MarketplacePack(
       id: 'cuadernos-clasicos',
       name: 'Cuadernos clásicos',
       description: 'Rayado ancho y estrecho, cuadrícula de 5 mm, puntos y pentagrama.',

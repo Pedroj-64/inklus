@@ -1,4 +1,10 @@
-# ✒️ Inklus
+<p align="center">
+  <img src="docs/assets/icon-animated.svg" width="168" alt="Inklus">
+</p>
+
+<h1 align="center">Inklus</h1>
+
+<p align="center"><b>Escritura a mano para tablets con stylus. Gratis, offline-first, código abierto.</b></p>
 
 🌐 [English](README.md) · **Español**
 
@@ -12,6 +18,15 @@ App de escritura a mano para tablets con **stylus**, al estilo de GoodNotes o Sa
 
 ---
 
+## 🎬 Cómo funciona
+
+<table>
+<tr><td width="50%"><img src="docs/assets/anim/write.es.svg" alt="Presión real"></td><td width="50%"><img src="docs/assets/anim/palm.es.svg" alt="Rechazo de palma"></td></tr>
+<tr><td width="50%"><img src="docs/assets/anim/shape.es.svg" alt="Figuras"></td><td width="50%"><img src="docs/assets/anim/lasso.es.svg" alt="Lazo"></td></tr>
+</table>
+
+---
+
 ## 📲 Instalar (Android)
 
 Inklus se distribuye como APK en [**GitHub Releases**](https://github.com/Pedroj-64/inklus/releases) (no está en Google Play).
@@ -19,6 +34,12 @@ Inklus se distribuye como APK en [**GitHub Releases**](https://github.com/Pedroj
 1. En la última release, descarga el APK de tu tablet. Casi todas las tablets actuales usan **`app-arm64-v8a-release.apk`**; si no se instala, prueba `app-armeabi-v7a-release.apk`.
 2. Ábrelo. Android pedirá permiso para **instalar apps de origen desconocido** para tu navegador o gestor de archivos: concédelo solo para esta instalación.
 3. Las actualizaciones se instalan igual, encima de la versión anterior, sin perder tus notas.
+
+**¿Móvil o tablet modesto?** Usa **`inklus-lite-arm64-v8a.apk`**: ~17 MB menos, sin reconocimiento de escritura (la búsqueda por texto tecleado y todo lo demás funciona). También puedes activar **Configuración → Modo ahorro**.
+
+## 🖥️ Instalar (Linux)
+
+En la misma página de la release: **`Inklus-x86_64.AppImage`** (`chmod +x` y ejecutar), el **`.deb`** (`sudo apt install ./inklus_*.deb`) o el `.tar.gz`. Los `.inklus` se abren con doble clic. Entrada en escritorio: la rueda desplaza, **Ctrl+rueda** hace zoom, pellizco en el trackpad, botón central desplaza, **clic derecho borra**, y atajos de teclado (Ctrl+Z/Y/C/X/V/A/S/F, F11 presentación, `[` `]` grosor).
 
 > Antes de cambiar de dispositivo, exporta un respaldo: **Configuración → Exportar respaldo completo** (o activa la copia en Google Drive).
 
@@ -164,6 +185,14 @@ flutter test integration_test -d <dispositivo>        # flujos críticos en tabl
 ```
 
 La CI de GitHub Actions ejecuta análisis, tests y pruebas de integración en cada PR, y publica los APK firmados al crear un tag `v*` (las notas de la release salen del CHANGELOG).
+
+### Icono y animaciones del README
+
+La fuente del icono es `assets/icon/*.svg` (→ `dart run flutter_launcher_icons`). El icono animado y los SVG de *Cómo funciona* se generan, sin dependencias, con:
+
+```bash
+python3 tool/docs_assets/generate.py   # → docs/assets/ (icon.svg, icon-animated.svg, icon.png, anim/*.svg)
+```
 
 ### Google Drive en tu propia compilación
 

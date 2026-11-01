@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.inklus.inklus</id>
+  <name>Inklus</name>
+  <summary>Free handwritten notes for stylus, tablets and desktop</summary>
+  <summary xml:lang="es">Notas manuscritas libres para stylus, tablets y escritorio</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="io.github.pedroj-64"><name>Pedro and Inklus contributors</name></developer>
+  <description>
+    <p>Inklus is a free and open source handwriting app: pressure-sensitive pens, palm rejection, infinite or fixed pages, PDF annotation, search, export to PNG/PDF/SVG, and optional Google Drive backup. No premium tier, no tracking.</p>
+    <p xml:lang="es">Inklus es una app libre y de código abierto para escribir a mano: plumas con presión, rechazo de palma, páginas infinitas o fijas, anotación de PDF, búsqueda, exportación a PNG/PDF/SVG y copia opcional en Google Drive. Sin versión de pago ni rastreo.</p>
+  </description>
+  <launchable type="desktop-id">com.inklus.inklus.desktop</launchable>
+  <url type="homepage">https://github.com/Pedroj-64/inklus</url>
+  <url type="bugtracker">https://github.com/Pedroj-64/inklus/issues</url>
+  <categories><category>Office</category><category>Utility</category></categories>
+  <provides><mediatype>application/x-inklus</mediatype></provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.10.0" date="2026-11-01"/>
+  </releases>
+</component>

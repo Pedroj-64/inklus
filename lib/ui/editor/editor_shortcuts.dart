@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -10,7 +12,10 @@ import '../../models/stroke.dart';
 /// | Tecla | Acción |
 /// |---|---|
 /// | Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | deshacer / rehacer |
-/// | Ctrl+C / Ctrl+V / Ctrl+D | copiar / pegar / duplicar selección |
+/// | Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+D | copiar / cortar / pegar / duplicar selección |
+/// | Ctrl+A | seleccionar todo · Ctrl+S guardar ahora · Ctrl+F buscar en la nota |
+/// | F5 / F11 | modo presentación (Esc sale) |
+/// | [ / ] | pluma más fina / más gruesa |
 /// | Supr / Retroceso | eliminar selección |
 /// | Esc | quitar selección |
 /// | P · H · E · L · T · V | pluma · resaltador · borrador · lazo · texto · mover |
@@ -25,6 +30,7 @@ abstract final class EditorShortcuts {
     KeyEvent event,
     CanvasController c, {
     VoidCallback? onGoToPage,
+    VoidCallback? onSearch,
   }) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
@@ -46,7 +52,14 @@ abstract final class EditorShortcuts {
               ((key == LogicalKeyboardKey.keyZ && shift) || key == LogicalKeyboardKey.keyY) =>
         done(() => c.canRedo ? c.redo() : null),
       _ when ctrl && key == LogicalKeyboardKey.keyC => done(c.copySelectedStrokes),
+      _ when ctrl && key == LogicalKeyboardKey.keyX => done(c.cutSelectedStrokes),
       _ when ctrl && key == LogicalKeyboardKey.keyV => done(c.pasteStrokes),
+      _ when ctrl && key == LogicalKeyboardKey.keyA && !_typingText() => done(c.selectAll),
+      _ when ctrl && key == LogicalKeyboardKey.keyS => done(() => unawaited(c.flush())),
+      _ when ctrl && key == LogicalKeyboardKey.keyF && onSearch != null => done(onSearch),
+      LogicalKeyboardKey.f5 || LogicalKeyboardKey.f11 => done(c.togglePresentationMode),
+      LogicalKeyboardKey.escape when c.presentationMode && !c.hasLassoSelection =>
+        done(c.togglePresentationMode),
       _ when ctrl && key == LogicalKeyboardKey.keyD => done(c.duplicateSelectedStrokes),
       _ when ctrl && key == LogicalKeyboardKey.keyB => done(c.toggleBookmark),
       _ when ctrl && key == LogicalKeyboardKey.keyG && onGoToPage != null => done(onGoToPage),
@@ -63,6 +76,10 @@ abstract final class EditorShortcuts {
           when c.hasLassoSelection =>
         done(c.deleteSelectedStrokes),
       LogicalKeyboardKey.escape => done(c.clearLassoSelection),
+      _ when !ctrl && !_typingText() && key == LogicalKeyboardKey.bracketLeft =>
+        done(() => c.setToolSize(c.toolSize * 0.8)),
+      _ when !ctrl && !_typingText() && key == LogicalKeyboardKey.bracketRight =>
+        done(() => c.setToolSize(c.toolSize * 1.25)),
       _ when !ctrl && !_typingText() => _toolKey(key, c),
       _ => false,
     };

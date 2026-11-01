@@ -1,0 +1,20 @@
+{
+  "id": "paleta-contraste",
+  "name": "Paleta de alto contraste",
+  "description": "Tintas oscuras y saturadas que se leen bien con poca luz o baja visión.",
+  "type": "palette",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": [
+    "accesibilidad"
+  ],
+  "palette": [
+    "#000000",
+    "#0000FF",
+    "#B91C1C",
+    "#166534",
+    "#7C2D12",
+    "#4C1D95"
+  ]
+}

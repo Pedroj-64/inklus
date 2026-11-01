@@ -1,0 +1,22 @@
+{
+  "id": "paleta-accesible",
+  "name": "Paleta accesible (daltonismo)",
+  "description": "Colores distinguibles con las formas más comunes de daltonismo (Okabe-Ito).",
+  "type": "palette",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": [
+    "accesibilidad"
+  ],
+  "palette": [
+    "#000000",
+    "#E69F00",
+    "#56B4E9",
+    "#009E73",
+    "#F0E442",
+    "#0072B2",
+    "#D55E00",
+    "#CC79A7"
+  ]
+}

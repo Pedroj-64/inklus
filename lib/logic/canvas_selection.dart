@@ -145,6 +145,31 @@ mixin _CanvasSelection on _CanvasCore {
     notifyListeners();
   }
 
+  /// Selecciona todo lo visible y desbloqueado de la página (Ctrl+A).
+  void selectAll() {
+    bool ok(int layer) => _isLayerVisible(layer) && !_isLayerLocked(layer);
+    _selectedStrokes = [
+      for (final s in page.strokes)
+        if (ok(s.layerIndex) &&
+            s.tool != ToolType.eraser &&
+            s.tool != ToolType.select &&
+            s.tool != ToolType.lasso)
+          s,
+    ];
+    _selectedImageIds = {for (final i in page.images) if (ok(i.layerIndex)) i.id};
+    _selectedTextIds = {for (final t in page.textItems) if (ok(t.layerIndex)) t.id};
+    if (hasLassoSelection) _tool = ToolType.select;
+    _notifyToolContext();
+    _notifyBottomBarContext();
+    notifyListeners();
+  }
+
+  /// Corta: copia la selección y la elimina (una sola acción deshacible).
+  void cutSelectedStrokes() {
+    copySelectedStrokes();
+    deleteSelectedStrokes();
+  }
+
   void clearLassoSelection() {
     _selectedStrokes = [];
     _clearItemSelection();

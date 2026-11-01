@@ -53,6 +53,16 @@ void main() {
     expect(shape!.normalizedPoints.first.offset, shape.normalizedPoints.last.offset);
   });
 
+  test('triángulo rectángulo NO se vuelve rectángulo', () {
+    for (final v in const [
+      [Offset(0, 0), Offset(300, 0), Offset(0, 250)],
+      [Offset(0, 0), Offset(300, 250), Offset(0, 250)],
+      [Offset(300, 0), Offset(300, 250), Offset(0, 250)],
+    ]) {
+      expect(ShapeDetector.detect(polygon(v, perSide: 25))?.type, ShapeType.triangle);
+    }
+  });
+
   /// Recta a mano alzada de (0,0) a (to) que ondula ±[wobble] (un temblor
   /// de baja frecuencia, como el de una mano real).
   List<StrokePoint> wobblyLine(Offset to, double wobble) {

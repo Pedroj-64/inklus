@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'l10n/l10n.dart';
 
+import 'services/low_power_mode.dart';
 import 'theme_controller.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/notebook_library.dart';
@@ -30,6 +31,7 @@ class _InklusAppState extends State<InklusApp> {
     super.initState();
     _checkOnboarding();
     ThemeModeController.load();
+    LowPowerMode.load();
   }
 
   Future<void> _checkOnboarding() async {

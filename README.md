@@ -1,4 +1,10 @@
-# ✒️ Inklus
+<p align="center">
+  <img src="docs/assets/icon-animated.svg" width="168" alt="Inklus">
+</p>
+
+<h1 align="center">Inklus</h1>
+
+<p align="center"><b>Handwriting for stylus tablets. Free, offline-first, open source.</b></p>
 
 🌐 **English** · [Español](README.es.md)
 
@@ -12,6 +18,15 @@ Handwriting app for **stylus** tablets, in the spirit of GoodNotes or Samsung No
 
 ---
 
+## 🎬 How it works
+
+<table>
+<tr><td width="50%"><img src="docs/assets/anim/write.en.svg" alt="Real pressure"></td><td width="50%"><img src="docs/assets/anim/palm.en.svg" alt="Palm rejection"></td></tr>
+<tr><td width="50%"><img src="docs/assets/anim/shape.en.svg" alt="Shapes"></td><td width="50%"><img src="docs/assets/anim/lasso.en.svg" alt="Lasso"></td></tr>
+</table>
+
+---
+
 ## 📲 Install (Android)
 
 Inklus is distributed as an APK on [**GitHub Releases**](https://github.com/Pedroj-64/inklus/releases) (it is not on Google Play).
@@ -19,6 +34,12 @@ Inklus is distributed as an APK on [**GitHub Releases**](https://github.com/Pedr
 1. From the latest release, download the APK for your tablet. Most current tablets use **`app-arm64-v8a-release.apk`**; if it won't install, try `app-armeabi-v7a-release.apk`.
 2. Open it. Android will ask you to allow **installing apps from unknown sources** for your browser or file manager: grant it for this installation only.
 3. Updates install the same way, on top of the previous version, without losing your notes.
+
+**Modest phone or tablet?** Use **`inklus-lite-arm64-v8a.apk`**: ~17 MB smaller, without handwriting recognition (search by typed text and everything else works). You can also enable **Settings → Battery & memory saver**.
+
+## 🖥️ Install (Linux)
+
+From the same release page: **`Inklus-x86_64.AppImage`** (`chmod +x` and run), the **`.deb`** (`sudo apt install ./inklus_*.deb`) or the `.tar.gz`. `.inklus` files open with a double click. Desktop input: mouse wheel scrolls, **Ctrl+wheel** zooms, trackpad pinch, middle button pans, **right click erases**, plus keyboard shortcuts (Ctrl+Z/Y/C/X/V/A/S/F, F11 presentation, `[` `]` pen size).
 
 > Before switching devices, export a backup: **Settings → Export full backup** (or enable Google Drive backup).
 
@@ -164,6 +185,14 @@ flutter test integration_test -d <device>             # critical flows on tablet
 ```
 
 GitHub Actions CI runs analysis, tests and integration tests on every PR, and publishes signed APKs when a `v*` tag is created (release notes come from the CHANGELOG).
+
+### Icon and README animations
+
+The icon source is `assets/icon/*.svg` (→ `dart run flutter_launcher_icons`). The animated icon and the *How it works* SVGs are generated, dependency-free, with:
+
+```bash
+python3 tool/docs_assets/generate.py   # → docs/assets/ (icon.svg, icon-animated.svg, icon.png, anim/*.svg)
+```
 
 ### Google Drive in your own build
 

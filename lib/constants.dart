@@ -15,7 +15,10 @@ import 'models/stroke.dart';
 
 /// Versión visible de la app (debe coincidir con `version:` de pubspec.yaml;
 /// lo comprueba `test/app_version_test.dart`).
-const String kAppVersion = '1.9.0';
+/// Variante ligera (sin reconocimiento de escritura): `--dart-define=INKLUS_LITE=true`.
+const bool kLiteBuild = bool.fromEnvironment('INKLUS_LITE');
+
+const String kAppVersion = '1.10.0';
 
 /// Idioma fijo SOLO para las capturas de pantalla (`tool/screenshots`) y los
 /// tests; la app real sigue el idioma del sistema.

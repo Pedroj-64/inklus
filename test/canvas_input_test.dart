@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inklus/constants.dart';
 import 'package:inklus/logic/canvas_controller.dart';
@@ -253,6 +254,70 @@ void main() {
     test('sin intersección → toda la vista', () {
       expect(CanvasPainter.uncoveredStrips(
           view, const Rect.fromLTWH(500, 500, 10, 10)), [view]);
+    });
+  });
+
+  group('escritorio', () {
+    testWidgets('la rueda desplaza y Ctrl+rueda hace zoom bajo el cursor', (tester) async {
+      await pumpCanvas(tester);
+      final t0 = c.translate;
+      final mouse = TestPointer(1, PointerDeviceKind.mouse);
+      await tester.sendEventToBinding(mouse.hover(const Offset(300, 300)));
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, 100)));
+      await tester.pump();
+      expect(c.translate.dy, lessThan(t0.dy), reason: 'rueda abajo = el contenido sube');
+
+      final s0 = c.scale;
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, -150)));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(c.scale, greaterThan(s0));
+      await finish(tester);
+    });
+
+    testWidgets('clic derecho del ratón borra', (tester) async {
+      await pumpCanvas(tester);
+      c.setEraserMode(EraserMode.stroke);
+      await drag(tester, const Offset(100, 100), PointerDeviceKind.stylus);
+      expect(c.page.strokes.length, 1);
+      final g = await tester.startGesture(const Offset(100, 100),
+          kind: PointerDeviceKind.mouse, buttons: kSecondaryMouseButton, pointer: 5);
+      for (var i = 1; i <= 10; i++) {
+        await g.moveTo(Offset(100 + i * 8.0, 100));
+      }
+      await g.up();
+      await tester.pump();
+      expect(c.page.strokes, isEmpty);
+      await finish(tester);
+    });
+
+    testWidgets('botón central arrastrado desplaza sin dibujar', (tester) async {
+      await pumpCanvas(tester);
+      final t0 = c.translate;
+      final g = await tester.startGesture(const Offset(200, 200),
+          kind: PointerDeviceKind.mouse, buttons: kMiddleMouseButton);
+      await g.moveBy(const Offset(40, 30));
+      await g.up();
+      await tester.pump();
+      expect(c.page.strokes, isEmpty);
+      expect(c.translate - t0, const Offset(40, 30));
+      await finish(tester);
+    });
+
+    testWidgets('Ctrl+A selecciona todo y Ctrl+X lo corta (deshacible)', (tester) async {
+      await pumpCanvas(tester);
+      await drag(tester, const Offset(100, 100), PointerDeviceKind.stylus);
+      await drag(tester, const Offset(100, 200), PointerDeviceKind.stylus, pointer: 2);
+      expect(c.page.strokes.length, 2);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
+      expect(c.selectionCount, 2);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyX);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      expect(c.page.strokes.length, 2, reason: 'cortar y deshacer restaura');
+      await finish(tester);
     });
   });
 }

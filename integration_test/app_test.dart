@@ -12,6 +12,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:inklus/app.dart';
 import 'package:inklus/services/app_paths.dart';
+import 'package:inklus/services/pdf_import_service.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:inklus/services/storage_service.dart';
 import 'package:inklus/ui/canvas/drawing_canvas.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -57,6 +59,9 @@ void main() {
 
   testWidgets('bienvenida → crear cuaderno → escribir con lápiz → se guarda',
       (tester) async {
+    tester.view.physicalSize = const Size(1280, 720); // como en CI
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(const InklusApp(locale: Locale('es')));
 
     // 1. Primer arranque: bienvenida.
@@ -67,11 +72,15 @@ void main() {
     // 2. Crear un cuaderno con los valores por defecto ("Cuaderno 1").
     await tester.tap(find.text('Nuevo cuaderno'));
     await waitFor(tester, find.text('Siguiente'));
+    // En ventanas bajas (CI: 720 px) el botón queda fuera de pantalla.
+    await tester.ensureVisible(find.text('Siguiente'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Siguiente'));
     // .last: la biblioteca vacía (debajo) tiene otro botón "Crear cuaderno".
-    final create = find.widgetWithText(FilledButton, 'Crear cuaderno').last;
+    // Se espera sin .last (lanza StateError si aún no hay ninguno).
+    final create = find.widgetWithText(FilledButton, 'Crear cuaderno');
     await waitFor(tester, create);
-    await tester.tap(create);
+    await tester.tap(create.last);
 
     // 3. Se abre la lista de notas; abrir la primera.
     await waitFor(tester, find.text('Sin título'));
@@ -99,5 +108,20 @@ void main() {
     expect(metas.single.title, 'Cuaderno 1');
     final nb = (await storage.loadNotebook(metas.single.id))!;
     expect(nb.notes.single.pages.first.strokes, hasLength(1));
+  });
+
+  // El rasterizado de PDF necesita el plugin nativo: solo corre aquí.
+  testWidgets('un PDF de 2 páginas se rasteriza en escritorio', (tester) async {
+    final doc = pw.Document();
+    for (final t in ['Uno', 'Dos']) {
+      doc.addPage(pw.Page(build: (_) => pw.Center(child: pw.Text(t))));
+    }
+    final dir = Directory.systemTemp.createTempSync('inklus_pdf_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/t.pdf')..writeAsBytesSync(await doc.save());
+    expect(PdfImportService.isSupported, isTrue);
+    final pages = await PdfImportService.renderAllPages(file.path);
+    expect(pages.length, 2);
+    expect(pages.first.length, greaterThan(1000)); // PNG real
   });
 }
