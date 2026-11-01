@@ -64,8 +64,9 @@ class OcrService {
 
   /// Plataformas soportadas (Android/iOS).
   static bool get isSupported =>
-      defaultTargetPlatform == TargetPlatform.android ||
-      defaultTargetPlatform == TargetPlatform.iOS;
+      !kLiteBuild &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
   // -------------------------------------------------------------------------
   // Modelo de tinta (descarga y cache)

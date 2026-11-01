@@ -4,6 +4,41 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 Cada versión se escribe en español y en inglés (sección `### English`): el workflow de release copia la sección completa a las notas de GitHub.
 
+## [1.10.0] — 2026-11-01
+
+### Añadido
+- **Escritorio de verdad**: rueda del ratón para desplazar (Mayús = horizontal) y **Ctrl+rueda para zoom** bajo el cursor, gestos de **trackpad** (desplazar y pellizcar), botón central arrastrado = mover la página y **clic derecho = borrador**.
+- **Atajos nuevos**: Ctrl+A seleccionar todo, Ctrl+X cortar, Ctrl+S guardar ahora, Ctrl+F buscar en la nota, F5/F11 modo presentación (Esc sale), `[` y `]` para afinar o engrosar la pluma.
+- **AppImage mejor integrado**: icono de ventana, ventana con tamaño mínimo, entrada de menú con tipo MIME `.inklus` y apertura de archivos `.inklus` pasados como argumento (doble clic / «Abrir con»). El empaquetado vive en `linux/packaging/`.
+- **Seis hojas nuevas**, dibujadas por código (sin imágenes, idénticas en pantalla y exportación): **Cornell**, **agenda semanal**, **calendario mensual**, **lista de tareas**, **storyboard** y **papel milimetrado** (infinito, 1 mm / 5 mm / 1 cm). Disponibles al crear cuaderno, al crear nota y en el selector de plantillas.
+- **Accesibilidad**: el lienzo y las miniaturas de página tienen etiqueta para lectores de pantalla; test de la pantalla de creación con texto del sistema al 200 %.
+
+- **Variante ligera** (`inklus-lite-arm64-v8a.apk`): sin reconocimiento de escritura (ML Kit), ~17 MB menos (45,7 → 28,8 MB). Se compila con `--dart-define=INKLUS_LITE=true`.
+- **Modo ahorro** (Configuración): imágenes y caché más pequeñas para tablets y móviles modestos.
+- **PDF en escritorio**: importar PDF para anotar ahora funciona también en Linux (PDFium).
+- **Paquete `.deb`**, metadatos AppStream y descripciones fastlane (es/en) para tiendas libres.
+- **Marketplace**: paquetes «Hojas con estructura», «Paleta accesible (daltonismo, Okabe-Ito)» y «Paleta de alto contraste».
+
+### Cambiado
+- Dependencias actualizadas dentro de sus rangos (archive, file_picker, pdf, printing…) y eliminada `cupertino_icons`, que no se usaba.
+
+### English
+
+**Added**
+- **A real desktop experience**: mouse wheel scrolls (Shift = horizontal) and **Ctrl+wheel zooms** at the cursor, **trackpad** gestures (pan and pinch), middle-button drag pans the page and **right click erases**.
+- **New shortcuts**: Ctrl+A select all, Ctrl+X cut, Ctrl+S save now, Ctrl+F search the note, F5/F11 presentation mode (Esc exits), `[` and `]` for a thinner/thicker pen.
+- **Better integrated AppImage**: window icon, minimum window size, a menu entry with the `.inklus` MIME type, and `.inklus` files passed as an argument open on launch (double click / “Open with”). Packaging lives in `linux/packaging/`.
+- **Six new sheets**, drawn in code (no images, identical on screen and in exports): **Cornell**, **weekly planner**, **monthly calendar**, **to-do list**, **storyboard** and **graph paper** (infinite, 1 mm / 5 mm / 1 cm). Available when creating a notebook, a note and in the template picker.
+- **Accessibility**: the canvas and page thumbnails have screen-reader labels; the create-notebook screen is tested with system text at 200 %.
+- **Lite build** (`inklus-lite-arm64-v8a.apk`): no handwriting recognition (ML Kit), ~17 MB smaller (45.7 → 28.8 MB). Built with `--dart-define=INKLUS_LITE=true`.
+- **Battery & memory saver** (Settings): smaller images and cache for modest tablets and phones.
+- **PDF on desktop**: importing a PDF to annotate now works on Linux too (PDFium).
+- **`.deb` package**, AppStream metadata and fastlane descriptions (es/en) for free app stores.
+- **Marketplace**: “Structured sheets”, “Accessible palette (colour-blind safe, Okabe-Ito)” and “High-contrast palette” packs.
+
+**Changed**
+- Dependencies updated within their ranges (archive, file_picker, pdf, printing…) and the unused `cupertino_icons` removed.
+
 ## [1.9.1] — 2026-10-20
 
 ### Cambiado

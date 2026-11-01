@@ -36,6 +36,9 @@ import '../l10n/l10n.dart';
 import '../services/app_errors.dart';
 import '../models/text_layout.dart';
 
+/// Archivos `.inklus` recibidos como argumento al arrancar (escritorio).
+List<String> launchFiles = const [];
+
 /// Biblioteca de cuadernos (pantalla de inicio).
 ///
 /// Muestra la lista de cuadernos guardados con una miniatura de su primera
@@ -128,6 +131,11 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
     // Restaura la sesión de Google (silenciosa).
     DriveSyncService.instance.restoreSession();
     // Archivos .inklus abiertos desde fuera (Drive, Archivos…), Android.
+    // Escritorio: archivos pasados como argumento (doble clic / «Abrir con»).
+    for (final f in launchFiles) {
+      _importIncoming(f);
+    }
+    launchFiles = const [];
     if (Platform.isAndroid) {
       _openChannel.setMethodCallHandler((call) async {
         if (call.method == 'file') {

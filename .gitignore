@@ -169,3 +169,6 @@ client_secret*.json
 
 # graphify (salida local, cachés con mtimes que gitleaks toma por claves)
 graphify-out/
+appimagetool
+AppDir/
+*.AppImage

@@ -157,6 +157,12 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                   selected: current.type == TemplateType.habit,
                   onTap: () => _selectTemplate(TemplateType.habit),
                 ),
+                _TemplateTile(
+                  icon: Icons.straighten,
+                  label: context.l10n.createTplMillimeter,
+                  selected: current.type == TemplateType.millimeter,
+                  onTap: () => _selectTemplate(TemplateType.millimeter),
+                ),
               ],
             ),
 
@@ -177,6 +183,22 @@ class _TemplateSheetState extends State<_TemplateSheet> {
                     lineColorValue: _lineColor.toARGB32(),
                   )),
                 ),
+                for (final (type, icon, label) in [
+                  (TemplateType.cornell, Icons.vertical_split, context.l10n.createTplCornell),
+                  (TemplateType.weekly, Icons.calendar_view_week, context.l10n.createTplWeekly),
+                  (TemplateType.monthly, Icons.calendar_month, context.l10n.createTplMonthly),
+                  (TemplateType.todo, Icons.checklist_rtl, context.l10n.createTplTodo),
+                  (TemplateType.storyboard, Icons.movie_creation_outlined, context.l10n.createTplStoryboard),
+                ])
+                  _TemplateTile(
+                    icon: icon,
+                    label: label,
+                    selected: current.type == type,
+                    onTap: () => _apply(PageTemplate(
+                      type: type,
+                      lineColorValue: _lineColor.toARGB32(),
+                    )),
+                  ),
                 _TemplateTile(
                   icon: Icons.add_photo_alternate_outlined,
                   label: context.l10n.tplOwn,
@@ -271,7 +293,8 @@ class _TemplateSheetState extends State<_TemplateSheet> {
             ],
 
             // Color de línea (para rayas, cuadrícula y hoja normal)
-            if (hasLines || current.type == TemplateType.sheet) ...[
+            if (hasLines || current.type == TemplateType.sheet ||
+                kStructuredTemplates.contains(current.type)) ...[
               const SizedBox(height: Spacing.md),
               Row(
                 children: [

@@ -12,6 +12,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:inklus/app.dart';
 import 'package:inklus/services/app_paths.dart';
+import 'package:inklus/services/pdf_import_service.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:inklus/services/storage_service.dart';
 import 'package:inklus/ui/canvas/drawing_canvas.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -106,5 +108,20 @@ void main() {
     expect(metas.single.title, 'Cuaderno 1');
     final nb = (await storage.loadNotebook(metas.single.id))!;
     expect(nb.notes.single.pages.first.strokes, hasLength(1));
+  });
+
+  // El rasterizado de PDF necesita el plugin nativo: solo corre aquí.
+  testWidgets('un PDF de 2 páginas se rasteriza en escritorio', (tester) async {
+    final doc = pw.Document();
+    for (final t in ['Uno', 'Dos']) {
+      doc.addPage(pw.Page(build: (_) => pw.Center(child: pw.Text(t))));
+    }
+    final dir = Directory.systemTemp.createTempSync('inklus_pdf_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/t.pdf')..writeAsBytesSync(await doc.save());
+    expect(PdfImportService.isSupported, isTrue);
+    final pages = await PdfImportService.renderAllPages(file.path);
+    expect(pages.length, 2);
+    expect(pages.first.length, greaterThan(1000)); // PNG real
   });
 }

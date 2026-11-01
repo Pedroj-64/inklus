@@ -356,6 +356,18 @@ abstract class AppLocalizations {
   /// **'Tema'**
   String get settingsTheme;
 
+  /// No description provided for @settingsLowPowerTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Modo ahorro'**
+  String get settingsLowPowerTitle;
+
+  /// No description provided for @settingsLowPowerSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Menos memoria para tablets y móviles modestos: imágenes más ligeras. Se aplica al abrir la siguiente nota.'**
+  String get settingsLowPowerSubtitle;
+
   /// No description provided for @settingsThemeLight.
   ///
   /// In es, this message translates to:
@@ -859,6 +871,42 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Hábitos'**
   String get createTplHabit;
+
+  /// No description provided for @createTplCornell.
+  ///
+  /// In es, this message translates to:
+  /// **'Cornell'**
+  String get createTplCornell;
+
+  /// No description provided for @createTplWeekly.
+  ///
+  /// In es, this message translates to:
+  /// **'Semana'**
+  String get createTplWeekly;
+
+  /// No description provided for @createTplMonthly.
+  ///
+  /// In es, this message translates to:
+  /// **'Mes'**
+  String get createTplMonthly;
+
+  /// No description provided for @createTplTodo.
+  ///
+  /// In es, this message translates to:
+  /// **'Tareas'**
+  String get createTplTodo;
+
+  /// No description provided for @createTplStoryboard.
+  ///
+  /// In es, this message translates to:
+  /// **'Storyboard'**
+  String get createTplStoryboard;
+
+  /// No description provided for @createTplMillimeter.
+  ///
+  /// In es, this message translates to:
+  /// **'Milimetrado'**
+  String get createTplMillimeter;
 
   /// No description provided for @createTplSheet.
   ///
@@ -2215,6 +2263,12 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'{tool} {n}'**
   String tbPenSlot(String tool, int n);
+
+  /// No description provided for @canvasSemantics.
+  ///
+  /// In es, this message translates to:
+  /// **'Lienzo de dibujo'**
+  String get canvasSemantics;
 
   /// No description provided for @tbPageOf.
   ///

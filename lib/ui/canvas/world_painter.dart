@@ -154,6 +154,22 @@ void paintWorld(
         }
         _drawDotGrid(canvas, visibleWorldRect, template, isDark: isDark, viewScale: viewScale);
         break;
+      case TemplateType.millimeter:
+        if (template.isFinite) {
+          canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
+        }
+        _drawMillimeter(canvas, visibleWorldRect, template, isDark: isDark, viewScale: viewScale);
+        break;
+      case TemplateType.cornell:
+      case TemplateType.weekly:
+      case TemplateType.monthly:
+      case TemplateType.todo:
+      case TemplateType.storyboard:
+        canvas.drawRect(sheetRect, Paint()..color = kPaperColorLight);
+        drawStructuredSheet(canvas, sheetRect, template.type,
+            color: _adaptiveLineColor(template, isDark: isDark),
+            hairline: _hairline(viewScale));
+        break;
     }
   }
 
@@ -575,6 +591,125 @@ void _drawHabitTracker(Canvas canvas, Rect visible, PageTemplate template,
         paint,
       );
     }
+  }
+}
+
+/// Papel milimetrado: 3 niveles de línea (1 mm, 5 mm, 1 cm) con 1 mm ≈ 3,78 px
+/// (96 dpi). Al alejar el zoom se omiten los niveles que se funden.
+void _drawMillimeter(Canvas canvas, Rect visible, PageTemplate template,
+    {bool isDark = false, double viewScale = 1}) {
+  const mm = 96 / 25.4;
+  final base = _adaptiveLineColor(template, isDark: isDark);
+  void lines(double step, double alpha, double width) {
+    if (step * viewScale < 4) return;
+    final paint = Paint()
+      ..color = base.withValues(alpha: alpha)
+      ..strokeWidth = _hairline(viewScale) * width;
+    for (var x = (visible.left / step).floor() * step; x <= visible.right; x += step) {
+      canvas.drawLine(Offset(x, visible.top), Offset(x, visible.bottom), paint);
+    }
+    for (var y = (visible.top / step).floor() * step; y <= visible.bottom; y += step) {
+      canvas.drawLine(Offset(visible.left, y), Offset(visible.right, y), paint);
+    }
+  }
+
+  lines(mm, 0.35, 0.6);
+  lines(mm * 5, 0.6, 0.8);
+  lines(mm * 10, 0.95, 1.2);
+}
+
+/// Hojas con estructura (Cornell, semana, mes, tareas, storyboard) sobre
+/// [sheet]. Función pura de geometría: la comparten lienzo y exportación.
+void drawStructuredSheet(Canvas canvas, Rect sheet, TemplateType type,
+    {required Color color, double hairline = 1}) {
+  final line = Paint()
+    ..color = color
+    ..strokeWidth = hairline;
+  final soft = Paint()
+    ..color = color.withValues(alpha: 0.45)
+    ..strokeWidth = hairline;
+  final m = sheet.width * 0.06; // margen
+  final area = Rect.fromLTRB(sheet.left + m, sheet.top + m, sheet.right - m, sheet.bottom - m);
+  void h(double y, Paint p, [double? x1, double? x2]) =>
+      canvas.drawLine(Offset(x1 ?? area.left, y), Offset(x2 ?? area.right, y), p);
+  void v(double x, Paint p, [double? y1, double? y2]) =>
+      canvas.drawLine(Offset(x, y1 ?? area.top), Offset(x, y2 ?? area.bottom), p);
+
+  switch (type) {
+    case TemplateType.cornell:
+      // Título, columna de ideas clave (30 %), apuntes rayados y resumen.
+      final titleY = area.top + area.height * 0.08;
+      final summaryY = area.bottom - area.height * 0.18;
+      final cueX = area.left + area.width * 0.3;
+      canvas.drawRect(area, line..style = PaintingStyle.stroke);
+      h(titleY, line);
+      h(summaryY, line);
+      v(cueX, line, titleY, summaryY);
+      for (var y = titleY + 40; y < summaryY - 10; y += 40) {
+        h(y, soft, cueX, area.right);
+      }
+      for (var y = summaryY + 40; y < area.bottom - 10; y += 40) {
+        h(y, soft);
+      }
+    case TemplateType.weekly:
+      // 7 bloques (L-V en dos columnas + S/D) con renglones.
+      final colW = area.width / 2;
+      final rowH = area.height / 4;
+      for (var i = 0; i < 8; i++) {
+        final r = Rect.fromLTWH(
+            area.left + (i % 2) * colW, area.top + (i ~/ 2) * rowH, colW, rowH);
+        canvas.drawRect(r, line..style = PaintingStyle.stroke);
+        h(r.top + 34, line, r.left, r.right);
+        for (var y = r.top + 34 + 36; y < r.bottom - 8; y += 36) {
+          h(y, soft, r.left + 8, r.right - 8);
+        }
+      }
+    case TemplateType.monthly:
+      // Cabecera de días + 6 filas × 7 columnas.
+      final head = area.top + 56;
+      final cw = area.width / 7;
+      final ch = (area.bottom - head) / 6;
+      canvas.drawRect(area, line..style = PaintingStyle.stroke);
+      h(head, line);
+      for (var i = 1; i < 7; i++) {
+        v(area.left + cw * i, line);
+      }
+      for (var i = 1; i < 6; i++) {
+        h(head + ch * i, line);
+      }
+    case TemplateType.todo:
+      // Casillas + renglones; las primeras 3 destacadas (prioridad).
+      final rowH = 52.0;
+      var n = 0;
+      for (var y = area.top + 70; y < area.bottom - 10; y += rowH, n++) {
+        h(y + rowH - 8, soft, area.left + 44, area.right);
+        canvas.drawRRect(
+            RRect.fromRectAndRadius(
+                Rect.fromLTWH(area.left + 6, y + rowH - 8 - 30, 28, 28), const Radius.circular(6)),
+            n < 3 ? (Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = hairline * 2)
+                  : (Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = hairline));
+      }
+      h(area.top + 50, line);
+    case TemplateType.storyboard:
+      // 2 columnas × 3 filas de viñetas 16:9 con renglones para la acción.
+      const cols = 2, rows = 3;
+      final gap = area.width * 0.04;
+      final fw = (area.width - gap * (cols - 1)) / cols;
+      final fh = fw * 9 / 16;
+      final cell = (area.height - 0) / rows;
+      for (var r = 0; r < rows; r++) {
+        for (var c = 0; c < cols; c++) {
+          final x = area.left + c * (fw + gap);
+          final y = area.top + r * cell;
+          canvas.drawRect(Rect.fromLTWH(x, y, fw, fh), line..style = PaintingStyle.stroke);
+          for (var i = 1; i <= 2; i++) {
+            final ly = y + fh + 28.0 * i;
+            if (ly < y + cell - 6) h(ly, soft, x, x + fw);
+          }
+        }
+      }
+    default:
+      break;
   }
 }
 

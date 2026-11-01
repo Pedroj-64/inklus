@@ -1,3 +1,4 @@
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -20,6 +21,13 @@ val hasReleaseKey = keystorePropertiesFile.exists()
 if (hasReleaseKey) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
+
+// Variante ligera: `flutter build apk --dart-define=INKLUS_LITE=true` deja fuera
+// el reconocimiento de escritura (ML Kit, ~18 MB). Se lee de los dart-defines
+// que Flutter pasa a Gradle, para tener una sola fuente (Dart usa la misma).
+val isLite = (project.findProperty("dart-defines") as String?)
+    ?.split(",")
+    ?.any { String(Base64.getDecoder().decode(it)) == "INKLUS_LITE=true" } == true
 
 android {
     namespace = "com.inklus.inklus"
@@ -45,6 +53,14 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+    }
+
+    packaging {
+        jniLibs {
+            if (isLite) {
+                excludes += listOf("**/libmlkit_google_ocr_pipeline.so", "**/libdigitalink.so")
+            }
+        }
     }
 
     signingConfigs {

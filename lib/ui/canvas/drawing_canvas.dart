@@ -8,6 +8,7 @@ import 'package:flutter/material.dart' hide Page;
 import 'package:flutter/services.dart';
 
 import '../../constants.dart';
+import '../../l10n/l10n.dart';
 import '../../logic/canvas_controller.dart';
 import '../../logic/palm_rejection.dart';
 import '../../logic/snap_guides.dart';
@@ -515,6 +516,7 @@ class DrawingCanvas extends StatefulWidget {
 
   /// Abre "Ir a página" (atajo Ctrl+G). Opcional.
   final VoidCallback? onGoToPage;
+  final VoidCallback? onSearch;
 
   const DrawingCanvas({
     super.key,
@@ -522,6 +524,7 @@ class DrawingCanvas extends StatefulWidget {
     required this.imageService,
     this.nightMode = false,
     this.onGoToPage,
+    this.onSearch,
   });
 
   @override
@@ -615,12 +618,17 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         }
         _ensureImagesDecoded();
 
-        return Focus(
+        return Semantics(
+          label: Localizations.of<AppLocalizations>(context, AppLocalizations)
+              ?.canvasSemantics,
+          container: true,
+          child: Focus(
           autofocus: true,
           onKeyEvent: (node, event) => EditorShortcuts.handle(
             event,
             widget.controller,
             onGoToPage: widget.onGoToPage,
+            onSearch: widget.onSearch,
           ),
           // El overlay de texto es HERMANO del Listener (no hijo): si no, los
           // toques en su barra/campo llegarían también al lienzo.
@@ -634,6 +642,9 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
           onPointerMove: _onPointerMove,
           onPointerUp: _onPointerUp,
           onPointerCancel: _onPointerCancel,
+          onPointerSignal: _onPointerSignal,
+          onPointerPanZoomStart: (_) => _lastPanZoomScale = 1,
+          onPointerPanZoomUpdate: _onPanZoomUpdate,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onScaleStart: _onScaleStart,
@@ -687,7 +698,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
               ClipRect(child: TextEditOverlay(controller: widget.controller)),
             ],
           ),      // Stack
-        );        // Focus + return
+        ));
       },
     );
   }
@@ -732,9 +743,40 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     if (PalmRejection.isStylusKind(event.kind)) _palm.stylusHoverEvent();
   }
 
+  // Escritorio: rueda (desplaza; con Ctrl hace zoom), gesto del trackpad y
+  // botón central arrastrado (desplaza). El ratón con el botón principal dibuja.
+  int? _mousePanPointer;
+  double _lastPanZoomScale = 1;
+
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    final c = widget.controller;
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isControlPressed || keyboard.isMetaPressed) {
+      c.zoomAt(exp(-event.scrollDelta.dy / 300), event.localPosition, _viewport);
+    } else {
+      var d = -event.scrollDelta;
+      if (keyboard.isShiftPressed && d.dx == 0) d = Offset(d.dy, 0);
+      c.panBy(d);
+    }
+  }
+
+  void _onPanZoomUpdate(PointerPanZoomUpdateEvent event) {
+    final c = widget.controller;
+    if (event.scale != _lastPanZoomScale) {
+      c.zoomAt(event.scale / _lastPanZoomScale, event.localPosition, _viewport);
+      _lastPanZoomScale = event.scale;
+    }
+    c.panBy(event.localPanDelta);
+  }
+
   void _onPointerDown(PointerDownEvent event) {
     final kind = event.kind;
     final c = widget.controller;
+    if (kind == PointerDeviceKind.mouse && (event.buttons & kMiddleMouseButton) != 0) {
+      _mousePanPointer = event.pointer;
+      return;
+    }
     final world = c.viewportToWorld(event.localPosition, _viewport);
 
     if (PalmRejection.isStylusKind(kind) || kind == PointerDeviceKind.mouse) {
@@ -747,6 +789,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       // Goma física del lápiz (invertedStylus) o botón lateral del S-Pen
       // pulsado = borrador para este trazo.
       final eraserButton = kind == PointerDeviceKind.invertedStylus ||
+          // Ratón: clic derecho = borrador.
+          (kind == PointerDeviceKind.mouse && (event.buttons & kSecondaryMouseButton) != 0) ||
           (kind == PointerDeviceKind.stylus &&
               // Algunos lápices (p. ej. el de la Lenovo) reportan el botón
               // lateral como primario y otras veces como secundario.
@@ -828,6 +872,10 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       _rotatingSelection;
 
   void _onPointerMove(PointerMoveEvent event) {
+    if (event.pointer == _mousePanPointer) {
+      widget.controller.panBy(event.localDelta);
+      return;
+    }
     if (_rulerPointers.containsKey(event.pointer)) {
       _rulerPointers[event.pointer] = event.localPosition;
       _updateRulerGesture();
@@ -846,6 +894,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
   void _onPointerUp(PointerUpEvent event) {
+    if (event.pointer == _mousePanPointer) _mousePanPointer = null;
     // Siempre, antes de cualquier return: si no, el estado "lápiz apoyado"
     // se quedaba atascado y la pantalla dejaba de responder al tacto.
     if (PalmRejection.isStylusKind(event.kind)) _palm.stylusUpEvent(event.pointer);
@@ -888,6 +937,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
+    if (event.pointer == _mousePanPointer) _mousePanPointer = null;
     if (PalmRejection.isStylusKind(event.kind)) _palm.stylusUpEvent(event.pointer);
     _rejectedPointers.remove(event.pointer);
     if (_rulerPointers.remove(event.pointer) != null) {

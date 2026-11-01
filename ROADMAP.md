@@ -172,6 +172,13 @@
 - **Comunidad**: CONTRIBUTING, código de conducta, seguridad, gobernanza, plantillas de issue/PR, `docs/{ARCHITECTURE,DESIGN_SYSTEM,TRANSLATING,RELEASING}.md`.
 - Borrador temporal (vuelve a la herramienta anterior), enderezar figuras más conservador, deshacer con dos dedos opcional.
 
+### ✅ v1.10.0 — Experiencia de escritorio y hojas con estructura (hecho)
+- Rueda, Ctrl+rueda, trackpad, botón central y clic derecho en el lienzo; atajos Ctrl+A/X/S/F, F5/F11, `[`/`]`.
+- AppImage con icono, MIME `.inklus` y apertura por argumento (`linux/packaging/`); la CI lo construye con `build_appimage.sh`.
+- Cornell, semana, mes, tareas, storyboard y milimetrado (`drawStructuredSheet`, `_drawMillimeter` en `world_painter.dart`).
+- Accesibilidad: etiquetas del lienzo y miniaturas. **Sigue pendiente**: TalkBack real en tablet y vista doble en apaisado (`_neighbor` devuelve solo `dy`: habría que generalizarlo a `(dx, dy)` y redefinir ajuste/navegación por pliegos; hacerla con una tablet para validar el tacto).
+- Distribución: variante `lite`, `.deb`, metadatos AppStream y fastlane (listos). **Pendiente**: Flatpak/Flathub, IzzyOnDroid (requiere enviar la solicitud) y una variante sin Google Sign-In/ML Kit para F-Droid principal.
+
 ### 🎯 Plan por fases (histórico, ya ejecutado) (revisado contra el código, 2026-09-27)
 > Prioridades: **1) no perder datos, 2) fluidez con notas grandes, 3) interfaz consistente, 4) distribución pública.** Cada fase es una versión publicable.
 

@@ -35,6 +35,12 @@ Inklus is distributed as an APK on [**GitHub Releases**](https://github.com/Pedr
 2. Open it. Android will ask you to allow **installing apps from unknown sources** for your browser or file manager: grant it for this installation only.
 3. Updates install the same way, on top of the previous version, without losing your notes.
 
+**Modest phone or tablet?** Use **`inklus-lite-arm64-v8a.apk`**: ~17 MB smaller, without handwriting recognition (search by typed text and everything else works). You can also enable **Settings → Battery & memory saver**.
+
+## 🖥️ Install (Linux)
+
+From the same release page: **`Inklus-x86_64.AppImage`** (`chmod +x` and run), the **`.deb`** (`sudo apt install ./inklus_*.deb`) or the `.tar.gz`. `.inklus` files open with a double click. Desktop input: mouse wheel scrolls, **Ctrl+wheel** zooms, trackpad pinch, middle button pans, **right click erases**, plus keyboard shortcuts (Ctrl+Z/Y/C/X/V/A/S/F, F11 presentation, `[` `]` pen size).
+
 > Before switching devices, export a backup: **Settings → Export full backup** (or enable Google Drive backup).
 
 ---

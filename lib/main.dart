@@ -5,9 +5,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import 'app.dart';
+import 'ui/notebook_library.dart' show launchFiles;
 import 'services/error_log.dart';
 
-void main() {
+void main(List<String> args) {
+  launchFiles = args.where((a) => a.toLowerCase().endsWith('.inklus')).toList();
   // Todo (binding + runApp) dentro de la misma zona para evitar el aviso
   // "Zone mismatch" de Flutter.
   runZonedGuarded(

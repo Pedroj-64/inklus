@@ -30,6 +30,25 @@ void main() {
     return count;
   }
 
+  /// Píxeles que no son papel blanco, con la plantilla incluida.
+  Future<int> inkPixels(Page page) async {
+    final png = await ExportService.renderPagePng(
+      page,
+      sheetSize: const Size(600, 800),
+      imageCache: const {},
+      options: const ExportOptions(),
+    );
+    final img = (await (await ui.instantiateImageCodec(png)).getNextFrame()).image;
+    final data = (await img.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+    var count = 0;
+    for (var i = 0; i < data.lengthInBytes; i += 4) {
+      if (data.getUint8(i) < 240 || data.getUint8(i + 1) < 240 || data.getUint8(i + 2) < 240) {
+        count++;
+      }
+    }
+    return count;
+  }
+
   Stroke line(double y) => Stroke(
         id: 'l$y',
         points: [StrokePoint(-250, y, 0.5), StrokePoint(-150, y, 0.5)],
@@ -50,5 +69,16 @@ void main() {
       ..strokes.add(line(-300));
     final n = await tester.runAsync(() => opaquePixels(page));
     expect(n, greaterThan(100));
+  });
+
+  testWidgets('hojas con estructura: son finitas y se exportan con su rayado', (tester) async {
+    for (final type in [...kStructuredTemplates, TemplateType.millimeter]) {
+      final page = Page.blank(
+          template: PageTemplate(type: type, infiniteFill: type == TemplateType.millimeter));
+      expect(page.template.isFinite, type != TemplateType.millimeter,
+          reason: '$type: estructuradas finitas, milimetrado infinito por defecto');
+      final n = await tester.runAsync(() => inkPixels(page));
+      expect(n, greaterThan(500), reason: '$type debe pintar su estructura');
+    }
   });
 }

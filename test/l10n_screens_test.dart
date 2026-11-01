@@ -37,4 +37,16 @@ void main() {
     expect(find.text('Discover and customize'), findsOneWidget);
     expect(find.text('Descubre y personaliza'), findsNothing);
   });
+
+  testWidgets('crear cuaderno con texto del sistema al 200 % no desborda', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MediaQuery(
+      data: const MediaQueryData(textScaler: TextScaler.linear(2), size: Size(1200, 1600)),
+      child: app(const Locale('es'), const CreateNotebookScreen(notebookCount: 1)),
+    ));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -446,6 +446,12 @@ class _CompactTemplateGrid extends StatelessWidget {
       (TemplateType.music, Icons.music_note, context.l10n.createTplMusic),
       (TemplateType.planner, Icons.calendar_today, context.l10n.noteTplPlanner),
       (TemplateType.habit, Icons.checklist, context.l10n.createTplHabit),
+      (TemplateType.millimeter, Icons.straighten, context.l10n.createTplMillimeter),
+      (TemplateType.cornell, Icons.vertical_split, context.l10n.createTplCornell),
+      (TemplateType.weekly, Icons.calendar_view_week, context.l10n.createTplWeekly),
+      (TemplateType.monthly, Icons.calendar_month, context.l10n.createTplMonthly),
+      (TemplateType.todo, Icons.checklist_rtl, context.l10n.createTplTodo),
+      (TemplateType.storyboard, Icons.movie_creation_outlined, context.l10n.createTplStoryboard),
     ];
 
     return Wrap(

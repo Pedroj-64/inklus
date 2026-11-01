@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../constants.dart';
 import '../models/note.dart';
+import '../services/low_power_mode.dart';
 import '../services/drive_sync_service.dart';
 import '../services/app_errors.dart';
 import '../services/error_log.dart';
@@ -67,7 +68,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : const SizedBox.shrink(),
             ),
             SectionLabel(context.l10n.settingsSectionAppearance),
-            SectionCard(children: [_themeTile()]),
+            SectionCard(children: [
+              _themeTile(),
+              ValueListenableBuilder<bool>(
+                valueListenable: LowPowerMode.enabled,
+                builder: (context, on, _) => SwitchListTile(
+                  secondary: const IconBadge(icon: Icons.battery_saver_outlined),
+                  title: Text(context.l10n.settingsLowPowerTitle),
+                  subtitle: Text(context.l10n.settingsLowPowerSubtitle),
+                  value: on,
+                  onChanged: LowPowerMode.set,
+                ),
+              ),
+            ]),
             SectionLabel(context.l10n.settingsSectionFiles),
             SectionCard(
               children: [
