@@ -206,7 +206,7 @@ jobs:
           # El .deb es opcional: si falla, que no bloquee el resto de la release.
           linux/packaging/build_deb.sh || echo "::warning::no se pudo generar el .deb"
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           name: Inklus ${{ github.ref_name }}
           body_path: release_notes.md
