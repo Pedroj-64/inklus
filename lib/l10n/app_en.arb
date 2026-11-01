@@ -42,6 +42,8 @@
   "settingsErrorLogSubject": "Inklus {version} error log",
   "settingsOpenFailed": "Could not open {url}",
   "settingsTheme": "Theme",
+  "settingsLowPowerTitle": "Battery & memory saver",
+  "settingsLowPowerSubtitle": "Uses less memory on modest tablets and phones: lighter images. Applies when you open the next note.",
   "settingsThemeLight": "Light",
   "settingsThemeDark": "Dark",
   "settingsThemeSystem": "System",
@@ -160,6 +162,12 @@
   "createTplMusic": "Staff",
   "createTplPlanner": "Planner",
   "createTplHabit": "Habits",
+  "createTplCornell": "Cornell",
+  "createTplWeekly": "Week",
+  "createTplMonthly": "Month",
+  "createTplTodo": "To-do",
+  "createTplStoryboard": "Storyboard",
+  "createTplMillimeter": "Graph paper",
   "createTplSheet": "A4 sheet",
   "createTitle": "New notebook",
   "createName": "Name",
@@ -566,6 +574,7 @@
       }
     }
   },
+  "canvasSemantics": "Drawing canvas",
   "tbPageOf": "Page {n} of {total}",
   "@tbPageOf": {
     "placeholders": {

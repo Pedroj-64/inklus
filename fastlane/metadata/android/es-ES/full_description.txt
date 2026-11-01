@@ -1,0 +1,13 @@
+Inklus es una app libre y de código abierto para escribir a mano en tablets con stylus (y escritorio).
+
+• Plumas con presión, lápiz, resaltador, caligrafía y pincel
+• Rechazo de palma y modo solo lápiz, botón del S-Pen como borrador
+• Páginas infinitas o fijas, Cornell, agendas semanal y mensual, milimetrado, pentagrama
+• Anota PDFs, inserta imágenes, cajas de texto, capas, lazo, figuras, regla y transportador
+• Busca dentro de tu escritura (reconocimiento en el dispositivo, opcional)
+• Exporta a PNG, PDF, SVG y PowerPoint; abre archivos .inklus en cualquier sitio
+• Primero sin conexión: copia opcional cifrada en Google Drive, sin rastreo ni anuncios
+• Marketplace gratuito de plantillas y paletas (incluidas paletas para daltonismo)
+• En español, inglés, portugués, francés y alemán
+
+Hay una versión «lite» sin reconocimiento de escritura, ~17 MB más pequeña.

@@ -162,6 +162,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get settingsTheme => 'Thème';
 
   @override
+  String get settingsLowPowerTitle => 'Mode économie';
+
+  @override
+  String get settingsLowPowerSubtitle =>
+      'Moins de mémoire sur les tablettes et téléphones modestes : images plus légères. S\'applique à l\'ouverture de la note suivante.';
+
+  @override
   String get settingsThemeLight => 'Clair';
 
   @override
@@ -444,6 +451,24 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get createTplHabit => 'Habitudes';
+
+  @override
+  String get createTplCornell => 'Cornell';
+
+  @override
+  String get createTplWeekly => 'Semaine';
+
+  @override
+  String get createTplMonthly => 'Mois';
+
+  @override
+  String get createTplTodo => 'Tâches';
+
+  @override
+  String get createTplStoryboard => 'Storyboard';
+
+  @override
+  String get createTplMillimeter => 'Papier millimétré';
 
   @override
   String get createTplSheet => 'Feuille A4';
@@ -1201,6 +1226,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String tbPenSlot(String tool, int n) {
     return '$tool $n';
   }
+
+  @override
+  String get canvasSemantics => 'Zone de dessin';
 
   @override
   String tbPageOf(int n, int total) {

@@ -84,7 +84,13 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
     (TemplateType.music, Icons.music_note, ''),
     (TemplateType.planner, Icons.view_week, ''),
     (TemplateType.habit, Icons.check_box_outlined, ''),
+    (TemplateType.millimeter, Icons.straighten, ''),
     (TemplateType.sheet, Icons.description, ''),
+    (TemplateType.cornell, Icons.vertical_split, ''),
+    (TemplateType.weekly, Icons.calendar_view_week, ''),
+    (TemplateType.monthly, Icons.calendar_month, ''),
+    (TemplateType.todo, Icons.checklist, ''),
+    (TemplateType.storyboard, Icons.movie_creation_outlined, ''),
   ];
 
   @override
@@ -129,7 +135,8 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
 
   bool get _showInfiniteToggle =>
       _templateType != TemplateType.blank &&
-      _templateType != TemplateType.sheet;
+      _templateType != TemplateType.sheet &&
+      !kStructuredTemplates.contains(_templateType);
 
   List<(TemplateType, IconData, String)> get _visibleTemplates =>
       _showAllTemplates ? _allTemplates : _favoriteTemplates;
@@ -151,6 +158,12 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
     TemplateType.grid => context.l10n.createTplGrid,
     TemplateType.dots => context.l10n.createTplDots,
     TemplateType.music => context.l10n.createTplMusic,
+    TemplateType.cornell => context.l10n.createTplCornell,
+    TemplateType.weekly => context.l10n.createTplWeekly,
+    TemplateType.monthly => context.l10n.createTplMonthly,
+    TemplateType.todo => context.l10n.createTplTodo,
+    TemplateType.storyboard => context.l10n.createTplStoryboard,
+    TemplateType.millimeter => context.l10n.createTplMillimeter,
     TemplateType.planner => context.l10n.createTplPlanner,
     TemplateType.habit => context.l10n.createTplHabit,
     _ => context.l10n.createTplSheet,

@@ -1,0 +1,13 @@
+Inklus is a free and open source handwriting app for tablets with a stylus (and desktop).
+
+• Pressure-sensitive pens, pencil, highlighter, calligraphy and brush
+• Palm rejection and stylus-only mode, S-Pen button as eraser
+• Infinite or fixed pages, Cornell, weekly/monthly planners, graph paper, music staff
+• Annotate PDFs, insert images, text boxes, layers, lasso, shapes, ruler and protractor
+• Search inside your handwriting (on-device recognition, optional)
+• Export to PNG, PDF, SVG and PowerPoint; open .inklus files anywhere
+• Offline-first: optional encrypted Google Drive backup, no tracking, no ads
+• Free marketplace of templates and colour palettes (including colour-blind safe ones)
+• Available in English, Spanish, Portuguese, French and German
+
+A "lite" build without handwriting recognition is ~17 MB smaller.

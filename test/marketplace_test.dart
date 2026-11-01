@@ -97,9 +97,12 @@ void main() {
     }
     final s = service({}, offline: true);
     await s.loadCatalog();
-    await s.install(s.catalog.first);
+    await s.install(s.catalog.firstWhere((p) => p.id == 'cuadernos-clasicos'));
+    await s.install(s.catalog.firstWhere((p) => p.id == 'hojas-estructuradas'));
     final templates = await s.installedTemplates();
     expect(templates.first.template.spacing, 64);
+    final cornell = templates.firstWhere((t) => t.name == 'Cornell').template;
+    expect(cornell.isFinite, isTrue, reason: 'las hojas con estructura son de tamaño fijo');
   });
 
   test('rutas fuera del paquete son rechazadas', () {
