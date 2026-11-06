@@ -24,7 +24,7 @@ List<List<Stroke>> groupStrokesIntoComponents(
       visited[idx] = true;
       component.add(strokes[idx]);
       // Buscar trazos cercanos no visitados.
-      for (var j = idx + 1; j < strokes.length; j++) {
+      for (var j = 0; j < strokes.length; j++) {
         if (visited[j]) continue;
         if (_strokesClose(strokes[idx], strokes[j], maxDistance)) {
           queue.add(j);

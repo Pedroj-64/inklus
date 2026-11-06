@@ -1167,6 +1167,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get strokeStabilizerDesc => 'Réduit le tremblement de la main';
 
   @override
+  String get strokeReset => 'Réinitialiser les réglages';
+
+  @override
   String get sizeThin => 'Fin';
 
   @override

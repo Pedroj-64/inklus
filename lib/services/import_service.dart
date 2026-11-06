@@ -111,7 +111,14 @@ abstract final class ImportService {
         return ImportResult(kind, count: count);
       case ImportKind.notebook:
       case ImportKind.legacyDocument:
-        final result = await InklusFormat.importAuto(bytes, extractTo: extractTo);
+        final Object result;
+        try {
+          result = await InklusFormat.importAuto(bytes, extractTo: extractTo);
+        } on Error {
+          // JSON con tipos/estructura inesperados (TypeError, RangeError…):
+          // el archivo está dañado o no es nuestro; error legible, no texto crudo.
+          throw const AppError(AppErrorCode.notInklus);
+        }
         if (result is Notebook) {
           await s.saveNotebook(result);
           return ImportResult(

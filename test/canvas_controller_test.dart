@@ -14,6 +14,7 @@ import 'package:inklus/models/template.dart';
 import 'package:flutter/painting.dart' show Color, Rect, Size;
 import 'package:inklus/models/stroke.dart';
 import 'package:inklus/services/storage_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Tests de regresión del controlador del lienzo (bugs de la auditoría).
 void main() {
@@ -593,5 +594,29 @@ void main() {
       c.panBy(const Offset(0, -1e6));
       expect(c.pageIndex, 0);
     });
+  });
+
+  test('ajustes de trazo (thinning/smoothing/streamline) persisten (issue #10)', () async {
+    SharedPreferences.setMockInitialValues({});
+    c.setTool(ToolType.pen);
+    c.setThinning(0.3);
+    c.setSmoothing(0.9);
+    c.setStreamline(0.1);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    final c2 = CanvasController(StorageService(baseDir: tmp));
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    c2.setTool(ToolType.pen);
+    expect([c2.thinning, c2.smoothing, c2.streamline], [0.3, 0.9, 0.1]);
+    c2.dispose();
+  });
+
+  test('resetStrokeSettings restaura los valores por defecto de la herramienta', () {
+    c.setTool(ToolType.pen);
+    c.setThinning(0.9);
+    c.setSmoothing(0.1);
+    c.setStreamline(0.9);
+    c.resetStrokeSettings();
+    expect([c.thinning, c.smoothing, c.streamline],
+        [kDefaultThinning[ToolType.pen], kDefaultSmoothing[ToolType.pen], kDefaultStreamline[ToolType.pen]]);
   });
 }

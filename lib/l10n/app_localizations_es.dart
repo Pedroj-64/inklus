@@ -1157,6 +1157,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get strokeStabilizerDesc => 'Reduce el temblor del pulso';
 
   @override
+  String get strokeReset => 'Restablecer ajustes';
+
+  @override
   String get sizeThin => 'Fino';
 
   @override

@@ -4,6 +4,34 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 Cada versión se escribe en español y en inglés (sección `### English`): el workflow de release copia la sección completa a las notas de GitHub.
 
+## [1.10.1] — 2026-11-06
+
+### Corregido
+- Los ajustes avanzados del trazo (presión, suavizado y estabilización) **se guardan por herramienta** y se conservan al salir de la nota y al reabrir la app (antes volvían a sus valores originales). Gracias a quien lo reportó (#10).
+- El **bote de pintura** agrupaba mal los trazos conectados cuando el que los une iba antes en el orden de dibujo.
+- Importar un `.inklus` dañado o con datos inesperados muestra el aviso de «archivo no válido» en vez de un error técnico.
+
+### Añadido
+- Botón **Restablecer ajustes** en las opciones de trazo (presión, suavizado y estabilizador vuelven a los valores de la herramienta), traducido a los 5 idiomas.
+
+### Cambiado
+- `googleapis` actualizado a la versión 17 y dependencias de CI al día.
+- Más pruebas: operaciones aleatorias del lienzo, tormenta de punteros, archivos hostiles/corruptos y carga con 5.000 trazos.
+
+### English
+
+**Fixed**
+- Advanced stroke settings (pressure, smoothing and stabilization) are now **saved per tool** and kept after leaving the note and reopening the app (they used to reset to their defaults). Thanks to the reporter (#10).
+- The **paint bucket** grouped connected strokes incorrectly when the stroke joining them was earlier in drawing order.
+- Importing a damaged or unexpected `.inklus` now shows the “invalid file” message instead of a technical error.
+
+**Added**
+- **Reset settings** button in stroke options (pressure, smoothing and stabilizer return to the tool's defaults), translated into all 5 languages.
+
+**Changed**
+- `googleapis` updated to version 17 and CI dependencies up to date.
+- More tests: random canvas operations, pointer storm, hostile/corrupt files and a 5,000-stroke load test.
+
 ## [1.10.0] — 2026-11-01
 
 ### Añadido

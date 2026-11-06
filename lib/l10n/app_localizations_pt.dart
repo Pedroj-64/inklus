@@ -1156,6 +1156,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get strokeStabilizerDesc => 'Reduz o tremor da mão';
 
   @override
+  String get strokeReset => 'Redefinir ajustes';
+
+  @override
   String get sizeThin => 'Fino';
 
   @override

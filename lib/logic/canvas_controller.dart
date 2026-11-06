@@ -520,6 +520,7 @@ class CanvasController extends _CanvasCore
       _continuousScroll = prefs.getBool(_prefContinuousScroll) ?? true;
       _twoFingerUndo = prefs.getBool(_prefTwoFingerUndo) ?? false;
       _eraserAutoRevert = prefs.getBool(_prefEraserAutoRevert) ?? true;
+      _loadStrokeSettings(prefs);
       final saved = prefs.getBool(_prefFingerDrawing);
       if (saved != null && saved != _fingerDrawingEnabled && !_disposed) {
         _fingerDrawingEnabled = saved;
@@ -709,18 +710,66 @@ class CanvasController extends _CanvasCore
     if (_tool == ToolType.eraser || _tool == ToolType.select) return;
     _thinning[_tool] = value.clamp(-1, 1);
     notifyListeners();
+    _saveStrokeSettings();
   }
 
   void setSmoothing(double value) {
     if (_tool == ToolType.eraser || _tool == ToolType.select) return;
     _smoothing[_tool] = value.clamp(0, 1);
     notifyListeners();
+    _saveStrokeSettings();
   }
 
   void setStreamline(double value) {
     if (_tool == ToolType.eraser || _tool == ToolType.select) return;
     _streamline[_tool] = value.clamp(0, 1);
     notifyListeners();
+    _saveStrokeSettings();
+  }
+
+  /// Devuelve presión, suavizado y estabilizador de la herramienta actual a
+  /// sus valores por defecto.
+  void resetStrokeSettings() {
+    if (_tool == ToolType.eraser || _tool == ToolType.select) return;
+    _thinning[_tool] = kDefaultThinning[_tool] ?? 0;
+    _smoothing[_tool] = kDefaultSmoothing[_tool] ?? 0.5;
+    _streamline[_tool] = kDefaultStreamline[_tool] ?? 0.5;
+    notifyListeners();
+    _saveStrokeSettings();
+  }
+
+  static const _prefStrokeSettings = 'stroke_settings';
+
+  Timer? _strokeSettingsTimer;
+
+  /// Persiste los tres ajustes por herramienta (JSON {tool: [thin, smooth, stream]}).
+  /// Con debounce: los sliders notifican en cada frame del arrastre.
+  void _saveStrokeSettings() {
+    _strokeSettingsTimer?.cancel();
+    _strokeSettingsTimer = Timer(const Duration(milliseconds: 300), _writeStrokeSettings);
+  }
+
+  void _writeStrokeSettings() {
+    final data = {
+      for (final t in _thinning.keys)
+        t.name: [_thinning[t], _smoothing[t], _streamline[t]],
+    };
+    SharedPreferences.getInstance()
+        .then((p) => p.setString(_prefStrokeSettings, jsonEncode(data)))
+        .catchError((_) => false);
+  }
+
+  void _loadStrokeSettings(SharedPreferences prefs) {
+    final raw = prefs.getString(_prefStrokeSettings);
+    if (raw == null) return;
+    final data = jsonDecode(raw) as Map<String, dynamic>;
+    for (final t in ToolType.values) {
+      final v = data[t.name];
+      if (v is! List || v.length != 3) continue;
+      _thinning[t] = (v[0] as num).toDouble().clamp(-1, 1);
+      _smoothing[t] = (v[1] as num).toDouble().clamp(0, 1);
+      _streamline[t] = (v[2] as num).toDouble().clamp(0, 1);
+    }
   }
 
   void togglePresentationMode() {
@@ -1582,6 +1631,10 @@ class CanvasController extends _CanvasCore
     _saveTimer?.cancel();
     _holdTimer?.cancel();
     _laserTicker?.cancel();
+    if (_strokeSettingsTimer?.isActive ?? false) {
+      _strokeSettingsTimer!.cancel();
+      _writeStrokeSettings(); // no perder el último ajuste al salir
+    }
     // Red de seguridad: si la UI no llamó a flush(), guardar lo pendiente.
     if (_dirty) unawaited(saveNow());
     _toolContextNotifier.dispose();

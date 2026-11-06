@@ -1158,6 +1158,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get strokeStabilizerDesc => 'Verringert das Zittern der Hand';
 
   @override
+  String get strokeReset => 'Einstellungen zurücksetzen';
+
+  @override
   String get sizeThin => 'Dünn';
 
   @override

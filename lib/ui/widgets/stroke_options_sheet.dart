@@ -101,6 +101,15 @@ class _StrokeOptionsSheet extends StatelessWidget {
                               description: context.l10n.strokeStabilizerDesc,
                               onChanged: controller.setStreamline,
                             ),
+                            const SizedBox(height: Spacing.sm),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: controller.resetStrokeSettings,
+                                icon: const Icon(Icons.restart_alt),
+                                label: Text(context.l10n.strokeReset),
+                              ),
+                            ),
                           ],
                         ),
                 ),

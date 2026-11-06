@@ -538,6 +538,7 @@
   "strokeSmoothingDesc": "Rounds the stroke's curves",
   "strokeStabilizer": "Stabilizer",
   "strokeStabilizerDesc": "Reduces hand tremor",
+  "strokeReset": "Reset settings",
   "sizeThin": "Thin",
   "sizeMedium": "Medium",
   "sizeThick": "Thick",

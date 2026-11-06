@@ -18,6 +18,7 @@
   <provides><mediatype>application/x-inklus</mediatype></provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.10.1" date="2026-11-06"/>
     <release version="1.10.0" date="2026-11-01"/>
   </releases>
 </component>

@@ -18,7 +18,7 @@ import 'models/stroke.dart';
 /// Variante ligera (sin reconocimiento de escritura): `--dart-define=INKLUS_LITE=true`.
 const bool kLiteBuild = bool.fromEnvironment('INKLUS_LITE');
 
-const String kAppVersion = '1.10.0';
+const String kAppVersion = '1.10.1';
 
 /// Idioma fijo SOLO para las capturas de pantalla (`tool/screenshots`) y los
 /// tests; la app real sigue el idioma del sistema.

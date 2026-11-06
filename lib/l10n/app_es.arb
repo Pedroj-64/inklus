@@ -594,6 +594,7 @@
   "strokeSmoothingDesc": "Redondea las curvas del trazo",
   "strokeStabilizer": "Estabilizador",
   "strokeStabilizerDesc": "Reduce el temblor del pulso",
+  "strokeReset": "Restablecer ajustes",
   "sizeThin": "Fino",
   "sizeMedium": "Medio",
   "sizeThick": "Grueso",

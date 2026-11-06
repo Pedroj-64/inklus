@@ -2150,6 +2150,12 @@ abstract class AppLocalizations {
   /// **'Reduce el temblor del pulso'**
   String get strokeStabilizerDesc;
 
+  /// No description provided for @strokeReset.
+  ///
+  /// In es, this message translates to:
+  /// **'Restablecer ajustes'**
+  String get strokeReset;
+
   /// No description provided for @sizeThin.
   ///
   /// In es, this message translates to:
