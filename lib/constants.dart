@@ -18,7 +18,7 @@ import 'models/stroke.dart';
 /// Variante ligera (sin reconocimiento de escritura): `--dart-define=INKLUS_LITE=true`.
 const bool kLiteBuild = bool.fromEnvironment('INKLUS_LITE');
 
-const String kAppVersion = '1.10.1';
+const String kAppVersion = '2.0.0';
 
 /// Idioma fijo SOLO para las capturas de pantalla (`tool/screenshots`) y los
 /// tests; la app real sigue el idioma del sistema.
@@ -156,6 +156,7 @@ const Map<ToolType, (double, double)> kToolSizeRanges = {
   ToolType.marker: (8, 40),
   ToolType.spray: (20, 100),
   ToolType.eraser: (12, 120),
+  ToolType.tape: (16, 90),
   ToolType.lasso: (0, 0),
 };
 
@@ -169,6 +170,7 @@ const Map<ToolType, double> kDefaultToolSizes = {
   ToolType.marker: 16,
   ToolType.spray: 50,
   ToolType.eraser: 36,
+  ToolType.tape: 32,
 };
 
 /// Thinning por defecto (0 = uniforme, 0.5 = variable con presión).

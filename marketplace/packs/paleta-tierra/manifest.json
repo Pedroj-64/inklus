@@ -1,0 +1,16 @@
+{
+  "id": "paleta-tierra",
+  "name": "Paleta Tierra",
+  "description": "Ocres, oliva y terracota, con buen contraste sobre papel.",
+  "type": "palette",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "palette": [
+    "#7C2D12",
+    "#A16207",
+    "#3F6212",
+    "#78716C",
+    "#B45309"
+  ]
+}

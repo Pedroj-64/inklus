@@ -1,0 +1,29 @@
+{
+  "id": "stickers-ciencia",
+  "name": "Ciencia y mates",
+  "description": "Átomo, matraz, ADN, imán, tubo de ensayo y símbolos matemáticos para tus apuntes.",
+  "type": "stickers",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": [
+    "ciencia",
+    "matemáticas",
+    "estudio"
+  ],
+  "stickers": [
+    "packs/stickers-ciencia/atomo.png",
+    "packs/stickers-ciencia/matraz.png",
+    "packs/stickers-ciencia/adn.png",
+    "packs/stickers-ciencia/iman.png",
+    "packs/stickers-ciencia/tubo-ensayo.png",
+    "packs/stickers-ciencia/pi.png",
+    "packs/stickers-ciencia/sumatorio.png",
+    "packs/stickers-ciencia/integral.png",
+    "packs/stickers-ciencia/raiz.png",
+    "packs/stickers-ciencia/infinito.png",
+    "packs/stickers-ciencia/mas-menos.png",
+    "packs/stickers-ciencia/delta.png"
+  ],
+  "preview": "packs/stickers-ciencia/preview.png"
+}

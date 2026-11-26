@@ -22,7 +22,7 @@ Version: $VERSION
 Section: graphics
 Priority: optional
 Architecture: amd64
-Depends: libgtk-3-0, libglib2.0-0, libstdc++6
+Depends: libgtk-3-0, libglib2.0-0, libstdc++6, libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, gstreamer1.0-plugins-good, pulseaudio-utils | pipewire-pulse
 Maintainer: Inklus contributors <https://github.com/Pedroj-64/inklus>
 Homepage: https://github.com/Pedroj-64/inklus
 Description: Free handwritten notes for stylus, tablets and desktop

@@ -1,0 +1,28 @@
+{
+  "id": "stickers-agenda",
+  "name": "Agenda",
+  "description": "Marcas, flechas, estrellas y avisos para organizar tu planner.",
+  "type": "stickers",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": [
+    "organización",
+    "agenda"
+  ],
+  "stickers": [
+    "packs/stickers-agenda/hecho.png",
+    "packs/stickers-agenda/pendiente.png",
+    "packs/stickers-agenda/estrella.png",
+    "packs/stickers-agenda/corazon.png",
+    "packs/stickers-agenda/flecha.png",
+    "packs/stickers-agenda/flecha-curva.png",
+    "packs/stickers-agenda/aviso.png",
+    "packs/stickers-agenda/chincheta.png",
+    "packs/stickers-agenda/bandera.png",
+    "packs/stickers-agenda/calendario.png",
+    "packs/stickers-agenda/reloj.png",
+    "packs/stickers-agenda/marcador.png"
+  ],
+  "preview": "packs/stickers-agenda/preview.png"
+}

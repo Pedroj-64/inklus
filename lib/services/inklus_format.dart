@@ -10,8 +10,6 @@ import '../models/image_item.dart';
 import '../models/note.dart';
 import '../models/notebook.dart';
 import '../models/page.dart';
-import '../models/stroke.dart';
-import '../models/text_item.dart';
 import '../models/template.dart';
 import 'file_utils.dart';
 import 'app_paths.dart';
@@ -44,6 +42,9 @@ class InklusFormat {
   static const _notebookEntry = 'notebook.json'; // v2
   static const _notesPrefix = 'notes/';
   static const _imagesPrefix = 'images/';
+  static const _audioPrefix = 'audio/';
+  static const _recordingsEntry = 'recordings.json'; // v1: grabaciones de la nota
+  static const _flashcardsEntry = 'flashcards.json'; // v1: tarjetas de estudio
   static const scheme = 'inklus://';
 
   static const _currentVersion = 2;
@@ -59,10 +60,11 @@ class InklusFormat {
   static Future<Uint8List> exportNotebookBytes(Notebook notebook) async {
     // 1) Recopilar imágenes de todos los notes.
     final images = <String, Future<Uint8List>>{};
+    final audio = <String, Future<Uint8List>>{};
 
     final notesData = <String, Map<String, dynamic>>{};
     for (final note in notebook.notes) {
-      final processedNote = await _processNoteForExport(note, images);
+      final processedNote = await _processNoteForExport(note, images, audio);
       notesData[note.id] = processedNote;
     }
 
@@ -101,6 +103,7 @@ class InklusFormat {
         ArchiveFile('$_imagesPrefix${entry.key}', bytes.length, bytes),
       );
     }
+    await _addAudio(archive, audio);
 
     return ZipEncoder().encodeBytes(archive);
   }
@@ -150,7 +153,7 @@ class InklusFormat {
             .substring(_notesPrefix.length)
             .replaceAll('.json', '');
         noteEntries[noteId] = data;
-      } else if (file.name.startsWith(_imagesPrefix)) {
+      } else if (file.name.startsWith(_imagesPrefix) || file.name.startsWith(_audioPrefix)) {
         imageEntries[file.name] = data;
       }
     }
@@ -187,6 +190,8 @@ class InklusFormat {
       if (noteBytes == null) continue;
       final noteJson = jsonDecode(utf8.decode(noteBytes)) as Map<String, dynamic>;
       final note = _rebuildNote(noteJson, extractedImages);
+      note.recordings.addAll(_rebuildRecordings(noteJson['recordings'], extractedImages));
+      note.flashcards.addAll(Note.fromJson({'id': '', 'flashcards': noteJson['flashcards']}).flashcards);
       notes.add(note);
     }
 
@@ -252,6 +257,16 @@ class InklusFormat {
         ArchiveFile('$_imagesPrefix${entry.key}', bytes.length, bytes),
       );
     }
+    if (document.flashcards.isNotEmpty) {
+      final b = utf8.encode(jsonEncode([for (final c in document.flashcards) c.toJson()]));
+      archive.addFile(ArchiveFile(_flashcardsEntry, b.length, b));
+    }
+    if (document.recordings.isNotEmpty) {
+      final audio = <String, Future<Uint8List>>{};
+      final recBytes = utf8.encode(jsonEncode(await _embedRecordings(document.recordings, audio)));
+      archive.addFile(ArchiveFile(_recordingsEntry, recBytes.length, recBytes));
+      await _addAudio(archive, audio);
+    }
     return ZipEncoder().encodeBytes(archive);
   }
 
@@ -307,12 +322,30 @@ class InklusFormat {
       }
       pages.add(page.copyWith(images: images, template: template));
     }
+    final recordings = <AudioRecording>[];
+    final recBytes = entries[_recordingsEntry];
+    if (recBytes != null) {
+      final extracted = <String, String>{};
+      for (final e in entries.entries) {
+        if (!e.key.startsWith(_audioPrefix)) continue;
+        final name = safeFileName(e.key);
+        if (name == null) continue;
+        final f = File('${dir.path}/$name');
+        await writeAtomic(f, e.value);
+        extracted[e.key] = f.path;
+      }
+      recordings.addAll(_rebuildRecordings(jsonDecode(utf8.decode(recBytes)), extracted));
+    }
     return Document(
       id: doc.id,
       title: doc.title,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
       pages: pages,
+      recordings: recordings,
+      flashcards: entries[_flashcardsEntry] == null
+          ? null
+          : Note.fromJson({'id': '', 'flashcards': jsonDecode(utf8.decode(entries[_flashcardsEntry]!))}).flashcards,
     );
   }
 
@@ -327,6 +360,8 @@ class InklusFormat {
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
       pages: note.pages,
+      recordings: note.recordings,
+      flashcards: note.flashcards,
     );
     return exportBytes(doc);
   }
@@ -342,6 +377,8 @@ class InklusFormat {
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
       pages: doc.pages,
+      recordings: doc.recordings,
+      flashcards: doc.flashcards,
     );
   }
 
@@ -354,6 +391,7 @@ class InklusFormat {
   static Future<Map<String, dynamic>> _processNoteForExport(
     Note note,
     Map<String, Future<Uint8List>> images,
+    Map<String, Future<Uint8List>> audio,
   ) async {
     final pages = <Map<String, dynamic>>[];
     for (final page in note.pages) {
@@ -378,14 +416,11 @@ class InklusFormat {
           template = template.copyWith(imagePath: _embedKey(name));
         }
       }
+      // Desde toJson: conserva todos los campos (marcadores, enlaces…).
       pages.add({
-        'id': page.id,
-        'name': page.name,
-        'strokes': page.strokes.map((s) => s.toJson()).toList(),
+        ...page.toJson(),
         'images': newImages,
-        'textItems': page.textItems.map((t) => t.toJson()).toList(),
         'template': template.toJson(),
-        'layers': page.layers.map((l) => l.toJson()).toList(),
       });
     }
 
@@ -395,6 +430,10 @@ class InklusFormat {
       'createdAt': note.createdAt.toIso8601String(),
       'updatedAt': note.updatedAt.toIso8601String(),
       'pages': pages,
+      if (note.recordings.isNotEmpty)
+        'recordings': await _embedRecordings(note.recordings, audio),
+      if (note.flashcards.isNotEmpty)
+        'flashcards': [for (final c in note.flashcards) c.toJson()],
     };
   }
 
@@ -430,21 +469,8 @@ class InklusFormat {
         }
       }
 
-      return Page(
-        id: pageJson['id'] as String,
-        name: pageJson['name'] as String? ?? '',
-        strokes: (pageJson['strokes'] as List? ?? [])
-            .map((s) => Stroke.fromJson(s as Map<String, dynamic>))
-            .toList(),
-        images: images,
-        textItems: (pageJson['textItems'] as List? ?? [])
-            .map((t) => TextItem.fromJson(t as Map<String, dynamic>))
-            .toList(),
-        template: template,
-        layers: (pageJson['layers'] as List? ?? [])
-            .map((l) => Layer.fromJson(l as Map<String, dynamic>))
-            .toList(),
-      );
+      // Desde fromJson: conserva todos los campos (marcadores, enlaces…).
+      return Page.fromJson(pageJson).copyWith(images: images, template: template);
     }).toList();
 
     return Note(
@@ -476,6 +502,39 @@ class InklusFormat {
   }
 
   static String _basename(String path) => path.split('/').last;
+
+  /// Grabaciones con la ruta reescrita a `inklus://audio/<nombre>`; recoge
+  /// los bytes de los archivos que existen.
+  static Future<List<Map<String, dynamic>>> _embedRecordings(
+    List<AudioRecording> recs,
+    Map<String, Future<Uint8List>> audio,
+  ) async {
+    final out = <Map<String, dynamic>>[];
+    for (final r in recs) {
+      final file = File(r.path);
+      if (!await file.exists()) continue; // sin archivo no sirve la ficha
+      final name = _basename(r.path);
+      audio.putIfAbsent(name, file.readAsBytes);
+      out.add(r.withPath('$scheme$_audioPrefix$name').toJson());
+    }
+    return out;
+  }
+
+  static Future<void> _addAudio(Archive archive, Map<String, Future<Uint8List>> audio) async {
+    for (final e in audio.entries) {
+      final bytes = await e.value;
+      archive.addFile(ArchiveFile('$_audioPrefix${e.key}', bytes.length, bytes));
+    }
+  }
+
+  /// Fichas de grabación con la ruta local del audio extraído (las que no
+  /// tienen archivo en el paquete se descartan).
+  static List<AudioRecording> _rebuildRecordings(Object? json, Map<String, String> extracted) => [
+        for (final r in json is List ? json : const [])
+          if (r is Map<String, dynamic>)
+            if (AudioRecording.fromJson(r) case final rec when rec.path.startsWith(scheme))
+              if (extracted[rec.path.substring(scheme.length)] case final local?) rec.withPath(local),
+      ];
 
   static String _embedKey(String name) => '$scheme$_imagesPrefix$name';
 }

@@ -137,6 +137,8 @@ abstract final class ImportService {
           createdAt: doc.createdAt,
           updatedAt: doc.updatedAt,
           pages: doc.pages,
+          recordings: doc.recordings,
+          flashcards: doc.flashcards,
         );
         final nb = Notebook(id: newId('nb'), title: doc.title, notes: [note]);
         await s.saveNotebook(nb);

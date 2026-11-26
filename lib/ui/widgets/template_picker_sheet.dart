@@ -3,7 +3,7 @@ import '../../constants.dart';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../theme/inklus_colors.dart';
 
 import '../../logic/canvas_controller.dart';

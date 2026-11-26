@@ -1,0 +1,21 @@
+{
+  "id": "paleta-subrayadores",
+  "name": "Paleta Subrayadores",
+  "description": "Seis tonos fluorescentes suaves pensados para el resaltador: no tapan la tinta.",
+  "type": "palette",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": [
+    "estudio",
+    "resaltador"
+  ],
+  "palette": [
+    "#FDE047",
+    "#86EFAC",
+    "#7DD3FC",
+    "#F9A8D4",
+    "#FDBA74",
+    "#C4B5FD"
+  ]
+}

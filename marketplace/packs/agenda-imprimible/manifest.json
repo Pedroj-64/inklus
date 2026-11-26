@@ -1,0 +1,36 @@
+{
+  "id": "agenda-imprimible",
+  "name": "Agenda imprimible",
+  "description": "Semana, día con horario, hábitos de 31 días y acta de reunión.",
+  "type": "template",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": [
+    "organización",
+    "agenda"
+  ],
+  "templates": [
+    {
+      "name": "Semana",
+      "image": "packs/agenda-imprimible/semana.png",
+      "infinite": false
+    },
+    {
+      "name": "Día con horario",
+      "image": "packs/agenda-imprimible/dia.png",
+      "infinite": false
+    },
+    {
+      "name": "Hábitos (31 días)",
+      "image": "packs/agenda-imprimible/habitos.png",
+      "infinite": false
+    },
+    {
+      "name": "Reunión",
+      "image": "packs/agenda-imprimible/reunion.png",
+      "infinite": false
+    }
+  ],
+  "preview": "packs/agenda-imprimible/preview.png"
+}

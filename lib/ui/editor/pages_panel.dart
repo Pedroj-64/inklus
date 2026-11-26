@@ -2,7 +2,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart' hide Page;
+import 'package:material_ui/material_ui.dart' hide Page;
 
 import '../../logic/canvas_controller.dart';
 import '../../models/page.dart';
@@ -10,6 +10,7 @@ import '../../services/export_service.dart';
 import '../../services/image_service.dart';
 import '../theme/inklus_colors.dart';
 import '../theme/tokens.dart';
+import '../widgets/dialogs.dart';
 import '../../l10n/l10n.dart';
 
 /// Panel lateral con las páginas de la nota (vertical, como GoodNotes).
@@ -42,6 +43,9 @@ class _PagesPanelState extends State<PagesPanel> {
 
   /// Mostrar solo las páginas marcadas.
   bool _onlyBookmarked = false;
+
+  /// Vista de índice: lista compacta de páginas con título o marcador.
+  bool _index = false;
 
   CanvasController get _c => widget.canvas;
 
@@ -105,11 +109,20 @@ class _PagesPanelState extends State<PagesPanel> {
           value: 'bookmark',
           child: Text(_c.pages[index].bookmarked ? context.l10n.pgUnbookmark : context.l10n.pgBookmark),
         ),
+        PopupMenuItem(value: 'rename', child: Text(context.l10n.pgRename)),
         PopupMenuItem(value: 'duplicate', child: Text(context.l10n.pgDuplicate)),
         PopupMenuItem(value: 'delete', child: Text(context.l10n.pgDelete)),
       ],
     );
-    if (choice == null) return;
+    if (choice == null || !context.mounted) return;
+    if (choice == 'rename') {
+      final page = _c.pages[index];
+      final name = await showTextPrompt(context,
+          title: context.l10n.pgRename,
+          initialValue: page.hasCustomName ? page.name : '');
+      if (name != null) _c.renamePage(index, name);
+      return;
+    }
     _c.goToPage(index);
     switch (choice) {
       case 'bookmark':
@@ -119,6 +132,40 @@ class _PagesPanelState extends State<PagesPanel> {
       case 'delete':
         _c.deleteCurrentPage();
     }
+  }
+
+  Widget _buildIndex(BuildContext context) {
+    final entries = [
+      for (var i = 0; i < _c.pages.length; i++)
+        if (_c.pages[i].bookmarked || _c.pages[i].hasCustomName) i,
+    ];
+    if (entries.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(Spacing.lg),
+        child: Text(context.l10n.pgIndexEmpty,
+            textAlign: TextAlign.center,
+            style: context.text.bodyMedium?.copyWith(color: context.colors.onSurfaceVariant)),
+      );
+    }
+    return ListView(
+      children: [
+        for (final i in entries)
+          ListTile(
+            selected: i == _c.pageIndex,
+            leading: Text('${i + 1}', style: context.text.labelLarge),
+            title: Text(_c.pages[i].hasCustomName ? _c.pages[i].name : context.l10n.tbPageOf(i + 1, _c.pageCount),
+                maxLines: 2, overflow: TextOverflow.ellipsis),
+            trailing: _c.pages[i].bookmarked ? const Icon(Icons.bookmark, size: 18) : null,
+            onTap: () => _c.goToPage(i),
+            onLongPress: () async {
+              final name = await showTextPrompt(context,
+                  title: context.l10n.pgRename,
+                  initialValue: _c.pages[i].hasCustomName ? _c.pages[i].name : '');
+              if (name != null) _c.renamePage(i, name);
+            },
+          ),
+      ],
+    );
   }
 
   @override
@@ -141,6 +188,12 @@ class _PagesPanelState extends State<PagesPanel> {
                   child: Text(context.l10n.pgPagesCount(pages.length), style: context.text.titleSmall),
                 ),
                 IconButton(
+                  tooltip: context.l10n.pgIndex,
+                  isSelected: _index,
+                  icon: const Icon(Icons.toc),
+                  onPressed: () => setState(() => _index = !_index),
+                ),
+                IconButton(
                   tooltip: _onlyBookmarked ? context.l10n.pgShowAll : context.l10n.pgOnlyBookmarked,
                   isSelected: _onlyBookmarked,
                   icon: const Icon(Icons.bookmark_border),
@@ -155,6 +208,9 @@ class _PagesPanelState extends State<PagesPanel> {
               ],
             ),
           ),
+          if (_index)
+            Expanded(child: _buildIndex(context))
+          else
           Expanded(
             child: ReorderableListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: Spacing.md, vertical: Spacing.sm),

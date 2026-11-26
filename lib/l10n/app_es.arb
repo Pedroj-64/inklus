@@ -1246,7 +1246,111 @@
     }
   },
   "menuTwoFingerUndo": "Deshacer con toque de dos dedos",
+  "menuStrictPalm": "Ignorar el dedo con el lápiz cerca",
   "popEraserAutoRevert": "Volver a la herramienta anterior al borrar",
   "saveFailed": "No se pudo guardar la nota. Libera espacio: se reintentará solo.",
-  "tplHalfLetter": "Media carta"
+  "tplHalfLetter": "Media carta",
+  "strokeCurve": "Sensibilidad del lápiz",
+  "strokeCurveDesc": "Izquierda: hay que apretar más · Derecha: más tinta con poca presión",
+  "toolTape": "Cinta para estudiar",
+  "tapeHint": "Cubre una respuesta con la cinta; tócala para destaparla o taparla",
+  "pgRename": "Poner título",
+  "pgIndex": "Índice",
+  "pgIndexEmpty": "Marca páginas o ponles título para verlas aquí",
+  "selLink": "Enlazar a página",
+  "selLinkTitle": "¿A qué página lleva? (1–{count})",
+  "@selLinkTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selLinkHint": "Déjalo vacío para quitar el enlace. Tócalo con el dedo para saltar.",
+  "audioRecord": "Grabar audio",
+  "audioStop": "Detener grabación",
+  "audioTitle": "Grabaciones",
+  "audioHint": "Al reproducir, la escritura aparece al ritmo del audio; toca un trazo con el dedo para oír ese momento",
+  "audioRecordNew": "Nueva grabación",
+  "audioItem": "Grabación {n}",
+  "@audioItem": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "audioDeleteTitle": "¿Eliminar la grabación?",
+  "audioDeleteBody": "Se borrará el audio. La escritura se queda tal cual.",
+  "audioPlay": "Reproducir",
+  "audioPause": "Pausa",
+  "errMicPermission": "Inklus necesita permiso para usar el micrófono",
+  "cardCreate": "Tarjeta de estudio",
+  "cardSetBack": "Usar como respuesta",
+  "cardAskBack": "Lo seleccionado es la pregunta. ¿La respuesta está en otra zona?",
+  "cardNoBack": "No, guardar así",
+  "cardPickBack": "Elegir respuesta",
+  "cardPickBackHint": "Selecciona la respuesta con el lazo y pulsa «Usar como respuesta»",
+  "cardCreated": "Tarjeta creada: repásala en ⋮ → Nota → Estudiar",
+  "menuStudy": "Estudiar tarjetas ({n} pendientes)",
+  "@menuStudy": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "studyTitle": "Estudiar",
+  "studyProgress": "{done} repasadas · {left} por repasar",
+  "@studyProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "left": {
+        "type": "int"
+      }
+    }
+  },
+  "studyShow": "Mostrar respuesta",
+  "studyAgain": "Otra vez",
+  "studyGood": "Bien",
+  "studyEasy": "Fácil",
+  "studyDelete": "Eliminar tarjeta",
+  "studyDeleteTitle": "¿Eliminar la tarjeta?",
+  "studyDeleteBody": "La página no cambia; solo se quita la tarjeta.",
+  "studyDoneTitle": "¡Al día!",
+  "studyDoneBody": "No hay tarjetas pendientes por ahora. Vuelve más tarde.",
+  "studyNoCards": "Selecciona algo con el lazo y pulsa «Tarjeta de estudio» para crear la primera.",
+  "updateAvailable": "Inklus {version} disponible",
+  "@updateAvailable": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateDownload": "Descargar",
+  "updateBody": "Se descargará el instalador desde GitHub. Se instala encima de la versión actual sin perder tus notas.",
+  "updateNone": "Tienes la última versión ({version})",
+  "@updateNone": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateAutoTitle": "Avisar de nuevas versiones",
+  "updateAutoSubtitle": "Una vez al día consulta GitHub (solo la versión publicada; no se envían datos)",
+  "updateCheckNow": "Buscar actualizaciones ahora",
+  "tabOpen": "Abrir en pestaña",
+  "tabClose": "Cerrar pestaña",
+  "tabLimit": "Como máximo {n} pestañas: cierra alguna primero",
+  "@tabLimit": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

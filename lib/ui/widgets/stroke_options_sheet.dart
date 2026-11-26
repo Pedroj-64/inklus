@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../logic/canvas_controller.dart';
 import '../../models/stroke.dart';
@@ -100,6 +100,15 @@ class _StrokeOptionsSheet extends StatelessWidget {
                               icon: Icons.speed,
                               description: context.l10n.strokeStabilizerDesc,
                               onChanged: controller.setStreamline,
+                            ),
+                            _OptionSlider(
+                              label: context.l10n.strokeCurve,
+                              value: controller.pressureCurve,
+                              min: -1,
+                              max: 1,
+                              icon: Icons.touch_app_outlined,
+                              description: context.l10n.strokeCurveDesc,
+                              onChanged: controller.setPressureCurve,
                             ),
                             const SizedBox(height: Spacing.sm),
                             Align(

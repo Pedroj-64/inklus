@@ -37,6 +37,24 @@ void main() {
     expect(palm.rejectTouch(), isFalse);
   });
 
+  test('hoverBlocks: false deja pasar el dedo con el lápiz flotando (#11)', () {
+    palm.stylusHoverEvent();
+    expect(palm.rejectTouch(hoverBlocks: false), isFalse);
+    expect(palm.rejectTouch(), isTrue);
+  });
+
+  test('hoverBlocks: false sigue bloqueando con el lápiz apoyado o recién levantado', () {
+    palm.stylusDownEvent(1);
+    expect(palm.rejectTouch(hoverBlocks: false), isTrue);
+    palm.stylusUpEvent(1);
+    now = now.add(const Duration(milliseconds: 200));
+    expect(palm.rejectTouch(hoverBlocks: false), isTrue);
+    now = now.add(const Duration(milliseconds: 300));
+    palm.stylusHoverEvent();
+    expect(palm.rejectTouch(hoverBlocks: false), isFalse);
+    expect(palm.rejectTouch(hoverBlocks: false, radiusMajor: 40), isTrue);
+  });
+
   test('un contacto grande es palma', () {
     expect(palm.rejectTouch(radiusMajor: 40), isTrue);
     expect(palm.rejectTouch(radiusMajor: 8), isFalse);

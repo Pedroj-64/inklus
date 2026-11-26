@@ -2,7 +2,7 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart' hide Page;
+import 'package:material_ui/material_ui.dart' hide Page;
 
 import '../../constants.dart';
 import '../../logic/canvas_controller.dart';

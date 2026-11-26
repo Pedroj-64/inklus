@@ -249,9 +249,9 @@ P4 audio sincronizado, P5 ventana de zoom, R7 plugin nativo de latencia (solo si
 | R3 | **OAuth en producción** (manual) | Google Cloud → pantalla de consentimiento: URL de `docs/privacy.md` + *Publish app* (si no: 100 usuarios de prueba y tokens de 7 días). |
 | T1 | **Prueba en tablet** | Superar `docs/testing.md`; verificar texto con S-Pen/teclado e inicio de sesión de Drive (SHA-1 debug y release registrados). |
 | 1.5 | **Medir rendimiento** | `flutter run --profile` con `build/inklus_stress.inklus`; decide R7 y "páginas en archivos". |
-| 0.4 | **Keystore de release** (manual) | Secretos `ANDROID_KEYSTORE_*` en GitHub antes de repartir APKs. |
+| 0.4 | ✅ **Keystore de release** | Secretos `ANDROID_KEYSTORE_*` configurados en GitHub. |
 
-| R3b | **Icono de escritorio** | `linux/` no tiene icono (la ventana sale sin él): copiar `docs/assets/icon.png` y fijarlo con `gtk_window_set_icon_from_file` en `my_application.cc`. |
+| R3b | ✅ **Icono de escritorio** (hecho en 1.10.0) | `linux/` no tiene icono (la ventana sale sin él): copiar `docs/assets/icon.png` y fijarlo con `gtk_window_set_icon_from_file` en `my_application.cc`. |
 | A1 | **Accesibilidad** | TalkBack/`Semantics` en biblioteca y barra, escala de texto del sistema (hoy solo hay tooltips). |
 | L1 | **Latencia de tinta** («Ronda 2» del rework) | `getCoalescedEvents`, puntos predichos, curva de presión; solo si 1.5 la muestra alta. |
 | Q1 | **Tests de lienzo** | Borrador, lazo, deshacer y painters con goldens (pendiente de la Ronda 2). |

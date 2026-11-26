@@ -18,6 +18,7 @@ enum ToolType {
   lasso, // selección de trazos con lazo
   bucket, // relleno de áreas
   text, // cajas de texto
+  tape, // cinta para estudiar: banda opaca que se destapa con un toque
 }
 
 ToolType toolTypeFromName(String name) =>
@@ -76,6 +77,11 @@ class Stroke {
   final double? smoothing;
   final double? streamline;
 
+  /// Instante (ms desde epoch) en que se empezó el trazo, solo si había una
+  /// grabación de audio en curso: permite reproducir la escritura al ritmo
+  /// del audio y saltar al momento de un trazo.
+  final int? ts;
+
   Stroke({
     required this.id,
     required this.points,
@@ -88,6 +94,7 @@ class Stroke {
     this.thinning,
     this.smoothing,
     this.streamline,
+    this.ts,
   });
 
   Color get color => Color(colorValue);
@@ -139,6 +146,7 @@ class Stroke {
         thinning: thinning,
         smoothing: smoothing,
         streamline: streamline,
+        ts: ts,
       );
 
   /// Copia desplazada [delta] (mismo id y atributos).
@@ -163,6 +171,7 @@ class Stroke {
         thinning: (json['th'] as num?)?.toDouble(),
         smoothing: (json['sm'] as num?)?.toDouble(),
         streamline: (json['sl'] as num?)?.toDouble(),
+        ts: (json['ts'] as num?)?.toInt(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -177,5 +186,6 @@ class Stroke {
         if (thinning != null) 'th': thinning,
         if (smoothing != null) 'sm': smoothing,
         if (streamline != null) 'sl': streamline,
+        if (ts != null) 'ts': ts,
       };
 }

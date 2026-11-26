@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../logic/canvas_controller.dart';
 import '../../logic/pen_presets.dart';
@@ -138,6 +138,16 @@ class SelectionBar extends StatelessWidget {
         ),
     ],
     _Action(
+      icon: Icons.style_outlined,
+      label: canvas.hasPendingFlashcard ? context.l10n.cardSetBack : context.l10n.cardCreate,
+      onTap: () => _flashcard(context),
+    ),
+    _Action(
+      icon: Icons.link,
+      label: context.l10n.selLink,
+      onTap: () => _link(context),
+    ),
+    _Action(
       icon: Icons.delete_outline,
       label: context.l10n.libDelete,
       color: context.inklus.danger,
@@ -149,6 +159,47 @@ class SelectionBar extends StatelessWidget {
       onTap: canvas.clearLassoSelection,
     ),
   ];
+
+  /// Tarjeta: la primera selección es la pregunta; luego se elige si la
+  /// respuesta es otra zona (segunda selección) o no hace falta.
+  Future<void> _flashcard(BuildContext context) async {
+    if (canvas.flashcardFromSelection()) {
+      onMessage(context.l10n.cardCreated);
+      return;
+    }
+    final withBack = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: Text(d.l10n.cardCreate),
+        content: Text(d.l10n.cardAskBack),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: Text(d.l10n.cardNoBack)),
+          FilledButton(onPressed: () => Navigator.pop(d, true), child: Text(d.l10n.cardPickBack)),
+        ],
+      ),
+    );
+    if (!context.mounted) return;
+    if (withBack == true) {
+      onMessage(context.l10n.cardPickBackHint);
+    } else if (withBack == false) {
+      canvas.finishFlashcardWithoutBack();
+      onMessage(context.l10n.cardCreated);
+    } else {
+      canvas.cancelPendingFlashcard();
+    }
+  }
+
+  /// Enlaza la selección con una página (número); vacío = quitar el enlace.
+  Future<void> _link(BuildContext context) async {
+    final text = await showTextPrompt(
+      context,
+      title: context.l10n.selLinkTitle(canvas.pageCount),
+      hint: context.l10n.selLinkHint,
+    );
+    if (text == null) return;
+    final n = int.tryParse(text.trim());
+    canvas.linkSelectionTo(n == null ? null : n - 1);
+  }
 
   Future<void> _convertToText(BuildContext context) async {
     final l10n = context.l10n;

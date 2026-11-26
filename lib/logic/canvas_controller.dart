@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants.dart';
 import '../models/document.dart';
 import '../models/id.dart';
+import '../models/flashcard.dart';
 import '../models/note.dart';
 import '../models/image_item.dart';
 import '../models/page.dart';
@@ -94,6 +95,9 @@ class CanvasController extends _CanvasCore
 
   // ---- Ajustes de presión / streamline por herramienta ----
   final Map<ToolType, double> _thinning = Map.of(kDefaultThinning);
+
+  /// Sensibilidad del lápiz por herramienta (-1 firme … 0 lineal … 1 suave).
+  final Map<ToolType, double> _pressureCurve = {};
   final Map<ToolType, double> _smoothing = Map.of(kDefaultSmoothing);
   final Map<ToolType, double> _streamline = Map.of(kDefaultStreamline);
 
@@ -299,13 +303,28 @@ class CanvasController extends _CanvasCore
 
   static const _prefTwoFingerUndo = 'two_finger_undo';
   static const _prefEraserAutoRevert = 'eraser_auto_revert';
+  static const _prefStrictPalm = 'strict_palm_rejection';
   bool _twoFingerUndo = false;
+  bool _strictPalmRejection = false;
   bool _eraserAutoRevert = true;
   ToolType _toolBeforeEraser = ToolType.pen;
 
   /// Toque rápido con dos dedos = deshacer (apagado por defecto: al
   /// desplazar la página borraba el último trazo).
   bool get twoFingerUndo => _twoFingerUndo;
+
+  /// Con el lápiz flotando cerca, el dedo no hace nada (tampoco desplazar ni
+  /// hacer zoom). Apagado por defecto: en modo solo lápiz el dedo navega.
+  bool get strictPalmRejection => _strictPalmRejection;
+
+  void setStrictPalmRejection(bool value) {
+    if (value == _strictPalmRejection) return;
+    _strictPalmRejection = value;
+    notifyListeners();
+    SharedPreferences.getInstance()
+        .then((p) => p.setBool(_prefStrictPalm, value))
+        .catchError((_) => false);
+  }
 
   /// Tras un trazo de borrador se vuelve a la herramienta anterior.
   bool get eraserAutoRevert => _eraserAutoRevert;
@@ -519,6 +538,7 @@ class CanvasController extends _CanvasCore
       _fingerDrawingUserSet = prefs.getBool(_prefFingerDrawingUserSet) ?? false;
       _continuousScroll = prefs.getBool(_prefContinuousScroll) ?? true;
       _twoFingerUndo = prefs.getBool(_prefTwoFingerUndo) ?? false;
+      _strictPalmRejection = prefs.getBool(_prefStrictPalm) ?? false;
       _eraserAutoRevert = prefs.getBool(_prefEraserAutoRevert) ?? true;
       _loadStrokeSettings(prefs);
       final saved = prefs.getBool(_prefFingerDrawing);
@@ -705,6 +725,22 @@ class CanvasController extends _CanvasCore
   double get thinning => _thinning[_tool] ?? 0;
   double get smoothing => _smoothing[_tool] ?? 0.5;
   double get streamline => _streamline[_tool] ?? 0.5;
+  double get pressureCurve => _pressureCurve[_tool] ?? 0;
+
+  /// Aplica la curva de presión de la herramienta actual a la presión cruda
+  /// del lápiz: p^(2^-curva). Suave = más tinta con poca presión.
+  double curvePressure(double p) {
+    final c = pressureCurve;
+    if (c == 0 || p <= 0) return p;
+    return pow(p.clamp(0.0, 1.0), pow(2, -c)).toDouble();
+  }
+
+  void setPressureCurve(double value) {
+    if (_tool == ToolType.eraser || _tool == ToolType.select) return;
+    _pressureCurve[_tool] = value.clamp(-1, 1);
+    notifyListeners();
+    _saveStrokeSettings();
+  }
 
   void setThinning(double value) {
     if (_tool == ToolType.eraser || _tool == ToolType.select) return;
@@ -734,6 +770,7 @@ class CanvasController extends _CanvasCore
     _thinning[_tool] = kDefaultThinning[_tool] ?? 0;
     _smoothing[_tool] = kDefaultSmoothing[_tool] ?? 0.5;
     _streamline[_tool] = kDefaultStreamline[_tool] ?? 0.5;
+    _pressureCurve.remove(_tool);
     notifyListeners();
     _saveStrokeSettings();
   }
@@ -742,7 +779,7 @@ class CanvasController extends _CanvasCore
 
   Timer? _strokeSettingsTimer;
 
-  /// Persiste los tres ajustes por herramienta (JSON {tool: [thin, smooth, stream]}).
+  /// Persiste los ajustes por herramienta (JSON {tool: [thin, smooth, stream, curva]}).
   /// Con debounce: los sliders notifican en cada frame del arrastre.
   void _saveStrokeSettings() {
     _strokeSettingsTimer?.cancel();
@@ -752,7 +789,7 @@ class CanvasController extends _CanvasCore
   void _writeStrokeSettings() {
     final data = {
       for (final t in _thinning.keys)
-        t.name: [_thinning[t], _smoothing[t], _streamline[t]],
+        t.name: [_thinning[t], _smoothing[t], _streamline[t], _pressureCurve[t] ?? 0],
     };
     SharedPreferences.getInstance()
         .then((p) => p.setString(_prefStrokeSettings, jsonEncode(data)))
@@ -765,10 +802,11 @@ class CanvasController extends _CanvasCore
     final data = jsonDecode(raw) as Map<String, dynamic>;
     for (final t in ToolType.values) {
       final v = data[t.name];
-      if (v is! List || v.length != 3) continue;
+      if (v is! List || v.length < 3) continue;
       _thinning[t] = (v[0] as num).toDouble().clamp(-1, 1);
       _smoothing[t] = (v[1] as num).toDouble().clamp(0, 1);
       _streamline[t] = (v[2] as num).toDouble().clamp(0, 1);
+      if (v.length > 3) _pressureCurve[t] = (v[3] as num).toDouble().clamp(-1, 1);
     }
   }
 
@@ -878,6 +916,7 @@ class CanvasController extends _CanvasCore
         thinning: _customOption(_thinning, kDefaultThinning, tool),
         smoothing: _customOption(_smoothing, kDefaultSmoothing, tool),
         streamline: _customOption(_streamline, kDefaultStreamline, tool),
+        ts: recordingStartedAt == null ? null : DateTime.now().millisecondsSinceEpoch,
       );
       _activeEraserPath = [];
     }
@@ -940,6 +979,25 @@ class CanvasController extends _CanvasCore
     final eraserPath = _activeEraserPath;
     _activeEraserPath = [];
 
+    if (active != null && active.tool == ToolType.tape) {
+      final a = activePoints.first.offset, b = activePoints.last.offset;
+      if ((b - a).distance < 8 / _scale) {
+        toggleTapeAt(a); // un toque con la cinta la destapa / la tapa
+      } else {
+        // Recta con puntos cada medio grosor: el borrador (parcial) y el lazo
+        // la tratan como cualquier trazo.
+        final steps = max(1, ((b - a).distance / (active.size / 2)).ceil());
+        final pts = [
+          for (var i = 0; i <= steps; i++)
+            StrokePoint(a.dx + (b.dx - a.dx) * i / steps, a.dy + (b.dy - a.dy) * i / steps, 0.5),
+        ];
+        final tape = active.copyWith(points: List<StrokePoint>.unmodifiable(pts));
+        page.strokes.add(tape);
+        _undoStack.push(CanvasAction(strokesAdded: [tape], strokesAddedAt: [page.strokes.length - 1]));
+        _touch();
+      }
+      return;
+    }
     if (active != null && activePoints.length >= 2) {
       // Congela los puntos: a partir de aquí el trazo es inmutable.
       Stroke finalStroke = active.copyWith(
@@ -973,6 +1031,104 @@ class CanvasController extends _CanvasCore
     if (_eraserAutoRevert && eraserPath.isNotEmpty && _tool == ToolType.eraser) {
       setTool(_toolBeforeEraser);
     }
+  }
+
+  /// Destapa o vuelve a tapar la cinta de más arriba bajo [world]. Entra en
+  /// el deshacer: el historial reconoce los trazos por instancia.
+  bool toggleTapeAt(Offset world) {
+    for (var i = page.strokes.length - 1; i >= 0; i--) {
+      final s = page.strokes[i];
+      if (s.tool != ToolType.tape || !_isLayerVisible(s.layerIndex)) continue;
+      if (!s.paintBounds.contains(world) || !StrokeEngine.pathFor(s).contains(world)) continue;
+      final toggled = StrokeEngine.isTapeOpen(s)
+          ? s.copyWith(clearShapeType: true)
+          : s.copyWith(shapeType: 'tapeOpen');
+      page.strokes[i] = toggled;
+      _undoStack.push(CanvasAction(strokesRemoved: [s], strokesAdded: [toggled]));
+      _touch();
+      return true;
+    }
+    return false;
+  }
+
+  /// Enlaza la zona de la selección del lazo con la página [pageIndex]
+  /// (sustituye los enlaces que se solapen). null = quitar el enlace.
+  void linkSelectionTo(int? pageIndex) {
+    if (!hasLassoSelection) return;
+    // Una línea recta tiene alto 0: el margen la hace tocable.
+    final rect = selectionBoundsAll.inflate(6);
+    page.links.removeWhere((l) => l.rect.overlaps(rect));
+    if (pageIndex != null && pageIndex >= 0 && pageIndex < pageCount) {
+      page.links.add(PageLink(rect, _note.pages[pageIndex].id));
+    }
+    clearLassoSelection();
+    _touch();
+  }
+
+  // ---- Tarjetas de estudio ----
+
+  /// Pregunta elegida que espera su respuesta (segunda selección).
+  ({String pageId, Rect rect})? _pendingFront;
+  bool get hasPendingFlashcard => _pendingFront != null;
+
+  /// Primera llamada: la selección es la pregunta (queda pendiente).
+  /// Segunda: la selección es la respuesta y se crea la tarjeta.
+  /// Devuelve true si creó la tarjeta.
+  bool flashcardFromSelection() {
+    if (!hasLassoSelection) return false;
+    final rect = selectionBoundsAll.inflate(8);
+    clearLassoSelection();
+    final front = _pendingFront;
+    if (front == null) {
+      _pendingFront = (pageId: page.id, rect: rect);
+      notifyListeners();
+      return false;
+    }
+    _pendingFront = null;
+    _note.flashcards.add(Flashcard(id: newId('card'), pageId: front.pageId, front: front.rect, back: rect));
+    _touch();
+    return true;
+  }
+
+  /// Guarda la pregunta pendiente como tarjeta sin respuesta aparte (p. ej.
+  /// la respuesta está bajo una cinta dentro de la misma zona).
+  void finishFlashcardWithoutBack() {
+    final front = _pendingFront;
+    if (front == null) return;
+    _pendingFront = null;
+    _note.flashcards.add(Flashcard(id: newId('card'), pageId: front.pageId, front: front.rect));
+    _touch();
+  }
+
+  void cancelPendingFlashcard() {
+    _pendingFront = null;
+    notifyListeners();
+  }
+
+  int dueFlashcards(DateTime now) => _note.flashcards.where((c) => c.isDue(now)).length;
+
+  void reviewFlashcard(String id, ReviewGrade grade) {
+    final i = _note.flashcards.indexWhere((c) => c.id == id);
+    if (i < 0) return;
+    _note.flashcards[i] = reviewCard(_note.flashcards[i], grade, DateTime.now());
+    _touch();
+  }
+
+  void removeFlashcard(String id) {
+    _note.flashcards.removeWhere((c) => c.id == id);
+    _touch();
+  }
+
+  /// Sigue el enlace bajo [world]. true si saltó de página.
+  bool followLinkAt(Offset world) {
+    for (final l in page.links.reversed) {
+      if (!l.rect.contains(world)) continue;
+      final i = _note.pages.indexWhere((p) => p.id == l.toPageId);
+      if (i < 0) return false;
+      goToPage(i);
+      return true;
+    }
+    return false;
   }
 
   /// Estado de los trazos al empezar el gesto del borrador (null = no borrando).
@@ -1167,6 +1323,14 @@ class CanvasController extends _CanvasCore
   }
 
   /// Marca / desmarca la página actual.
+  /// Título de una página (aparece en el índice del panel de páginas).
+  void renamePage(int index, String name) {
+    final n = name.trim();
+    if (n.isEmpty || index < 0 || index >= pageCount) return;
+    _note.pages[index].name = n;
+    _touch();
+  }
+
   void toggleBookmark() {
     page.bookmarked = !page.bookmarked;
     _touch();
@@ -1555,6 +1719,53 @@ class CanvasController extends _CanvasCore
     notifyListeners();
   }
 
+  // ---- Audio sincronizado ----
+
+  /// Inicio de la grabación en curso (la pone la UI). Mientras no es null,
+  /// cada trazo nuevo guarda su instante (`Stroke.ts`).
+  int? recordingStartedAt;
+
+  /// Reproducción: los trazos grabados después de este instante se pintan
+  /// tenues (la escritura «se reproduce» con el audio). null = normal.
+  int? get replayUntil => _replayUntil;
+  int? _replayUntil;
+
+  void setReplayUntil(int? ms) {
+    if (ms == _replayUntil) return;
+    _replayUntil = ms;
+    _touchLive();
+  }
+
+  /// Toque corto del dedo sobre el lienzo (la barra de audio lo usa para
+  /// saltar al momento de un trazo). Devuelve true si lo consumió.
+  bool Function(Offset world)? onCanvasTap;
+
+  /// Trazo bajo [world] (tolerancia constante en pantalla).
+  Stroke? strokeAt(Offset world) =>
+      StrokeEngine.findStrokeAt(world, page.strokes, maxDistance: 12 / _scale);
+
+  void addRecording(AudioRecording rec) {
+    _note.recordings.add(rec);
+    _touch();
+  }
+
+  void removeRecording(String id) {
+    _note.recordings.removeWhere((r) => r.id == id);
+    _touch();
+  }
+
+  /// Grabación que contiene el instante [ts] de un trazo (para saltar a él).
+  ({AudioRecording rec, Duration at})? recordingAtStroke(Stroke s) {
+    final ts = s.ts;
+    if (ts == null) return null;
+    for (final r in _note.recordings) {
+      if (ts >= r.startedAt && ts <= r.startedAt + r.durationMs) {
+        return (rec: r, at: Duration(milliseconds: ts - r.startedAt));
+      }
+    }
+    return null;
+  }
+
   /// Hay cambios sin guardar.
   bool _dirty = false;
   bool _disposed = false;
@@ -1579,6 +1790,20 @@ class CanvasController extends _CanvasCore
     _resetPageState();
     _viewInitialized = false;
     _touch();
+  }
+
+  /// Cambia a otra nota ya guardada (pestañas) **sin** marcarla como
+  /// modificada: su `updatedAt` decide quién gana al sincronizar con Drive.
+  void openNote(Note note) {
+    _note = note;
+    _pageIndex = 0;
+    _pendingFront = null;
+    _replayUntil = null;
+    onCanvasTap = null;
+    _resetPageState();
+    _viewInitialized = false;
+    _contentVersion++;
+    notifyListeners();
   }
 
   /// Compatibilidad: acepta un Document y lo convierte a Note interno.

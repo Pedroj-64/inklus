@@ -4,6 +4,60 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 Cada versión se escribe en español y en inglés (sección `### English`): el workflow de release copia la sección completa a las notas de GitHub.
 
+## [2.0.0] — 2026-11-26
+
+### Añadido
+- **Audio sincronizado con la escritura**: botón de micrófono en la barra del editor. Al reproducir, lo que aún no se había escrito se ve tenue y tocar un trazo con el dedo salta a ese momento. Las grabaciones viajan en las copias `.inklus`, en Drive y en el respaldo completo.
+- **Tarjetas de estudio con repetición espaciada**: selecciona la pregunta con el lazo → «Tarjeta de estudio» (y, si quieres, la respuesta); repásalas en ⋮ → Nota → Estudiar con «Otra vez / Bien / Fácil».
+- **Aviso de nuevas versiones**: la app consulta GitHub una vez al día y ofrece descargar el instalador de la última release (apagable en Configuración; también «Buscar actualizaciones ahora»).
+- **Pestañas**: ⋮ → Nota → «Abrir en pestaña» abre otra nota del cuaderno; cambia entre ellas desde la tira bajo la barra (hasta 8).
+- **Cinta para estudiar** (menú de herramientas): tapa una respuesta y tócala con el dedo para destaparla o taparla de nuevo.
+- **Enlaces entre páginas**: selecciona con el lazo → «Enlazar a página»; un toque con el dedo salta a esa página (ideal para planners).
+- **Índice del cuaderno**: pon título a las páginas y míralas, junto a las marcadas, en la vista «Índice» del panel de páginas.
+- **Cursor del lápiz**: al acercar el lápiz se ve un círculo del grosor y color de la pluma (o del borrador).
+- **Sensibilidad del lápiz** por herramienta en las opciones de trazo.
+- Opción **Ver → Ignorar el dedo con el lápiz cerca** para volver al rechazo de palma estricto (traducida a los 5 idiomas).
+- Marketplace: 4 paquetes de stickers, 2 de plantillas (agenda imprimible, papel de ingeniería/isométrico/polar) y paletas nuevas.
+
+### Accesibilidad
+- Con el texto del sistema muy grande (200 %) ya no se desbordan la barra del editor, la navegación de la biblioteca ni el selector de tema.
+- El botón de zoom «100 %» tiene el tamaño táctil mínimo (48 dp) y el botón de cerrar de «Nuevo cuaderno» se anuncia en TalkBack.
+- Pruebas automáticas de accesibilidad (etiquetas y tamaño táctil) en el editor, la biblioteca, Configuración, Marketplace, Estudiar y Nuevo cuaderno, y goldens del pintado del lienzo.
+
+### Corregido
+- La copia `.inklus` de un cuaderno perdía los marcadores de las páginas.
+- Con un lápiz **flotando** cerca de la pantalla (p. ej. TCL NXTPAPER + T-Pen 2), el dedo ya **desplaza y hace zoom** en modo solo lápiz; antes quedaba bloqueado hasta alejar el lápiz. El lápiz apoyado o recién levantado sigue bloqueando la palma. Gracias a quien lo reportó (#11).
+
+### Cambiado
+- Flutter 3.50 (`material_ui`), Android Gradle Plugin 9.1.1, `googleapis` 19, `file_picker` 13, ML Kit 1.0 y `archive` 4.7.
+
+### English
+
+**Added**
+- **Audio synced with your writing**: microphone button in the editor toolbar. While playing, writing that hasn't happened yet is faded and tapping a stroke with a finger jumps to that moment. Recordings travel in `.inklus` copies, Drive and the full backup.
+- **Study cards with spaced repetition**: lasso-select the question → “Study card” (and the answer, if you want); review them in ⋮ → Note → Study with “Again / Good / Easy”.
+- **New version notice**: the app checks GitHub once a day and offers to download the latest release's installer (can be turned off in Settings; also “Check for updates now”).
+- **Tabs**: ⋮ → Note → “Open in tab” opens another note from the notebook; switch between them from the strip under the toolbar (up to 8).
+- **Study tape** (tools menu): cover an answer and tap it with a finger to reveal or hide it again.
+- **Links between pages**: lasso-select → “Link to page”; a finger tap jumps to that page (great for planners).
+- **Notebook contents**: give pages a title and see them, along with bookmarked pages, in the “Contents” view of the pages panel.
+- **Pen cursor**: when the pen is near, a circle with the pen's (or eraser's) size and colour shows under the tip.
+- Per-tool **pen sensitivity** in the stroke options.
+- **View → Ignore fingers while the pen is near** option to bring back strict palm rejection (translated into all 5 languages).
+- Marketplace: 4 sticker packs, 2 template packs (printable planner, engineering/isometric/polar paper) and new palettes.
+
+**Accessibility**
+- With very large system text (200%) the editor toolbar, the library navigation and the theme selector no longer overflow.
+- The “100 %” zoom button has the minimum touch size (48 dp) and the close button in “New notebook” is announced by TalkBack.
+- Automated accessibility checks (labels and touch size) on the editor, library, Settings, Marketplace, Study and New notebook, plus golden tests for canvas painting.
+
+**Fixed**
+- A notebook's `.inklus` copy lost page bookmarks.
+- With a pen **hovering** near the screen (e.g. TCL NXTPAPER + T-Pen 2), a finger now **scrolls and zooms** in pen-only mode; it used to be blocked until the pen moved away. A pen that is touching or was just lifted still blocks the palm. Thanks to the reporter (#11).
+
+**Changed**
+- Flutter 3.50 (`material_ui`), Android Gradle Plugin 9.1.1, `googleapis` 19, `file_picker` 13, ML Kit 1.0 and `archive` 4.7.
+
 ## [1.10.1] — 2026-11-06
 
 ### Corregido

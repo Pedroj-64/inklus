@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'l10n/l10n.dart';
 
@@ -50,7 +50,7 @@ class _InklusAppState extends State<InklusApp> {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       // Sin `locale`: sigue el idioma del sistema; si no hay traducción, inglés.
       locale: widget.locale,

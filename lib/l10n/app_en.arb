@@ -1190,7 +1190,111 @@
     }
   },
   "menuTwoFingerUndo": "Undo with a two-finger tap",
+  "menuStrictPalm": "Ignore fingers while the pen is near",
   "popEraserAutoRevert": "Return to the previous tool after erasing",
   "saveFailed": "Couldn't save the note. Free up some space: it will retry automatically.",
-  "tplHalfLetter": "Half Letter"
+  "tplHalfLetter": "Half Letter",
+  "strokeCurve": "Pen sensitivity",
+  "strokeCurveDesc": "Left: press harder · Right: more ink with a light touch",
+  "toolTape": "Study tape",
+  "tapeHint": "Cover an answer with tape; tap it to reveal or hide it again",
+  "pgRename": "Set title",
+  "pgIndex": "Contents",
+  "pgIndexEmpty": "Bookmark pages or give them a title to see them here",
+  "selLink": "Link to page",
+  "selLinkTitle": "Which page does it go to? (1–{count})",
+  "@selLinkTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selLinkHint": "Leave empty to remove the link. Tap it with a finger to jump.",
+  "audioRecord": "Record audio",
+  "audioStop": "Stop recording",
+  "audioTitle": "Recordings",
+  "audioHint": "While playing, your writing appears in step with the audio; tap a stroke with your finger to hear that moment",
+  "audioRecordNew": "New recording",
+  "audioItem": "Recording {n}",
+  "@audioItem": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "audioDeleteTitle": "Delete the recording?",
+  "audioDeleteBody": "The audio will be deleted. Your writing stays as it is.",
+  "audioPlay": "Play",
+  "audioPause": "Pause",
+  "errMicPermission": "Inklus needs permission to use the microphone",
+  "cardCreate": "Study card",
+  "cardSetBack": "Use as answer",
+  "cardAskBack": "The selection is the question. Is the answer somewhere else?",
+  "cardNoBack": "No, save as is",
+  "cardPickBack": "Pick answer",
+  "cardPickBackHint": "Select the answer with the lasso and tap “Use as answer”",
+  "cardCreated": "Card created: review it in ⋮ → Note → Study",
+  "menuStudy": "Study cards ({n} due)",
+  "@menuStudy": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "studyTitle": "Study",
+  "studyProgress": "{done} reviewed · {left} left",
+  "@studyProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "left": {
+        "type": "int"
+      }
+    }
+  },
+  "studyShow": "Show answer",
+  "studyAgain": "Again",
+  "studyGood": "Good",
+  "studyEasy": "Easy",
+  "studyDelete": "Delete card",
+  "studyDeleteTitle": "Delete the card?",
+  "studyDeleteBody": "The page doesn't change; only the card is removed.",
+  "studyDoneTitle": "All caught up!",
+  "studyDoneBody": "No cards due right now. Come back later.",
+  "studyNoCards": "Select something with the lasso and tap “Study card” to create your first one.",
+  "updateAvailable": "Inklus {version} is available",
+  "@updateAvailable": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateDownload": "Download",
+  "updateBody": "The installer will download from GitHub. It installs over the current version without losing your notes.",
+  "updateNone": "You have the latest version ({version})",
+  "@updateNone": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateAutoTitle": "Notify me of new versions",
+  "updateAutoSubtitle": "Checks GitHub once a day (only the published version; no data is sent)",
+  "updateCheckNow": "Check for updates now",
+  "tabOpen": "Open in tab",
+  "tabClose": "Close tab",
+  "tabLimit": "At most {n} tabs: close one first",
+  "@tabLimit": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

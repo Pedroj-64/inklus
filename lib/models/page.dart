@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import 'dart:ui';
 import 'id.dart';
 import 'image_item.dart';
 import 'stroke.dart';
@@ -52,6 +53,22 @@ class Layer {
 /// Una página del cuaderno: conjunto de trazos e imágenes sobre una plantilla.
 ///
 /// Soporta capas: cada trazo e imagen puede pertenecer a una capa diferente.
+/// Zona de la página que lleva a otra página del mismo cuaderno (planners).
+class PageLink {
+  final Rect rect; // coordenadas de mundo
+  final String toPageId;
+  const PageLink(this.rect, this.toPageId);
+
+  factory PageLink.fromJson(Map<String, dynamic> j) => PageLink(
+        Rect.fromLTWH((j['x'] as num).toDouble(), (j['y'] as num).toDouble(),
+            (j['w'] as num).toDouble(), (j['h'] as num).toDouble()),
+        j['to'] as String,
+      );
+
+  Map<String, dynamic> toJson() =>
+      {'x': rect.left, 'y': rect.top, 'w': rect.width, 'h': rect.height, 'to': toPageId};
+}
+
 /// La capa por defecto es la 0 (siempre existe). Si el JSON no tiene capas,
 /// se crea una capa "Capa 1" por defecto para compatibilidad.
 class Page {
@@ -68,6 +85,9 @@ class Page {
   /// Página marcada (aparece destacada y filtrable en el panel de páginas).
   bool bookmarked;
 
+  /// Enlaces a otras páginas (un toque con el dedo salta a la página).
+  final List<PageLink> links;
+
   Page({
     required this.id,
     required this.name,
@@ -77,8 +97,13 @@ class Page {
     List<Layer>? layers,
     List<TextItem>? textItems,
     this.bookmarked = false,
+    List<PageLink>? links,
   })  : layers = layers ?? [Layer(name: 'Capa 1')],
-        textItems = textItems ?? [];
+        textItems = textItems ?? [],
+        links = links ?? [];
+
+  /// true si [name] lo puso el usuario (no es «Página 3», «PDF 2»…).
+  bool get hasCustomName => !RegExp(r'^(Página|PDF) \d+( \(copia\))*$').hasMatch(name);
 
   factory Page.blank({String? id, String? name, PageTemplate? template}) =>
       Page(
@@ -130,6 +155,7 @@ class Page {
         layers: layers ?? this.layers,
         textItems: textItems ?? this.textItems,
         bookmarked: bookmarked,
+        links: List.of(links),
       );
 
   factory Page.fromJson(Map<String, dynamic> json) => Page(
@@ -150,6 +176,10 @@ class Page {
             .map((t) => TextItem.fromJson(t as Map<String, dynamic>))
             .toList(),
         bookmarked: json['bookmarked'] as bool? ?? false,
+        links: [
+          for (final l in json['links'] as List? ?? const [])
+            if (l is Map<String, dynamic>) PageLink.fromJson(l),
+        ],
       );
 
   Map<String, dynamic> toJson() => {
@@ -161,5 +191,6 @@ class Page {
         'layers': layers.map((l) => l.toJson()).toList(),
         'textItems': textItems.map((t) => t.toJson()).toList(),
         if (bookmarked) 'bookmarked': true,
+        if (links.isNotEmpty) 'links': [for (final l in links) l.toJson()],
       };
 }

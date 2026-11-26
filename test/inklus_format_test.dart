@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inklus/models/document.dart';
+import 'package:inklus/models/flashcard.dart';
 import 'package:inklus/models/image_item.dart';
 import 'package:inklus/models/page.dart';
 import 'package:inklus/models/stroke.dart';
 import 'package:inklus/models/template.dart';
 import 'package:inklus/models/note.dart';
+import 'package:inklus/models/notebook.dart';
 import 'package:inklus/services/backup_crypto.dart';
 import 'package:inklus/services/inklus_format.dart';
 
@@ -185,5 +188,29 @@ void main() {
       InklusFormat.importNoteBytes(encrypted, extractTo: extractDir),
       throwsA(isA<FormatException>()),
     );
+  });
+
+  test('audio, marcadores y enlaces viajan en .inklus (nota y cuaderno)', () async {
+    final audio = File('${tempDir.path}/rec_1.m4a')..writeAsBytesSync(List.filled(16, 3));
+    final page = Page.blank()..bookmarked = true;
+    page.links.add(const PageLink(Rect.fromLTWH(1, 2, 3, 4), 'p2'));
+    final note = Note.newBlank()..pages[0] = page;
+    note.recordings.add(AudioRecording(id: 'rec_1', path: audio.path, startedAt: 10, durationMs: 500));
+    note.flashcards.add(Flashcard(id: 'card', pageId: page.id, front: const Rect.fromLTWH(0, 0, 5, 5)));
+
+    final one = await InklusFormat.importNoteBytes(
+        await InklusFormat.exportNoteBytes(note), extractTo: Directory('${tempDir.path}/a'));
+    expect(one.recordings.single.durationMs, 500);
+    expect(one.flashcards.single.id, 'card');
+    expect(File(one.recordings.single.path).readAsBytesSync(), audio.readAsBytesSync());
+
+    final nb = await InklusFormat.importNotebookBytes(
+        await InklusFormat.exportNotebookBytes(Notebook(id: 'nb', title: 't', notes: [note])),
+        extractTo: Directory('${tempDir.path}/b'));
+    final back = nb.notes.single;
+    expect(back.pages.single.bookmarked, isTrue);
+    expect(back.pages.single.links.single.toPageId, 'p2');
+    expect(File(back.recordings.single.path).existsSync(), isTrue);
+    expect(back.flashcards.single.pageId, page.id);
   });
 }

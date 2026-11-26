@@ -1,0 +1,26 @@
+{
+  "id": "stickers-estudio",
+  "name": "Estudio",
+  "description": "Libro, lápiz, bombilla, birrete, mochila, calculadora y más para tus apuntes.",
+  "type": "stickers",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": [
+    "estudio",
+    "escuela"
+  ],
+  "stickers": [
+    "packs/stickers-estudio/libro.png",
+    "packs/stickers-estudio/lapiz.png",
+    "packs/stickers-estudio/bombilla.png",
+    "packs/stickers-estudio/birrete.png",
+    "packs/stickers-estudio/mochila.png",
+    "packs/stickers-estudio/calculadora.png",
+    "packs/stickers-estudio/portapapeles.png",
+    "packs/stickers-estudio/gafas.png",
+    "packs/stickers-estudio/despertador.png",
+    "packs/stickers-estudio/cuaderno.png"
+  ],
+  "preview": "packs/stickers-estudio/preview.png"
+}

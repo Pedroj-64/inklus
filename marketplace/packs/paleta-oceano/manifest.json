@@ -1,0 +1,20 @@
+{
+  "id": "paleta-oceano",
+  "name": "Paleta Océano",
+  "description": "Azules y verdes marinos, del azul profundo al turquesa, con un coral para destacar.",
+  "type": "palette",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": [
+    "naturaleza"
+  ],
+  "palette": [
+    "#0C4A6E",
+    "#0369A1",
+    "#0EA5E9",
+    "#14B8A6",
+    "#0F766E",
+    "#F97362"
+  ]
+}

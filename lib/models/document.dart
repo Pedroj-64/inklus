@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import 'flashcard.dart';
+import 'note.dart' show AudioRecording;
 import 'page.dart';
 import 'id.dart';
 
@@ -19,6 +21,12 @@ class Document {
   /// Etiquetas del cuaderno (para organización y filtrado).
   List<String> tags;
 
+  /// Grabaciones (van en `recordings.json` del .inklus, no en este JSON).
+  List<AudioRecording> recordings;
+
+  /// Tarjetas de estudio (van en `flashcards.json` del .inklus).
+  List<Flashcard> flashcards;
+
   Document({
     required this.id,
     required this.title,
@@ -27,7 +35,11 @@ class Document {
     required this.pages,
     this.colorValue,
     List<String>? tags,
-  })  : tags = tags ?? [];
+    List<AudioRecording>? recordings,
+    List<Flashcard>? flashcards,
+  })  : tags = tags ?? [],
+        recordings = recordings ?? [],
+        flashcards = flashcards ?? [];
 
   factory Document.newBlank({String? id, String? title}) => Document(
         id: id ?? newId('doc'),

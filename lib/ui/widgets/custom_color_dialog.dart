@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../theme/inklus_colors.dart';
 import '../../logic/canvas_controller.dart';
 import 'color_wheel_picker.dart';

@@ -42,6 +42,15 @@ class PalmRejection {
     return last != null && _now().difference(last) < stylusGrace;
   }
 
+  /// Lápiz apoyado o levantado hace menos de [stylusGrace] (sin contar hover).
+  bool get _stylusRecentlyDown {
+    if (stylusDown) return true;
+    final up = _lastStylusUp;
+    return up != null && _now().difference(up) < stylusGrace;
+  }
+
+  DateTime? _lastStylusUp;
+
   void stylusDownEvent(int pointer) {
     _stylusPointers.add(pointer);
     _lastStylusActivity = _now();
@@ -49,7 +58,7 @@ class PalmRejection {
 
   void stylusUpEvent(int pointer) {
     _stylusPointers.remove(pointer);
-    _lastStylusActivity = _now();
+    _lastStylusActivity = _lastStylusUp = _now();
   }
 
   /// Hover del lápiz (sin tocar). Extiende la ventana de "lápiz cerca".
@@ -59,8 +68,13 @@ class PalmRejection {
   }
 
   /// true si un toque de dedo debe ignorarse por completo.
-  bool rejectTouch({double radiusMajor = 0}) {
-    if (stylusNearby) return true;
+  ///
+  /// [hoverBlocks] = false: el lápiz flotando no bloquea el dedo (solo lápiz
+  /// apoyado o recién levantado). Se usa cuando el dedo solo navega: algunos
+  /// lápices (p. ej. TCL T-Pen) reportan hover desde lejos y sin pausa, y
+  /// bloqueaban el desplazamiento y el zoom (#11).
+  bool rejectTouch({double radiusMajor = 0, bool hoverBlocks = true}) {
+    if (hoverBlocks ? stylusNearby : _stylusRecentlyDown) return true;
     if (radiusMajor > palmRadius) return true;
     return false;
   }
@@ -68,6 +82,6 @@ class PalmRejection {
   /// Limpia el estado (p. ej. al perder el foco la ventana).
   void reset() {
     _stylusPointers.clear();
-    _lastStylusActivity = null;
+    _lastStylusActivity = _lastStylusUp = null;
   }
 }

@@ -2,11 +2,15 @@
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart' hide Page;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inklus/constants.dart';
 import 'package:inklus/logic/canvas_controller.dart';
+import 'package:inklus/logic/stroke_engine.dart';
+import 'package:inklus/models/flashcard.dart';
+import 'package:inklus/models/note.dart';
+import 'package:inklus/models/page.dart';
 import 'package:inklus/models/stroke.dart';
 import 'package:inklus/services/image_service.dart';
 import 'package:inklus/services/storage_service.dart';
@@ -105,6 +109,42 @@ void main() {
     await drag(tester, const Offset(200, 200), PointerDeviceKind.touch, pointer: 5);
     expect(c.page.strokes, isEmpty);
     expect(c.translate, isNot(before));
+  });
+
+  Future<void> hoverPen(WidgetTester tester) async {
+    final pen = await tester.createGesture(kind: PointerDeviceKind.stylus, pointer: 9);
+    await pen.addPointer(location: const Offset(50, 50));
+    await pen.moveTo(const Offset(60, 60)); // sin apoyar = hover
+    await tester.pump();
+  }
+
+  testWidgets('solo lápiz: con el lápiz flotando, el dedo sigue desplazando (#11)',
+      (tester) async {
+    await pumpCanvas(tester);
+    c.setFingerDrawing(false);
+    await hoverPen(tester);
+    final before = c.translate;
+    await drag(tester, const Offset(200, 200), PointerDeviceKind.touch, pointer: 5);
+    expect(c.translate, isNot(before));
+  });
+
+  testWidgets('modo estricto: con el lápiz flotando, el dedo no desplaza', (tester) async {
+    await pumpCanvas(tester);
+    c.setFingerDrawing(false);
+    c.setStrictPalmRejection(true);
+    await hoverPen(tester);
+    final before = c.translate;
+    await drag(tester, const Offset(200, 200), PointerDeviceKind.touch, pointer: 5);
+    expect(c.translate, before);
+  });
+
+  testWidgets('dibujo con dedo: el lápiz flotando sigue bloqueando la palma', (tester) async {
+    await pumpCanvas(tester);
+    c.setFingerDrawing(true);
+    await hoverPen(tester);
+    await drag(tester, const Offset(200, 200), PointerDeviceKind.touch, pointer: 5);
+    expect(c.page.strokes, isEmpty);
+    await finish(tester);
   });
 
   testWidgets('regla: un dedo la arrastra y el lápiz se pega a su borde',
@@ -319,5 +359,128 @@ void main() {
       expect(c.page.strokes.length, 2, reason: 'cortar y deshacer restaura');
       await finish(tester);
     });
+  });
+
+  testWidgets('el lápiz flotando muestra el cursor y desaparece al apoyar', (tester) async {
+    await pumpCanvas(tester);
+    final painter = tester
+        .widgetList<CustomPaint>(find.byType(CustomPaint))
+        .map((w) => w.painter)
+        .whereType<HoverCursorPainter>()
+        .single;
+    expect(painter.hover.value, isNull);
+    final pen = await tester.createGesture(kind: PointerDeviceKind.stylus, pointer: 9);
+    await pen.addPointer(location: const Offset(50, 50));
+    await pen.moveTo(const Offset(80, 80));
+    expect(painter.hover.value?.pos, const Offset(80, 80));
+    await pen.down(const Offset(80, 80));
+    expect(painter.hover.value, isNull);
+    await pen.up();
+    await finish(tester);
+  });
+
+  test('curva de presión: lineal no cambia; suave sube; firme baja; se guarda por herramienta', () {
+    expect(c.curvePressure(0.5), 0.5);
+    c.setPressureCurve(1);
+    expect(c.curvePressure(0.25), closeTo(0.5, 1e-9));
+    c.setPressureCurve(-1);
+    expect(c.curvePressure(0.5), closeTo(0.25, 1e-9));
+    c.setTool(ToolType.pencil);
+    expect(c.pressureCurve, 0);
+    c.setTool(ToolType.pen);
+    expect(c.pressureCurve, -1);
+    c.resetStrokeSettings();
+    expect(c.pressureCurve, 0);
+  });
+
+  testWidgets('cinta: se dibuja recta, un toque del dedo la destapa y otro la tapa', (tester) async {
+    await pumpCanvas(tester);
+    c.setFingerDrawing(true);
+    c.setTool(ToolType.tape);
+    await drag(tester, const Offset(100, 100), PointerDeviceKind.touch);
+    expect(c.page.strokes.single.tool, ToolType.tape);
+    expect(c.page.strokes.single.points.length, greaterThan(2), reason: 'recta remuestreada');
+    c.setFingerDrawing(false);
+    c.setTool(ToolType.pen);
+    Future<void> tap() async {
+      await tester.tapAt(const Offset(140, 100));
+      await tester.pump();
+    }
+    await tap();
+    expect(StrokeEngine.isTapeOpen(c.page.strokes.single), isTrue);
+    await tap();
+    expect(StrokeEngine.isTapeOpen(c.page.strokes.single), isFalse);
+    c.undo();
+    expect(StrokeEngine.isTapeOpen(c.page.strokes.single), isTrue);
+    c.undo();
+    c.undo();
+    expect(c.page.strokes, isEmpty);
+    await finish(tester);
+  });
+
+  test('índice: título de página y nombres por defecto', () {
+    expect(c.page.hasCustomName, isFalse);
+    c.renamePage(0, '  Tema 1: derivadas ');
+    expect(c.page.name, 'Tema 1: derivadas');
+    expect(c.page.hasCustomName, isTrue);
+    c.renamePage(0, '   ');
+    expect(c.page.name, 'Tema 1: derivadas', reason: 'vacío no borra el título');
+    c.addPage();
+    expect(c.page.hasCustomName, isFalse);
+  });
+
+  testWidgets('enlace: la selección lleva a otra página con un toque del dedo y se guarda', (tester) async {
+    await pumpCanvas(tester);
+    c.setFingerDrawing(true);
+    await drag(tester, const Offset(100, 100), PointerDeviceKind.touch);
+    c.addPage();
+    c.goToPage(0);
+    c.selectAll();
+    c.linkSelectionTo(1);
+    expect(c.page.links, hasLength(1));
+    expect(Page.fromJson(c.page.toJson()).links.single.toPageId, c.pages[1].id);
+    c.setFingerDrawing(false);
+    await tester.tapAt(const Offset(140, 100));
+    await tester.pump();
+    expect(c.pageIndex, 1);
+    c.goToPage(0);
+    c.selectAll();
+    c.linkSelectionTo(null);
+    expect(c.page.links, isEmpty);
+    await finish(tester);
+  });
+
+  testWidgets('tarjeta: pregunta + respuesta en dos selecciones, repaso y guardado', (tester) async {
+    await pumpCanvas(tester);
+    c.setFingerDrawing(true);
+    await drag(tester, const Offset(100, 100), PointerDeviceKind.touch);
+    c.selectAll();
+    expect(c.flashcardFromSelection(), isFalse, reason: 'primero queda pendiente la pregunta');
+    expect(c.hasPendingFlashcard, isTrue);
+    c.selectAll();
+    expect(c.flashcardFromSelection(), isTrue);
+    final card = c.note.flashcards.single;
+    expect(card.back, isNotNull);
+    expect(c.dueFlashcards(DateTime.now()), 1);
+    c.reviewFlashcard(card.id, ReviewGrade.good);
+    expect(c.dueFlashcards(DateTime.now()), 0);
+    expect(Note.fromJson(c.note.toJson()).flashcards.single.intervalDays, 1);
+    c.selectAll();
+    c.flashcardFromSelection();
+    c.finishFlashcardWithoutBack();
+    expect(c.note.flashcards.last.back, isNull);
+    await finish(tester);
+  });
+
+  test('pestañas: abrir otra nota no cambia su fecha ni la marca como modificada', () {
+    final other = Note.newBlank(title: 'Otra');
+    final stamp = DateTime(2020, 1, 1);
+    other.updatedAt = stamp;
+    final before = c.contentVersion;
+    c.openNote(other);
+    expect(c.note, same(other));
+    expect(other.updatedAt, stamp);
+    expect(c.contentVersion, greaterThan(before), reason: 'repinta');
+    expect(c.pageIndex, 0);
   });
 }

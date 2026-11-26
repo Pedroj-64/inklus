@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
 
@@ -2169,6 +2171,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuTwoFingerUndo => 'Undo with a two-finger tap';
 
   @override
+  String get menuStrictPalm => 'Ignore fingers while the pen is near';
+
+  @override
   String get popEraserAutoRevert => 'Return to the previous tool after erasing';
 
   @override
@@ -2177,4 +2182,184 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tplHalfLetter => 'Half Letter';
+
+  @override
+  String get strokeCurve => 'Pen sensitivity';
+
+  @override
+  String get strokeCurveDesc =>
+      'Left: press harder · Right: more ink with a light touch';
+
+  @override
+  String get toolTape => 'Study tape';
+
+  @override
+  String get tapeHint =>
+      'Cover an answer with tape; tap it to reveal or hide it again';
+
+  @override
+  String get pgRename => 'Set title';
+
+  @override
+  String get pgIndex => 'Contents';
+
+  @override
+  String get pgIndexEmpty =>
+      'Bookmark pages or give them a title to see them here';
+
+  @override
+  String get selLink => 'Link to page';
+
+  @override
+  String selLinkTitle(int count) {
+    return 'Which page does it go to? (1–$count)';
+  }
+
+  @override
+  String get selLinkHint =>
+      'Leave empty to remove the link. Tap it with a finger to jump.';
+
+  @override
+  String get audioRecord => 'Record audio';
+
+  @override
+  String get audioStop => 'Stop recording';
+
+  @override
+  String get audioTitle => 'Recordings';
+
+  @override
+  String get audioHint =>
+      'While playing, your writing appears in step with the audio; tap a stroke with your finger to hear that moment';
+
+  @override
+  String get audioRecordNew => 'New recording';
+
+  @override
+  String audioItem(int n) {
+    return 'Recording $n';
+  }
+
+  @override
+  String get audioDeleteTitle => 'Delete the recording?';
+
+  @override
+  String get audioDeleteBody =>
+      'The audio will be deleted. Your writing stays as it is.';
+
+  @override
+  String get audioPlay => 'Play';
+
+  @override
+  String get audioPause => 'Pause';
+
+  @override
+  String get errMicPermission =>
+      'Inklus needs permission to use the microphone';
+
+  @override
+  String get cardCreate => 'Study card';
+
+  @override
+  String get cardSetBack => 'Use as answer';
+
+  @override
+  String get cardAskBack =>
+      'The selection is the question. Is the answer somewhere else?';
+
+  @override
+  String get cardNoBack => 'No, save as is';
+
+  @override
+  String get cardPickBack => 'Pick answer';
+
+  @override
+  String get cardPickBackHint =>
+      'Select the answer with the lasso and tap “Use as answer”';
+
+  @override
+  String get cardCreated => 'Card created: review it in ⋮ → Note → Study';
+
+  @override
+  String menuStudy(int n) {
+    return 'Study cards ($n due)';
+  }
+
+  @override
+  String get studyTitle => 'Study';
+
+  @override
+  String studyProgress(int done, int left) {
+    return '$done reviewed · $left left';
+  }
+
+  @override
+  String get studyShow => 'Show answer';
+
+  @override
+  String get studyAgain => 'Again';
+
+  @override
+  String get studyGood => 'Good';
+
+  @override
+  String get studyEasy => 'Easy';
+
+  @override
+  String get studyDelete => 'Delete card';
+
+  @override
+  String get studyDeleteTitle => 'Delete the card?';
+
+  @override
+  String get studyDeleteBody =>
+      'The page doesn\'t change; only the card is removed.';
+
+  @override
+  String get studyDoneTitle => 'All caught up!';
+
+  @override
+  String get studyDoneBody => 'No cards due right now. Come back later.';
+
+  @override
+  String get studyNoCards =>
+      'Select something with the lasso and tap “Study card” to create your first one.';
+
+  @override
+  String updateAvailable(String version) {
+    return 'Inklus $version is available';
+  }
+
+  @override
+  String get updateDownload => 'Download';
+
+  @override
+  String get updateBody =>
+      'The installer will download from GitHub. It installs over the current version without losing your notes.';
+
+  @override
+  String updateNone(String version) {
+    return 'You have the latest version ($version)';
+  }
+
+  @override
+  String get updateAutoTitle => 'Notify me of new versions';
+
+  @override
+  String get updateAutoSubtitle =>
+      'Checks GitHub once a day (only the published version; no data is sent)';
+
+  @override
+  String get updateCheckNow => 'Check for updates now';
+
+  @override
+  String get tabOpen => 'Open in tab';
+
+  @override
+  String get tabClose => 'Close tab';
+
+  @override
+  String tabLimit(int n) {
+    return 'At most $n tabs: close one first';
+  }
 }

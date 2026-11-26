@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../services/update_service.dart';
 
 import '../constants.dart';
 import '../models/note.dart';
@@ -134,6 +136,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Inklus $kAppVersion',
                   subtitle: context.l10n.settingsAppTagline,
                 ),
+                if (UpdateService.available) ...[
+                  FutureBuilder<bool>(
+                    future: UpdateService.isEnabled(),
+                    builder: (context, snap) => SwitchListTile(
+                      secondary: const IconBadge(icon: Icons.system_update_outlined),
+                      title: Text(context.l10n.updateAutoTitle),
+                      subtitle: Text(context.l10n.updateAutoSubtitle),
+                      value: snap.data ?? true,
+                      onChanged: (v) async {
+                        await UpdateService.setEnabled(v);
+                        setState(() {});
+                      },
+                    ),
+                  ),
+                  SettingsTile(
+                    icon: Icons.refresh,
+                    title: context.l10n.updateCheckNow,
+                    onTap: _busy ? null : _checkUpdatesNow,
+                  ),
+                ],
                 SettingsTile(
                   icon: Icons.favorite_outline,
                   accent: context.inklus.danger,
@@ -238,11 +260,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         valueListenable: ThemeModeController.mode,
         builder: (context, mode, _) => Padding(
           padding: const EdgeInsets.all(Spacing.lg),
-          child: Row(
+          // Wrap: con texto grande el selector baja a otra línea en vez de salirse.
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: Spacing.lg,
+            runSpacing: Spacing.md,
             children: [
-              IconBadge(icon: context.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined),
-              const SizedBox(width: Spacing.lg),
-              Expanded(child: Text(context.l10n.settingsTheme, style: context.text.titleMedium)),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconBadge(icon: context.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined),
+                  const SizedBox(width: Spacing.lg),
+                  Text(context.l10n.settingsTheme, style: context.text.titleMedium),
+                ],
+              ),
               SegmentedButton<ThemeMode>(
                 showSelectedIcon: false,
                 segments: [
@@ -422,6 +454,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
         if (saved != null) _snack(l10n.backupSaved);
       });
+
+  Future<void> _checkUpdatesNow() async {
+    final l10n = context.l10n;
+    setState(() => _busy = true);
+    final info = await UpdateService.check(force: true);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (info == null) {
+      _snack(l10n.updateNone(kAppVersion));
+      return;
+    }
+    final go = await showConfirmDialog(
+      context,
+      title: l10n.updateAvailable(info.version),
+      message: l10n.updateBody,
+      confirmLabel: l10n.updateDownload,
+    );
+    if (go) await _open(info.downloadUrl);
+  }
 
   Future<void> _open(String url) async {
     final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);

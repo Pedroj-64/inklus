@@ -2,7 +2,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'theme/inklus_colors.dart';
 
@@ -239,8 +239,6 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
   Future<void> _pickImages() async {
     final files = await FilePicker.pickFiles(
       type: FileType.image,
-      // ignore: deprecated_member_use (multi-selección requiere allowMultiple)
-      allowMultiple: true,
     );
     if (files.isEmpty || !mounted) return;
     final service = ImageService();
@@ -270,6 +268,7 @@ class _CreateNotebookScreenState extends State<CreateNotebookScreen> {
         ),
         centerTitle: false,
         leading: IconButton(
+          tooltip: context.l10n.commonClose,
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
         ),

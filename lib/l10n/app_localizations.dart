@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -3776,6 +3777,12 @@ abstract class AppLocalizations {
   /// **'Deshacer con toque de dos dedos'**
   String get menuTwoFingerUndo;
 
+  /// No description provided for @menuStrictPalm.
+  ///
+  /// In es, this message translates to:
+  /// **'Ignorar el dedo con el lápiz cerca'**
+  String get menuStrictPalm;
+
   /// No description provided for @popEraserAutoRevert.
   ///
   /// In es, this message translates to:
@@ -3793,6 +3800,312 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Media carta'**
   String get tplHalfLetter;
+
+  /// No description provided for @strokeCurve.
+  ///
+  /// In es, this message translates to:
+  /// **'Sensibilidad del lápiz'**
+  String get strokeCurve;
+
+  /// No description provided for @strokeCurveDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Izquierda: hay que apretar más · Derecha: más tinta con poca presión'**
+  String get strokeCurveDesc;
+
+  /// No description provided for @toolTape.
+  ///
+  /// In es, this message translates to:
+  /// **'Cinta para estudiar'**
+  String get toolTape;
+
+  /// No description provided for @tapeHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Cubre una respuesta con la cinta; tócala para destaparla o taparla'**
+  String get tapeHint;
+
+  /// No description provided for @pgRename.
+  ///
+  /// In es, this message translates to:
+  /// **'Poner título'**
+  String get pgRename;
+
+  /// No description provided for @pgIndex.
+  ///
+  /// In es, this message translates to:
+  /// **'Índice'**
+  String get pgIndex;
+
+  /// No description provided for @pgIndexEmpty.
+  ///
+  /// In es, this message translates to:
+  /// **'Marca páginas o ponles título para verlas aquí'**
+  String get pgIndexEmpty;
+
+  /// No description provided for @selLink.
+  ///
+  /// In es, this message translates to:
+  /// **'Enlazar a página'**
+  String get selLink;
+
+  /// No description provided for @selLinkTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'¿A qué página lleva? (1–{count})'**
+  String selLinkTitle(int count);
+
+  /// No description provided for @selLinkHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Déjalo vacío para quitar el enlace. Tócalo con el dedo para saltar.'**
+  String get selLinkHint;
+
+  /// No description provided for @audioRecord.
+  ///
+  /// In es, this message translates to:
+  /// **'Grabar audio'**
+  String get audioRecord;
+
+  /// No description provided for @audioStop.
+  ///
+  /// In es, this message translates to:
+  /// **'Detener grabación'**
+  String get audioStop;
+
+  /// No description provided for @audioTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Grabaciones'**
+  String get audioTitle;
+
+  /// No description provided for @audioHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Al reproducir, la escritura aparece al ritmo del audio; toca un trazo con el dedo para oír ese momento'**
+  String get audioHint;
+
+  /// No description provided for @audioRecordNew.
+  ///
+  /// In es, this message translates to:
+  /// **'Nueva grabación'**
+  String get audioRecordNew;
+
+  /// No description provided for @audioItem.
+  ///
+  /// In es, this message translates to:
+  /// **'Grabación {n}'**
+  String audioItem(int n);
+
+  /// No description provided for @audioDeleteTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'¿Eliminar la grabación?'**
+  String get audioDeleteTitle;
+
+  /// No description provided for @audioDeleteBody.
+  ///
+  /// In es, this message translates to:
+  /// **'Se borrará el audio. La escritura se queda tal cual.'**
+  String get audioDeleteBody;
+
+  /// No description provided for @audioPlay.
+  ///
+  /// In es, this message translates to:
+  /// **'Reproducir'**
+  String get audioPlay;
+
+  /// No description provided for @audioPause.
+  ///
+  /// In es, this message translates to:
+  /// **'Pausa'**
+  String get audioPause;
+
+  /// No description provided for @errMicPermission.
+  ///
+  /// In es, this message translates to:
+  /// **'Inklus necesita permiso para usar el micrófono'**
+  String get errMicPermission;
+
+  /// No description provided for @cardCreate.
+  ///
+  /// In es, this message translates to:
+  /// **'Tarjeta de estudio'**
+  String get cardCreate;
+
+  /// No description provided for @cardSetBack.
+  ///
+  /// In es, this message translates to:
+  /// **'Usar como respuesta'**
+  String get cardSetBack;
+
+  /// No description provided for @cardAskBack.
+  ///
+  /// In es, this message translates to:
+  /// **'Lo seleccionado es la pregunta. ¿La respuesta está en otra zona?'**
+  String get cardAskBack;
+
+  /// No description provided for @cardNoBack.
+  ///
+  /// In es, this message translates to:
+  /// **'No, guardar así'**
+  String get cardNoBack;
+
+  /// No description provided for @cardPickBack.
+  ///
+  /// In es, this message translates to:
+  /// **'Elegir respuesta'**
+  String get cardPickBack;
+
+  /// No description provided for @cardPickBackHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Selecciona la respuesta con el lazo y pulsa «Usar como respuesta»'**
+  String get cardPickBackHint;
+
+  /// No description provided for @cardCreated.
+  ///
+  /// In es, this message translates to:
+  /// **'Tarjeta creada: repásala en ⋮ → Nota → Estudiar'**
+  String get cardCreated;
+
+  /// No description provided for @menuStudy.
+  ///
+  /// In es, this message translates to:
+  /// **'Estudiar tarjetas ({n} pendientes)'**
+  String menuStudy(int n);
+
+  /// No description provided for @studyTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Estudiar'**
+  String get studyTitle;
+
+  /// No description provided for @studyProgress.
+  ///
+  /// In es, this message translates to:
+  /// **'{done} repasadas · {left} por repasar'**
+  String studyProgress(int done, int left);
+
+  /// No description provided for @studyShow.
+  ///
+  /// In es, this message translates to:
+  /// **'Mostrar respuesta'**
+  String get studyShow;
+
+  /// No description provided for @studyAgain.
+  ///
+  /// In es, this message translates to:
+  /// **'Otra vez'**
+  String get studyAgain;
+
+  /// No description provided for @studyGood.
+  ///
+  /// In es, this message translates to:
+  /// **'Bien'**
+  String get studyGood;
+
+  /// No description provided for @studyEasy.
+  ///
+  /// In es, this message translates to:
+  /// **'Fácil'**
+  String get studyEasy;
+
+  /// No description provided for @studyDelete.
+  ///
+  /// In es, this message translates to:
+  /// **'Eliminar tarjeta'**
+  String get studyDelete;
+
+  /// No description provided for @studyDeleteTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'¿Eliminar la tarjeta?'**
+  String get studyDeleteTitle;
+
+  /// No description provided for @studyDeleteBody.
+  ///
+  /// In es, this message translates to:
+  /// **'La página no cambia; solo se quita la tarjeta.'**
+  String get studyDeleteBody;
+
+  /// No description provided for @studyDoneTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'¡Al día!'**
+  String get studyDoneTitle;
+
+  /// No description provided for @studyDoneBody.
+  ///
+  /// In es, this message translates to:
+  /// **'No hay tarjetas pendientes por ahora. Vuelve más tarde.'**
+  String get studyDoneBody;
+
+  /// No description provided for @studyNoCards.
+  ///
+  /// In es, this message translates to:
+  /// **'Selecciona algo con el lazo y pulsa «Tarjeta de estudio» para crear la primera.'**
+  String get studyNoCards;
+
+  /// No description provided for @updateAvailable.
+  ///
+  /// In es, this message translates to:
+  /// **'Inklus {version} disponible'**
+  String updateAvailable(String version);
+
+  /// No description provided for @updateDownload.
+  ///
+  /// In es, this message translates to:
+  /// **'Descargar'**
+  String get updateDownload;
+
+  /// No description provided for @updateBody.
+  ///
+  /// In es, this message translates to:
+  /// **'Se descargará el instalador desde GitHub. Se instala encima de la versión actual sin perder tus notas.'**
+  String get updateBody;
+
+  /// No description provided for @updateNone.
+  ///
+  /// In es, this message translates to:
+  /// **'Tienes la última versión ({version})'**
+  String updateNone(String version);
+
+  /// No description provided for @updateAutoTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Avisar de nuevas versiones'**
+  String get updateAutoTitle;
+
+  /// No description provided for @updateAutoSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Una vez al día consulta GitHub (solo la versión publicada; no se envían datos)'**
+  String get updateAutoSubtitle;
+
+  /// No description provided for @updateCheckNow.
+  ///
+  /// In es, this message translates to:
+  /// **'Buscar actualizaciones ahora'**
+  String get updateCheckNow;
+
+  /// No description provided for @tabOpen.
+  ///
+  /// In es, this message translates to:
+  /// **'Abrir en pestaña'**
+  String get tabOpen;
+
+  /// No description provided for @tabClose.
+  ///
+  /// In es, this message translates to:
+  /// **'Cerrar pestaña'**
+  String get tabClose;
+
+  /// No description provided for @tabLimit.
+  ///
+  /// In es, this message translates to:
+  /// **'Como máximo {n} pestañas: cierra alguna primero'**
+  String tabLimit(int n);
 }
 
 class _AppLocalizationsDelegate

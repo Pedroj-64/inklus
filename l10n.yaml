@@ -6,3 +6,6 @@ template-arb-file: app_es.arb
 output-localization-file: app_localizations.dart
 output-class: AppLocalizations
 nullable-getter: false
+# Flutter 3.50 marca flutter_localizations como obsoleto (pasa a material_ui),
+# pero gen-l10n aún lo genera: se silencia solo en el código generado.
+header: "// ignore_for_file: deprecated_member_use"

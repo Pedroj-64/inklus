@@ -14,7 +14,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart' hide Page;
+import 'package:material_ui/material_ui.dart' hide Page;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inklus/models/page.dart';
@@ -137,7 +137,7 @@ void main() {
         ));
       }
       await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: _shotLocale,
         debugShowCheckedModeBanner: false,
@@ -163,7 +163,7 @@ void main() {
       final c = CanvasController(StorageService.instance)..setHapticEnabled(false);
       c.setTemplate(const PageTemplate(type: TemplateType.sheet));
       await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: _shotLocale,
         debugShowCheckedModeBanner: false,
@@ -188,7 +188,7 @@ void main() {
       storage: StorageService.instance,
     );
     await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: _shotLocale,
       debugShowCheckedModeBanner: false,
@@ -204,7 +204,7 @@ void main() {
     tester.view.physicalSize = const Size(2560, 1600);
     tester.view.devicePixelRatio = 2;
     await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: _shotLocale,
       debugShowCheckedModeBanner: false,
@@ -281,7 +281,7 @@ void main() {
       pages: [sheet('A', 300), sheet('B', -780)],
     );
     await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: _shotLocale,
       debugShowCheckedModeBanner: false,

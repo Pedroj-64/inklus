@@ -5,7 +5,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -32,6 +32,10 @@ import '../services/search_service.dart';
 import '../services/version_history_service.dart';
 import '../logic/pen_presets.dart';
 import 'canvas/drawing_canvas.dart';
+import 'editor/audio_controls.dart';
+import 'study_screen.dart';
+import 'widgets/notebook_covers.dart' show displayTitle;
+import 'widgets/page_scaffold.dart' show SheetHeader;
 import 'editor/version_history_sheet.dart';
 import 'editor/editor_toolbar.dart';
 import 'editor/pages_panel.dart';
@@ -115,6 +119,70 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   DateTime? _sessionStart;
   /// `updatedAt` al abrir (el Note se muta en sitio: hay que copiarlo ya).
   late final DateTime _openedAt;
+
+  /// Notas abiertas en pestañas (del mismo cuaderno). La activa es `_c.note`.
+  late final List<Note> _tabs = [widget.note];
+  static const _maxTabs = 8;
+
+  Future<void> _switchTab(Note note) async {
+    if (identical(note, _c.note)) return;
+    await finishRecording(_c);
+    await _c.flush();
+    unawaited(_search.indexNote(widget.notebookId, _c.note));
+    if (!mounted) return;
+    setState(() => _c.openNote(note));
+    unawaited(_search.indexNote(widget.notebookId, note));
+  }
+
+  Future<void> _closeTab(Note note) async {
+    final i = _tabs.indexWhere((t) => identical(t, note));
+    if (i < 0 || _tabs.length == 1) return;
+    if (identical(note, _c.note)) await _switchTab(_tabs[i == 0 ? 1 : i - 1]);
+    if (mounted) setState(() => _tabs.removeAt(i));
+  }
+
+  /// Elige otra nota del cuaderno y la abre en una pestaña.
+  Future<void> _openInTab() async {
+    await _c.flush();
+    final nb = await _storage.loadNotebook(widget.notebookId);
+    if (nb == null || !mounted) return;
+    final picked = await showModalBottomSheet<Note>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SheetHeader(icon: Icons.tab_outlined, title: sheet.l10n.tabOpen),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final n in nb.notes)
+                    ListTile(
+                      leading: Icon(_tabs.any((t) => t.id == n.id) ? Icons.tab : Icons.description_outlined),
+                      title: Text(displayTitle(sheet.l10n, n.title)),
+                      subtitle: Text(sheet.l10n.pgPagesCount(n.pages.length)),
+                      onTap: () => Navigator.pop(sheet, n),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    // Si ya está abierta se reutiliza esa instancia (tiene lo último en memoria).
+    final open = _tabs.where((t) => t.id == picked.id).firstOrNull;
+    if (open != null) return _switchTab(open);
+    if (_tabs.length >= _maxTabs) {
+      _snack(context.l10n.tabLimit(_maxTabs));
+      return;
+    }
+    setState(() => _tabs.add(picked));
+    await _switchTab(picked);
+  }
 
   @override
   void initState() {
@@ -227,8 +295,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final files = await FilePicker.pickFiles(
         type: FileType.image,
-        // ignore: deprecated_member_use (multi-selección requiere allowMultiple)
-        allowMultiple: true,
       );
       for (final f in files) {
         final path = f.path;
@@ -928,6 +994,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _createReminder();
       case 'stats':
         _openStats();
+      case 'openTab':
+        _openInTab();
+      case 'study':
+        Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => StudyScreen(controller: _c, imageService: _imageService),
+        ));
       case 'searchContent':
         _searchContent();
       case 'indexInk':
@@ -1253,6 +1325,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     onToggleLayers: () =>
                         setState(() => _layersSidebarOpen = !_layersSidebarOpen),
                     trailing: [
+                      AudioButton(controller: controller),
                       _buildCloudButton(),
                       // El menú muestra estados (marcador, vibración): se
                       // reconstruye solo cuando cambian.
@@ -1262,6 +1335,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         builder: (context, _) => _buildMenuButton(),
                       ),
                     ],
+                  ),
+                if (!presentMode && _tabs.length > 1)
+                  _TabStrip(
+                    tabs: _tabs,
+                    active: controller.note,
+                    onSelect: _switchTab,
+                    onClose: _closeTab,
                   ),
                 Expanded(
                   child: Row(
@@ -1316,6 +1396,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 bottom: Spacing.lg,
                                 child: _ZoomPill(controller: controller),
                               ),
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: Spacing.lg + 56,
+                              child: Center(child: AudioReplayBar(controller: controller)),
+                            ),
                             if (!presentMode)
                               Positioned(
                                 left: 0,
@@ -1581,7 +1667,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             item('ocr', Icons.text_snippet_outlined,
                 OcrService.isSupported ? context.l10n.menuOcr : context.l10n.menuOcrUnsupported,
                 enabled: OcrService.isSupported),
+            item('openTab', Icons.tab_outlined, context.l10n.tabOpen),
             item('versions', Icons.history, context.l10n.menuVersions),
+            item('study', Icons.style_outlined,
+                context.l10n.menuStudy(_c.dueFlashcards(DateTime.now()))),
             item('reminder', Icons.alarm_add_outlined, context.l10n.menuReminder),
           ],
           child: Text(context.l10n.trashNote),
@@ -1603,6 +1692,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               value: _c.twoFingerUndo,
               onChanged: (v) => _c.setTwoFingerUndo(v ?? false),
               child: Text(context.l10n.menuTwoFingerUndo),
+            ),
+            CheckboxMenuButton(
+              value: _c.strictPalmRejection,
+              onChanged: (v) => _c.setStrictPalmRejection(v ?? false),
+              child: Text(context.l10n.menuStrictPalm),
             ),
           ],
           child: Text(context.l10n.menuView),
@@ -1633,6 +1727,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _goBack() async {
     if (_leaving) return;
     _leaving = true;
+    await finishRecording(_controller);
     await _controller.flush();
     unawaited(_search.indexNote(widget.notebookId, _controller.note));
     // Instantánea al salir si hubo cambios en esta sesión (respeta el
@@ -1758,9 +1853,14 @@ class _ZoomPill extends StatelessWidget {
               child: InkWell(
                 borderRadius: Radii.smAll,
                 onTap: () => controller.fitView(controller.viewportSize),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Spacing.xs, vertical: Spacing.sm),
-                  child: Text('$percent %', style: context.text.labelLarge),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: Spacing.xs),
+                      child: Text('$percent %', style: context.text.labelLarge),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1778,5 +1878,43 @@ class _ZoomPill extends StatelessWidget {
   Offset get _center => Offset(
         controller.viewportSize.width / 2,
         controller.viewportSize.height / 2,
+      );
+}
+
+/// Tira de pestañas (solo con más de una nota abierta).
+class _TabStrip extends StatelessWidget {
+  const _TabStrip({
+    required this.tabs,
+    required this.active,
+    required this.onSelect,
+    required this.onClose,
+  });
+
+  final List<Note> tabs;
+  final Note active;
+  final ValueChanged<Note> onSelect;
+  final ValueChanged<Note> onClose;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: Sizes.minTouch,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+          children: [
+            for (final t in tabs)
+              Padding(
+                padding: const EdgeInsets.only(right: Spacing.sm),
+                child: InputChip(
+                  selected: identical(t, active),
+                  showCheckmark: false,
+                  label: Text(displayTitle(context.l10n, t.title), maxLines: 1),
+                  onPressed: () => onSelect(t),
+                  onDeleted: () => onClose(t),
+                  deleteButtonTooltipMessage: context.l10n.tabClose,
+                ),
+              ),
+          ],
+        ),
       );
 }

@@ -1,0 +1,17 @@
+{
+  "id": "paleta-pastel",
+  "name": "Paleta Pastel",
+  "description": "Tonos suaves para apuntes bonitos y diagramas.",
+  "type": "palette",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "palette": [
+    "#F9A8D4",
+    "#A5B4FC",
+    "#86EFAC",
+    "#FDE68A",
+    "#FDBA74",
+    "#67E8F9"
+  ]
+}

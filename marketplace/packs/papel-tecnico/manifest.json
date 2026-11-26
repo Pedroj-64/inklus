@@ -1,0 +1,29 @@
+{
+  "id": "papel-tecnico",
+  "name": "Papel técnico",
+  "description": "Cuadrícula fina tipo milimetrado y agenda por columnas, en tonos suaves.",
+  "type": "template",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": [
+    "ingeniería"
+  ],
+  "templates": [
+    {
+      "name": "Milimetrado",
+      "params": {
+        "type": "grid",
+        "spacing": 12,
+        "lineColor": "#C8D8E8"
+      }
+    },
+    {
+      "name": "Agenda por columnas",
+      "params": {
+        "type": "planner",
+        "spacing": 44
+      }
+    }
+  ]
+}

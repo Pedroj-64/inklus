@@ -12,7 +12,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart' hide Page;
+import 'package:material_ui/material_ui.dart' hide Page;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inklus/models/image_item.dart';
 import 'package:inklus/models/note.dart';

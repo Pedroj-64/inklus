@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inklus/l10n/l10n.dart';
 import 'package:inklus/ui/create_notebook_screen.dart';
@@ -9,7 +9,7 @@ import 'package:inklus/ui/marketplace_screen.dart';
 void main() {
   Widget app(Locale locale, Widget home) => MaterialApp(
         locale: locale,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: home,
       );

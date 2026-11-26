@@ -167,7 +167,7 @@ lib/
 
 ## 🚀 Desarrollo
 
-Requiere **Flutter 3.47** (stable).
+Requiere **Flutter 3.50** (stable).
 
 ```bash
 flutter pub get

@@ -4,7 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart' hide Page;
+import 'package:material_ui/material_ui.dart' hide Page;
 import 'package:flutter/services.dart';
 
 import '../../constants.dart';
@@ -82,9 +82,13 @@ class CanvasPainter extends CustomPainter {
   /// abajo de la actual, desplazadas `dy` en el mundo.
   final List<({Page page, double dy})> neighbors;
 
+  /// Reproducción de audio en curso (ver `paintWorld(replayUntil:)`).
+  final int? replayUntil;
+
   CanvasPainter({
     required this.page,
     required this.contentVersion,
+    this.replayUntil,
     required this.sheetSize,
     required this.imageCache,
     this.imageCacheVersion = 0,
@@ -209,6 +213,7 @@ class CanvasPainter extends CustomPainter {
       isDark: isDark,
       viewScale: scale,
       paintDesk: desk,
+      replayUntil: replayUntil,
     );
     canvas.restore();
   }
@@ -231,6 +236,7 @@ class CanvasPainter extends CustomPainter {
   bool shouldRepaint(CanvasPainter oldDelegate) =>
       oldDelegate.page != page ||
       oldDelegate.contentVersion != contentVersion ||
+      oldDelegate.replayUntil != replayUntil ||
       oldDelegate.sheetSize != sheetSize ||
       oldDelegate.scale != scale ||
       oldDelegate.translate != translate ||
@@ -282,6 +288,46 @@ class ViewSnapshot {
 /// Pinta el trazo en progreso, el cursor del borrador y la selección de
 /// imágenes. Se repinta en cada frame sin invalidar la capa confirmada.
 /// ---------------------------------------------------------------------------
+/// Cursor del lápiz flotando: círculo del grosor de la pluma (o del
+/// borrador) bajo la punta, antes de tocar. Capa propia: no repinta el lienzo.
+class HoverCursorPainter extends CustomPainter {
+  HoverCursorPainter(this.hover, this.controller) : super(repaint: hover);
+
+  final ValueNotifier<({Offset pos, bool eraser})?> hover;
+  final CanvasController controller;
+
+  static const _inkTools = {
+    ToolType.pen, ToolType.pencil, ToolType.highlighter, ToolType.calligraphy,
+    ToolType.brush, ToolType.marker, ToolType.spray, ToolType.eraser, ToolType.tape,
+  };
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final h = hover.value;
+    if (h == null) return;
+    final eraser = h.eraser || controller.tool == ToolType.eraser;
+    if (!eraser && !_inkTools.contains(controller.tool)) return;
+    final r = max(2.0, (eraser ? controller.eraserRadius : controller.toolSize / 2) * controller.scale);
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = eraser ? const Color(0x99000000) : controller.color.withValues(alpha: 0.8);
+    if (!eraser) {
+      canvas.drawCircle(h.pos, r, Paint()..color = controller.color.withValues(alpha: 0.25));
+    }
+    canvas.drawCircle(h.pos, r, ring);
+    if (eraser) {
+      canvas.drawCircle(h.pos, r + 1.5, Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = const Color(0x99FFFFFF));
+    }
+  }
+
+  @override
+  bool shouldRepaint(HoverCursorPainter old) => false;
+}
+
 class ActiveLayerPainter extends CustomPainter {
   final CanvasController controller;
   final Map<String, ui.Image> imageCache;
@@ -314,6 +360,17 @@ class ActiveLayerPainter extends CustomPainter {
     // Trazo en progreso.
     if (active != null) {
       paintActiveStroke(canvas, active);
+    }
+
+    // Enlaces a otras páginas: subrayado discreto (solo en pantalla).
+    if (controller.page.links.isNotEmpty) {
+      final linkPaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5 / scale
+        ..color = const Color(0x661E88E5);
+      for (final l in controller.page.links) {
+        canvas.drawRRect(RRect.fromRectAndRadius(l.rect.inflate(4 / scale), Radius.circular(6 / scale)), linkPaint);
+      }
     }
 
     // Puntero láser: estela roja que se desvanece (no se guarda).
@@ -550,6 +607,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   @override
   void dispose() {
     _viewGesture.dispose();
+    _hover.dispose();
     _viewSnapshot.clear();
     super.dispose();
   }
@@ -603,6 +661,12 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   /// Desplazamiento total del gesto de mover selección en curso.
   Offset _strokeMoveDelta = Offset.zero;
 
+  /// Primer dedo apoyado (para reconocer un toque corto).
+  ({int pointer, Offset pos, DateTime at})? _tapStart;
+
+  /// Punta del lápiz flotando (coordenadas de la vista) y si borraría.
+  final _hover = ValueNotifier<({Offset pos, bool eraser})?>(null);
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -635,7 +699,10 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-          Listener(
+          MouseRegion(
+          opaque: false,
+          onExit: (_) => _hover.value = null,
+          child: Listener(
           behavior: HitTestBehavior.opaque,
           onPointerDown: _onPointerDown,
           onPointerHover: _onPointerHover,
@@ -668,6 +735,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                             neighbors: widget.controller.stackedNeighbors,
                             page: widget.controller.page,
                             contentVersion: widget.controller.contentVersion,
+                            replayUntil: widget.controller.replayUntil,
                             sheetSize: widget.controller.sheetSize,
                             imageCache: widget.imageService.cache,
                             imageCacheVersion: widget.imageService.cache.version,
@@ -695,6 +763,13 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
             ),    // ClipRect
           ),      // GestureDetector
           ),      // Listener
+          ),      // MouseRegion
+              IgnorePointer(
+                child: CustomPaint(
+                  size: Size.infinite,
+                  painter: HoverCursorPainter(_hover, widget.controller),
+                ),
+              ),
               ClipRect(child: TextEditOverlay(controller: widget.controller)),
             ],
           ),      // Stack
@@ -740,7 +815,11 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   void _onPointerHover(PointerHoverEvent event) {
     // S-Pen / Apple Pencil reportan hover a ~1 cm de la pantalla: sabemos que
     // el lápiz viene ANTES de que la palma se apoye.
-    if (PalmRejection.isStylusKind(event.kind)) _palm.stylusHoverEvent();
+    if (!PalmRejection.isStylusKind(event.kind)) return;
+    _palm.stylusHoverEvent();
+    final eraser = event.kind == PointerDeviceKind.invertedStylus ||
+        (event.buttons & (kPrimaryStylusButton | kSecondaryStylusButton)) != 0;
+    _hover.value = (pos: event.localPosition, eraser: eraser);
   }
 
   // Escritorio: rueda (desplaza; con Ctrl hace zoom), gesto del trackpad y
@@ -771,6 +850,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
   void _onPointerDown(PointerDownEvent event) {
+    _hover.value = null;
     final kind = event.kind;
     final c = widget.controller;
     if (kind == PointerDeviceKind.mouse && (event.buttons & kMiddleMouseButton) != 0) {
@@ -795,12 +875,13 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
               // Algunos lápices (p. ej. el de la Lenovo) reportan el botón
               // lateral como primario y otras veces como secundario.
               (event.buttons & (kPrimaryStylusButton | kSecondaryStylusButton)) != 0);
+      final pressure = PalmRejection.isStylusKind(kind) ? c.curvePressure(event.pressure) : event.pressure;
       if (eraserButton) {
-        c.beginStroke(world, event.pressure, tool: ToolType.eraser);
+        c.beginStroke(world, pressure, tool: ToolType.eraser);
       } else if (c.tool == ToolType.select) {
         _handleSelectDown(event.localPosition, world, event.pointer);
       } else {
-        c.beginStroke(world, event.pressure, tool: c.tool);
+        c.beginStroke(world, pressure, tool: c.tool);
       }
       return;
     }
@@ -809,7 +890,15 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
 
     // Rechazo de palma: lápiz apoyado / cerca / recién levantado, o
     // contacto demasiado grande → el toque se ignora por completo.
-    if (_palm.rejectTouch(radiusMajor: event.radiusMajor)) {
+    // El hover solo bloquea si el dedo puede escribir/editar; si solo
+    // navega (modo solo lápiz), desplazar y hacer zoom siguen funcionando
+    // con el lápiz flotando (#11), salvo que se pida el modo estricto.
+    final fingerEdits = c.fingerDrawingEnabled ||
+        c.tool == ToolType.select ||
+        c.tool == ToolType.text;
+    if (_palm.rejectTouch(
+        radiusMajor: event.radiusMajor,
+        hoverBlocks: fingerEdits || c.strictPalmRejection)) {
       _rejectedPointers.add(event.pointer);
       return;
     }
@@ -820,6 +909,9 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       return;
     }
     _touchPointers.add(event.pointer);
+    _tapStart = _touchPointers.length == 1
+        ? (pointer: event.pointer, pos: event.localPosition, at: DateTime.now())
+        : null;
     if (_touchPointers.length == 2) {
       _twoFingerStartTime = DateTime.now();
       _twoFingerMoved = false;
@@ -890,7 +982,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       event.localPosition,
       _viewport,
     );
-    widget.controller.addStrokePoint(world, event.pressure);
+    widget.controller.addStrokePoint(world,
+        PalmRejection.isStylusKind(event.kind) ? widget.controller.curvePressure(event.pressure) : event.pressure);
   }
 
   void _onPointerUp(PointerUpEvent event) {
@@ -904,6 +997,20 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       return;
     }
     final wasTouch = _touchPointers.remove(event.pointer);
+
+    // Toque corto de un dedo que solo navega: destapa/tapa una cinta.
+    final tap = _tapStart;
+    if (wasTouch && tap != null && tap.pointer == event.pointer) {
+      _tapStart = null;
+      final c = widget.controller;
+      if (_touchPointers.isEmpty &&
+          !c.fingerDrawingEnabled &&
+          (event.localPosition - tap.pos).distance < 12 &&
+          DateTime.now().difference(tap.at) < const Duration(milliseconds: 300)) {
+        final w = c.viewportToWorld(event.localPosition, _viewport);
+        if (!(c.onCanvasTap?.call(w) ?? false) && !c.toggleTapeAt(w)) c.followLinkAt(w);
+      }
+    }
 
     // ---- Atajo: toque rápido con dos dedos = deshacer ----
     if (wasTouch && _touchPointers.isEmpty && _twoFingerStartTime != null) {

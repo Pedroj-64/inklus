@@ -1,6 +1,6 @@
 # 🏗️ Arquitectura de Inklus
 
-Guía técnica para quien vaya a contribuir. Inklus es una app de escritura a mano para tablets con stylus (tipo GoodNotes), **Flutter 3.47 / Dart 3.13**, Material 3, UI y comentarios en **español**. Targets: **Android** (principal) + **Linux desktop** (desarrollo).
+Guía técnica para quien vaya a contribuir. Inklus es una app de escritura a mano para tablets con stylus (tipo GoodNotes), **Flutter 3.50 / Dart 3.13**, Material 3, UI y comentarios en **español**. Targets: **Android** (principal) + **Linux desktop** (desarrollo).
 
 > Cómo contribuir: [`CONTRIBUTING.md`](../CONTRIBUTING.md) · Sistema de diseño: [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) · Traducir: [`TRANSLATING.md`](TRANSLATING.md) · Publicar versiones: [`RELEASING.md`](RELEASING.md) · Próximos pasos: [`ROADMAP.md`](../ROADMAP.md)
 
@@ -64,6 +64,10 @@ services/
   import_service.dart      importación única: detecta por CONTENIDO .inklus v1/v2 o respaldo
                              completo (acepta .inklus.zip renombrados por Android)
   template_library_service.dart  "Mis plantillas" (imágenes propias)
+  audio_service.dart       grabar/reproducir audio de notas (singleton; AAC en Android, WAV en Linux);
+                             archivos en AppPaths.audio(noteId), rutas absolutas en Note.recordings
+  update_service.dart      aviso de nueva release de GitHub (1/día, apagable; INKLUS_NO_UPDATE_CHECK
+                             lo quita en builds de tienda); solo enlaces de github.com
 ui/
   theme/                   ★ app_theme.dart (ThemeData claro/oscuro), inklus_colors.dart
                              (ThemeExtension + context.inklus/colors/text/isDark), tokens.dart
@@ -102,7 +106,7 @@ Resumen en [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
 
 ### 1. Stylus y rechazo de palma — `drawing_canvas.dart` + `logic/palm_rejection.dart`
 - Un `Listener` **crudo** recibe TODOS los eventos (no participa en la gesture arena), incluido `onPointerHover` (el hover del lápiz marca "lápiz cerca").
-- `PalmRejection` (pura, testeada): un toque se descarta si hay lápiz apoyado, flotando cerca, levantado hace <400 ms, o si `radiusMajor` es grande. Al apoyar el lápiz, `_rejectPalmInProgress()` cancela el trazo/pan que estuviera haciendo un dedo.
+- `PalmRejection` (pura, testeada): un toque se descarta si hay lápiz apoyado, flotando cerca, levantado hace <400 ms, o si `radiusMajor` es grande. El hover **solo** bloquea si el dedo puede editar (dibujo con dedo, selección o texto) o con `strictPalmRejection`; en solo lápiz el dedo navega aunque el lápiz flote (#11: TCL T-Pen envía hover desde lejos y sin pausa). Al apoyar el lápiz, `_rejectPalmInProgress()` cancela el trazo/pan que estuviera haciendo un dedo.
 - El estado del lápiz se actualiza **al principio** de `_onPointerUp/_onPointerCancel` (antes de cualquier `return`): si no, se quedaba "apoyado" para siempre.
 - `invertedStylus` o `kSecondaryStylusButton` (botón del S-Pen) = borrador para ese trazo. **No** hay atajos destructivos con el lápiz.
 - `controller.onStylusDetected()`: la primera vez pasa a *solo lápiz* (`fingerDrawingEnabled=false`, persistido); entonces **un dedo desplaza** la página (`_oneFingerPans`) y dos dedos hacen zoom. El zoom es incremental (sin saltos al entrar/salir dedos).
@@ -176,7 +180,8 @@ Resumen en [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
 
 ## 🚨 Gotchas de versiones (ya resueltas, no revertir)
 
-- **file_picker 12**: API estática — `FilePicker.pickFiles()` → `List<PlatformFile>`, `FilePicker.pickFile()` → `PlatformFile?`, `FilePicker.saveFile({fileName, bytes})` → `Uri?`. **No existe** `FilePicker.platform`.
+- **file_picker 13**: API estática — `FilePicker.pickFiles()` → `List<PlatformFile>` (multi-selección por defecto; `allowMultiple`/`withData` ya no existen), `FilePicker.pickFile()` → `PlatformFile?`, `FilePicker.saveFile({fileName, bytes})` → `Uri?`. **No existe** `FilePicker.platform`.
+- **Flutter 3.50 / `material_ui`**: se importa `package:material_ui/material_ui.dart` (no `flutter/material.dart`). Delegados: **`kLocalizationsDelegates`** (`lib/l10n/l10n.dart`), nunca `AppLocalizations.localizationsDelegates` (gen-l10n genera los de `flutter_localizations`, que no sirven a `material_ui`: la app salía sin textos de Material). `l10n.yaml` silencia el aviso en el código generado. AGP ≥ 9.1.1.
 - **google_sign_in 7**: exige `GoogleSignIn.instance.initialize(serverClientId: <cliente web>)` **una vez y esperado** antes de cualquier otra llamada (si no: "serverClientId must be provided"). `GoogleSignIn.instance.authenticate({scopeHint})` / `attemptLightweightAuthentication()` (One Tap). `authentication` solo trae `idToken`; el access token se pide con `authorizationClient.authorizeScopes/authorizationForScopes`. `default_web_client_id` está **manualmente** en `android/app/src/main/res/values/strings.xml` (ya no lo genera google-services; no usar Firebase).
 - **googleapis 16 / `_discoveryapis_commons`**: `drive.DriveApi(client)` con `uploadMedia: commons.Media(Stream.value(bytes), len, contentType:)`; `files.update(File request, String fileId, ...)` (¡el request va primero!). googleapis_auth no exporta su `AuthenticatedClient` → usar `_BearerClient` propio sobre `http`.
 - **No Firebase**: la app no inicializa ni depende de Firebase (se eliminó). Si se reintroduce, `main.dart` debe llamar a `Firebase.initializeApp()` antes de tocar `FirebaseAuth.instance` (causa del crash al arrancar).
@@ -187,7 +192,7 @@ Resumen en [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
 
 ## Modelo de datos (JSON)
 
-`Notebook{id,title,noteIds[],color,coverStyle,coverImagePath,tags}` → `Note{id,title,createdAt,updatedAt,pages[]}` → `Page{id,name,template,strokes[],images[],textItems[],layers[]}` → `Stroke{id,tool,color,size,points[{x,y,p}],fillColor,layer,shape,th,sm,sl}` (`Document` = formato legacy, solo migración), `ImageItem{id,path,x,y,w,h,rotation,layer}`, `TextItem{id,x,y,w,text,fontSize,color,layer}`, `PageTemplate{type,lineColor,spacing,imagePath,infiniteFill,customW,customH}`, `Layer{name,visible,locked}`. Trazos e imágenes en **coordenadas de mundo**; las capas filtran visibilidad.
+`Notebook{id,title,noteIds[],color,coverStyle,coverImagePath,tags}` → `Note{id,title,createdAt,updatedAt,pages[],recordings[{id,path,startedAt,durationMs}],flashcards[{id,page,front,back,due,iv,ease,reps}]}` → `Page{id,name,template,strokes[],images[],textItems[],layers[],bookmarked,links[{x,y,w,h,to}]}` → `Stroke{id,tool,color,size,points[{x,y,p}],fillColor,layer,shape,th,sm,sl,ts}` (`ts` = instante si se grababa audio; `tool: tape` = cinta, `shape: tapeOpen` destapada), (`Document` = formato legacy, solo migración), `ImageItem{id,path,x,y,w,h,rotation,layer}`, `TextItem{id,x,y,w,text,fontSize,color,layer}`, `PageTemplate{type,lineColor,spacing,imagePath,infiniteFill,customW,customH}`, `Layer{name,visible,locked}`. Trazos e imágenes en **coordenadas de mundo**; las capas filtran visibilidad.
 
 ## Reglas de negocio
 

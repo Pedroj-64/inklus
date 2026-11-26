@@ -1,0 +1,36 @@
+{
+  "id": "papel-ingenieria",
+  "name": "Papel de ingeniería",
+  "description": "Cuadrícula de ingeniería, puntos isométricos, hexágonos y papel polar.",
+  "type": "template",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": [
+    "ingeniería",
+    "ciencia"
+  ],
+  "templates": [
+    {
+      "name": "Ingeniería",
+      "image": "packs/papel-ingenieria/ingenieria.png",
+      "infinite": false
+    },
+    {
+      "name": "Isométrico",
+      "image": "packs/papel-ingenieria/isometrico.png",
+      "infinite": false
+    },
+    {
+      "name": "Hexagonal",
+      "image": "packs/papel-ingenieria/hexagonal.png",
+      "infinite": false
+    },
+    {
+      "name": "Polar",
+      "image": "packs/papel-ingenieria/polar.png",
+      "infinite": false
+    }
+  ],
+  "preview": "packs/papel-ingenieria/preview.png"
+}

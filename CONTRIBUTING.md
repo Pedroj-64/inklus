@@ -14,7 +14,7 @@ flutter test integration_test -d linux # end-to-end flows
 flutter run -d linux                   # develop on desktop
 ```
 
-Flutter 3.47 / Dart 3.13. Before touching the canvas, read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (the "critical flows" section lists what must not break: stylus input and palm rejection, paint layers, undo/redo, export).
+Flutter 3.50 / Dart 3.13. Before touching the canvas, read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (the "critical flows" section lists what must not break: stylus input and palm rejection, paint layers, undo/redo, export).
 
 ## Ground rules
 

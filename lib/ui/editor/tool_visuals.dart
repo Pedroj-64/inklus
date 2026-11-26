@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/stroke.dart';
@@ -20,6 +20,7 @@ abstract final class ToolVisuals {
         ToolType.lasso => Icons.gesture,
         ToolType.bucket => Icons.format_color_fill,
         ToolType.text => Icons.text_fields,
+        ToolType.tape => Icons.view_day_outlined,
       };
 
   static String label(BuildContext context, ToolType tool) => switch (tool) {
@@ -35,6 +36,7 @@ abstract final class ToolVisuals {
         ToolType.lasso => context.l10n.toolLasso,
         ToolType.bucket => context.l10n.toolFill,
         ToolType.text => context.l10n.toolText,
+        ToolType.tape => context.l10n.toolTape,
       };
 
 

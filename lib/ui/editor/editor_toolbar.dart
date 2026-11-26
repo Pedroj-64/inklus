@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../constants.dart';
 import '../../logic/canvas_controller.dart';
@@ -12,6 +12,7 @@ import 'anchored_popover.dart';
 import 'tool_popovers.dart';
 import 'tool_visuals.dart';
 import '../../l10n/l10n.dart';
+import '../widgets/dialogs.dart';
 import '../widgets/notebook_covers.dart';
 
 /// Barra superior única del editor (sustituye al riel lateral y a la barra
@@ -61,7 +62,11 @@ class EditorToolbar extends StatelessWidget {
     final compact = width < Breakpoints.expanded;
     // Barra flotante y redondeada sobre el escritorio (no una franja pegada
     // al borde): deja respirar la hoja y se lee como una herramienta aparte.
-    return Padding(
+    // Texto del sistema muy grande: la barra lo acota (alto fijo de 48 dp);
+    // el lienzo y las demás pantallas siguen la escala completa.
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.3,
+      child: Padding(
       padding: const EdgeInsets.fromLTRB(
         Spacing.sm,
         Spacing.xs,
@@ -127,6 +132,7 @@ class EditorToolbar extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -257,6 +263,7 @@ class _MoreToolsButton extends StatelessWidget {
     final extraSelected =
         canvas.tool == ToolType.select ||
         canvas.tool == ToolType.bucket ||
+        canvas.tool == ToolType.tape ||
         canvas.laserMode ||
         canvas.magnifierEnabled;
     return MenuAnchor(
@@ -270,6 +277,14 @@ class _MoreToolsButton extends StatelessWidget {
           leadingIcon: Icon(ToolVisuals.icon(ToolType.bucket)),
           onPressed: () => canvas.setTool(ToolType.bucket),
           child: Text(context.l10n.tbFill),
+        ),
+        MenuItemButton(
+          leadingIcon: Icon(ToolVisuals.icon(ToolType.tape)),
+          onPressed: () {
+            canvas.setTool(ToolType.tape);
+            showSnack(context, context.l10n.tapeHint);
+          },
+          child: Text(context.l10n.toolTape),
         ),
         MenuItemButton(
           leadingIcon: Icon(
@@ -330,7 +345,11 @@ class _TitleButton extends StatelessWidget {
       child: ControllerSelector<CanvasController, (String, int, int)>(
         listenable: canvas,
         selector: (c) => (c.note.title, c.pageIndex, c.pageCount),
-        builder: (context, state) => Column(
+        // scaleDown: con texto grande, título y página siguen cabiendo en 48 dp.
+        builder: (context, state) => FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -345,6 +364,7 @@ class _TitleButton extends StatelessWidget {
               style: context.text.bodySmall,
             ),
           ],
+        ),
         ),
       ),
     ),

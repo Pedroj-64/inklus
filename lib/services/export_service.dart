@@ -2,7 +2,7 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart' hide Page;
+import 'package:material_ui/material_ui.dart' hide Page;
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;

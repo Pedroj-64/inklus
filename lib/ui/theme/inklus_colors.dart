@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Colores propios de Inklus que no existen en [ColorScheme] (papel,
 /// escritorio, selección de trazos…). Se leen con `context.inklus`.

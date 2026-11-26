@@ -1260,6 +1260,7 @@ class StorageService {
 
   /// Carpetas incluidas en el respaldo completo.
   static const _backupFolders = [
+    'audio',
     _notebooksFolder,
     _notesFolder,
     _documentsFolder,
@@ -1513,6 +1514,9 @@ class StorageService {
       final tplPath = page.template.imagePath;
       if (tplPath != null) referenced.add(tplPath);
     }
+    for (final r in note.recordings) {
+      referenced.add(r.path);
+    }
   }
 
   bool _collectingOrphans = false;
@@ -1529,22 +1533,24 @@ class StorageService {
     _collectingOrphans = true;
     try {
       final base = await _baseDir();
-      final imagesDir = Directory('${base.path}/images');
-      if (!await imagesDir.exists()) return;
-
       final referenced = await _collectReferencedImagePaths();
       final now = DateTime.now();
       var deleted = 0;
 
-      await for (final entity in imagesDir.list(recursive: true)) {
-        if (entity is! File) continue;
-        if (referenced.contains(entity.path)) continue;
-        try {
-          if (now.difference(await entity.lastModified()) < minAge) continue;
-          await entity.delete();
-          deleted++;
-        } catch (e) {
-          debugPrint('StorageService.collectOrphanedImages: ${entity.path}: $e');
+      // Imágenes y audios de notas (los audios se graban en `audio/<nota>/`).
+      for (final name in ['images', 'audio']) {
+        final dir = Directory('${base.path}/$name');
+        if (!await dir.exists()) continue;
+        await for (final entity in dir.list(recursive: true)) {
+          if (entity is! File) continue;
+          if (referenced.contains(entity.path)) continue;
+          try {
+            if (now.difference(await entity.lastModified()) < minAge) continue;
+            await entity.delete();
+            deleted++;
+          } catch (e) {
+            debugPrint('StorageService.collectOrphanedImages: ${entity.path}: $e');
+          }
         }
       }
 

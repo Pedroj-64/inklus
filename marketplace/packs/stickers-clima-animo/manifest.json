@@ -1,0 +1,30 @@
+{
+  "id": "stickers-clima-animo",
+  "name": "Clima y ánimo",
+  "description": "Tiempo del día y caritas para tu diario o registro de ánimo.",
+  "type": "stickers",
+  "author": "Inklus",
+  "license": "CC0-1.0",
+  "version": "1.0.0",
+  "tags": [
+    "diario",
+    "emociones"
+  ],
+  "stickers": [
+    "packs/stickers-clima-animo/sol.png",
+    "packs/stickers-clima-animo/nube.png",
+    "packs/stickers-clima-animo/sol-y-nubes.png",
+    "packs/stickers-clima-animo/lluvia.png",
+    "packs/stickers-clima-animo/nieve.png",
+    "packs/stickers-clima-animo/tormenta.png",
+    "packs/stickers-clima-animo/luna.png",
+    "packs/stickers-clima-animo/arcoiris.png",
+    "packs/stickers-clima-animo/feliz.png",
+    "packs/stickers-clima-animo/triste.png",
+    "packs/stickers-clima-animo/neutral.png",
+    "packs/stickers-clima-animo/sorpresa.png",
+    "packs/stickers-clima-animo/sueno.png",
+    "packs/stickers-clima-animo/enamorado.png"
+  ],
+  "preview": "packs/stickers-clima-animo/preview.png"
+}

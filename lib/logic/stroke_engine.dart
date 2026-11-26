@@ -100,6 +100,7 @@ class StrokeEngine {
           start: StrokeEndOptions.start(taperEnabled: true, customTaper: 0.3),
           end: StrokeEndOptions.end(taperEnabled: true, customTaper: 0.25),
         );
+      case ToolType.tape:
       case ToolType.eraser:
       case ToolType.select:
       case ToolType.lasso:
@@ -124,7 +125,9 @@ class StrokeEngine {
   static List<Offset> outlineFor(Stroke stroke) {
     final cached = _outlineCache[stroke];
     if (cached != null) return cached;
-    final outline = getStroke(
+    final outline = stroke.tool == ToolType.tape
+        ? tapeOutline(stroke.points, stroke.size)
+        : getStroke(
       _vectors(stroke.points),
       options: optionsForStroke(stroke),
     );
@@ -151,6 +154,7 @@ class StrokeEngine {
     double? smoothing,
     double? streamline,
   }) {
+    if (tool == ToolType.tape) return tapeOutline(points, size);
     return getStroke(
       _vectors(points),
       options: optionsFor(
@@ -162,6 +166,21 @@ class StrokeEngine {
       ),
     );
   }
+
+  /// Cinta: rectángulo recto de grosor [size] del primer al último punto.
+  static List<Offset> tapeOutline(List<StrokePoint> points, double size) {
+    if (points.isEmpty) return const [];
+    final a = points.first.offset, b = points.last.offset;
+    final d = b - a;
+    final len = d.distance;
+    final dir = len < 1e-6 ? const Offset(1, 0) : d / len;
+    final n = Offset(-dir.dy, dir.dx) * (size / 2);
+    final cap = dir * 2;
+    return [a - cap + n, b + cap + n, b + cap - n, a - cap - n];
+  }
+
+  /// Cinta destapada (se ve lo de debajo).
+  static bool isTapeOpen(Stroke s) => s.tool == ToolType.tape && s.shapeType == 'tapeOpen';
 
   static List<PointVector> _vectors(List<StrokePoint> points) => [
         for (final p in points) PointVector(p.x, p.y, p.pressure),
@@ -178,6 +197,9 @@ class StrokeEngine {
     }
     if (stroke.tool == ToolType.spray) {
       return stroke.color.withValues(alpha: 0.25);
+    }
+    if (stroke.tool == ToolType.tape) {
+      return stroke.color.withValues(alpha: isTapeOpen(stroke) ? 0.15 : 1);
     }
     return stroke.color;
   }

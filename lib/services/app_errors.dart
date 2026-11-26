@@ -7,7 +7,7 @@ import 'drive_sync_service.dart';
 ///
 /// Extiende [FormatException] para que los `on FormatException` y los tests
 /// existentes sigan funcionando.
-enum AppErrorCode { notInklus, notInklusFile, notInklusV2, catalogTooLarge, catalogVersion }
+enum AppErrorCode { notInklus, notInklusFile, notInklusV2, catalogTooLarge, catalogVersion, micPermission }
 
 class AppError extends FormatException {
   const AppError(this.code, [this.detail = '']) : super('');
@@ -24,6 +24,7 @@ class AppError extends FormatException {
         AppErrorCode.notInklusV2 => l10n.errNotInklusV2,
         AppErrorCode.catalogTooLarge => l10n.errCatalogTooLarge,
         AppErrorCode.catalogVersion => l10n.errCatalogVersion(detail),
+        AppErrorCode.micPermission => l10n.errMicPermission,
       };
 }
 

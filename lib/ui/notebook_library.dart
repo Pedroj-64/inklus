@@ -5,7 +5,7 @@ import '../models/page.dart' as models;
 
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../services/drive_sync_service.dart';
@@ -34,6 +34,8 @@ import 'widgets/inklus_logo.dart';
 import 'marketplace_screen.dart';
 import '../l10n/l10n.dart';
 import '../services/app_errors.dart';
+import '../services/update_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/text_layout.dart';
 
 /// Archivos `.inklus` recibidos como argumento al arrancar (escritorio).
@@ -123,6 +125,24 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
     }
   }
 
+  /// Aviso de versión nueva (como mucho una vez al día; apagable en Configuración).
+  Future<void> _checkUpdates() async {
+    final info = await UpdateService.check();
+    if (info == null || !mounted) return;
+    showSnack(
+      context,
+      context.l10n.updateAvailable(info.version),
+      duration: const Duration(seconds: 12),
+      action: SnackBarAction(
+        label: context.l10n.updateDownload,
+        onPressed: () {
+          UpdateService.dismiss(info.version);
+          launchUrl(Uri.parse(info.downloadUrl), mode: LaunchMode.externalApplication);
+        },
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -130,6 +150,7 @@ class _NotebookLibraryScreenState extends State<NotebookLibraryScreen> {
     _loadViewPref();
     // Restaura la sesión de Google (silenciosa).
     DriveSyncService.instance.restoreSession();
+    _checkUpdates();
     // Archivos .inklus abiertos desde fuera (Drive, Archivos…), Android.
     // Escritorio: archivos pasados como argumento (doble clic / «Abrir con»).
     for (final f in launchFiles) {
@@ -889,9 +910,14 @@ class _Brand extends StatelessWidget {
     children: [
       const InklusLogo(size: 32),
       const SizedBox(width: Spacing.md),
-      Text(
-        'Inklus',
-        style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+      Flexible(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            'Inklus',
+            style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
       ),
     ],
   );

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart' hide Page;
+import 'package:material_ui/material_ui.dart' hide Page;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inklus/models/page.dart';
 import 'package:inklus/models/stroke.dart';

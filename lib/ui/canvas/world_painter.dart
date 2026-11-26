@@ -2,7 +2,7 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart' hide Page;
+import 'package:material_ui/material_ui.dart' hide Page;
 
 import '../../constants.dart';
 import '../../logic/stroke_engine.dart';
@@ -44,6 +44,7 @@ void paintWorld(
   bool omitImages = false,
   bool isDark = false,
   bool paintDesk = true,
+  int? replayUntil,
 }) {
   final template = page.template;
 
@@ -198,8 +199,15 @@ void paintWorld(
     }
   }
 
+  // Reproducción del audio: lo escrito después del instante actual va en
+  // una pasada tenue aparte (encima; el orden exacto no importa ahí).
+  final ahead = <Stroke>[];
   for (final stroke in page.strokes) {
     if (!visibleWorldRect.overlaps(stroke.paintBounds)) continue;
+    if (replayUntil != null && (stroke.ts ?? 0) > replayUntil) {
+      ahead.add(stroke);
+      continue;
+    }
     if (!layers.enter(stroke.layerIndex)) continue;
     paintStroke(canvas, stroke);
   }
@@ -209,6 +217,16 @@ void paintWorld(
     _paintTextItem(canvas, item);
   }
   layers.close();
+
+  if (ahead.isNotEmpty) {
+    canvas.saveLayer(visibleWorldRect, Paint()..color = const Color(0x2E000000));
+    for (final stroke in ahead) {
+      final i = stroke.layerIndex;
+      if (i < page.layers.length && !page.layers[i].visible) continue;
+      paintStroke(canvas, stroke);
+    }
+    canvas.restore();
+  }
 
   canvas.restore();
 }

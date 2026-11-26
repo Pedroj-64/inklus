@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'file_utils.dart';
+
 /// Rutas de datos de la app. **Única fuente** de `<appSupport>/inklus` y de
 /// sus subcarpetas: ningún servicio vuelve a construirlas a mano.
 ///
@@ -42,6 +44,7 @@ abstract final class AppPaths {
   static Future<File> file(String name) async => File('${(await root()).path}/$name');
 
   static Future<Directory> images() => dir('images');
+  static Future<Directory> audio(String noteId) => dir('audio/${safeFileName(noteId) ?? '_'}');
   static Future<Directory> pdfImports() => dir('pdf_imports');
   static Future<Directory> templates() => dir('templates');
   static Future<Directory> exports() => dir('exports');
